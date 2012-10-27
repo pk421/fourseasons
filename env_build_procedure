@@ -1,0 +1,11 @@
+Start Up Procedure
+
+- mkdir ~/Desktop/fourseasons
+- add shared folder to Virtual Box
+- sudo mount.vboxsf fourseasons ~/Desktop/fourseasons
+- sudo apt-get install git
+- sudo apt-get install virtualbox
+- git clone remote dir
+- sudo apt-get install rubygems
+- gem install vagrant
+
