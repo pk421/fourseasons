@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+#This is running from vagrant and as such will run as root by default
+
+apt-get update
+#packages to get a build environment working
+apt-get --assume-yes install libtool build-essential git-core curl screen autoconf zlib1g zlib1g-dev libssl-dev uuid-dev libbz2-dev sqlite libxml2-dev libxslt-dev emacs23-nox s3cmd
+
+#usr was root only for some reason, will need this to link a lib
+#so as to not have to fight quantlib
+chmod a+w /usr/lib/
+
+echo
+echo
+echo 'All done'
+echo 'If you are doing a fresh install to compile or update libraries'
+echo '(this will take some time), run:'
+echo 'cat vagrant_install.sh | vagrant ssh'
+echo
+echo 'If you are simply pulling down and updating code, then run:'
+echo 'cat vagrant_refresh.sh | vagrant ssh'

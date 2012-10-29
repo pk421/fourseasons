@@ -1,0 +1,11 @@
+REST Query to Yahoo:
+curl 'http://download.finance.yahoo.com/d/quotes.csv?s=SLV&f=l1' > tmp/SLV.csv
+
+Convert from DOS line endings to UNIX style:
+    sed -i 's/\r//' filename
+
+TAR:
+    tar -czf data.tar *
+    -c: create new file
+    -z: compress
+    -f: use argument as name of file

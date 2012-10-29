@@ -9,3 +9,19 @@ Start Up Procedure
 - sudo apt-get install rubygems
 - gem install vagrant
 
+Easy Install / Setup Tools:
+- download ez_setup.py: http://peak.telecommunity.com/dist/ez_setup.py
+- python ez_setup.py
+- this will install easy_install and should install setup_tools
+
+YQL:
+wget http://pypi.python.org/packages/source/y/yql/yql-0.2.tar.gz
+tar -xzf yql-0.2.tar.gz
+cd yql-0.2
+python setup.py install
+
+Useful Commands:
+-   Convert from DOS line endings to UNIX style:
+    sed -i 's/\r//' filename
+
+    
