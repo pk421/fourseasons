@@ -1,1 +1,1 @@
-export
+#!/bin/sh

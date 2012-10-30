@@ -5,7 +5,15 @@ Convert from DOS line endings to UNIX style:
     sed -i 's/\r//' filename
 
 TAR:
+    To Compress:
     tar -czf data.tar *
     -c: create new file
     -z: compress
     -f: use argument as name of file
+
+    To DeCompress:
+    tar -xvzf file.tar
+    -x: decompress
+    -v: verbose (not necessary, it will print out file names that are extracted)
+    -z: decompress files created by gzip
+    -f: specify an archive o
