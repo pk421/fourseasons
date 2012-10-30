@@ -26,5 +26,7 @@ pip-log.txt
 #Mr Developer
 .mr.developer.cfg
 
+#My section:
 /tmp
 .log
+.idea/workspace.xml
