@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="a2e96d02-1953-4005-8887-cdde0d86eba3" name="Default" comment="">
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.gitignore" afterPath="$PROJECT_DIR$/.gitignore" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/data_retriever.py" afterPath="$PROJECT_DIR$/src/data_retriever.py" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/test_run.py" afterPath="$PROJECT_DIR$/test_run.py" />
@@ -30,7 +31,7 @@
       <file leaf-file-name="test_run.py" pinned="false" current="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/test_run.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state line="4" column="0" selection-start="66" selection-end="66" vertical-scroll-proportion="-2.4">
+            <state line="5" column="0" selection-start="86" selection-end="86" vertical-scroll-proportion="-3.0">
               <folding />
             </state>
           </provider>
@@ -39,7 +40,16 @@
       <file leaf-file-name="data_retriever.py" pinned="false" current="true" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/data_retriever.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state line="25" column="62" selection-start="1198" selection-end="1198" vertical-scroll-proportion="0.43757293">
+            <state line="31" column="4" selection-start="1331" selection-end="1331" vertical-scroll-proportion="0.48677886">
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name=".gitignore" pinned="false" current="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/.gitignore">
+          <provider selected="true" editor-type-id="text-editor">
+            <state line="29" column="4" selection-start="242" selection-end="242" vertical-scroll-proportion="0.0">
               <folding />
             </state>
           </provider>
@@ -406,13 +416,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/.gitignore">
-      <provider selected="true" editor-type-id="text-editor">
-        <state line="29" column="0" selection-start="239" selection-end="239" vertical-scroll-proportion="0.5">
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/hints">
       <provider selected="true" editor-type-id="text-editor">
         <state line="10" column="36" selection-start="282" selection-end="282" vertical-scroll-proportion="0.0">
@@ -434,16 +437,23 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/.gitignore">
+      <provider selected="true" editor-type-id="text-editor">
+        <state line="29" column="4" selection-start="242" selection-end="242" vertical-scroll-proportion="0.0">
+          <folding />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/test_run.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state line="4" column="0" selection-start="66" selection-end="66" vertical-scroll-proportion="-2.4">
+        <state line="5" column="0" selection-start="86" selection-end="86" vertical-scroll-proportion="-3.0">
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/data_retriever.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state line="25" column="62" selection-start="1198" selection-end="1198" vertical-scroll-proportion="0.43757293">
+        <state line="31" column="4" selection-start="1331" selection-end="1331" vertical-scroll-proportion="0.48677886">
           <folding />
         </state>
       </provider>
