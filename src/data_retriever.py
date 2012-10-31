@@ -1,3 +1,4 @@
+from data.redis import manage_redis
 import os
 import urllib2
 import threading
@@ -7,11 +8,12 @@ import time
 
 def get_yahoo_data(s, **kwargs):
 
+    update_check = kwargs['update_check']
     logger = kwargs['log']
     logger.debug(s + '\tEntering thread')
     file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/tmp/" + s + ".csv"
 
-    if (os.path.exists(file_path) == False) or os.path.getsize(file_path) < 3500:
+    if (os.path.exists(file_path) == False) or os.path.getsize(file_path) < 3500 or update_check == False:
         post_request = "http://table.finance.yahoo.com/table.csv?s=" + s + "&a=1&b=1&c=1950&d=10e=29&f=2012&ignore=.csv"
         logger.debug(s + "\tbefore request")
         test_file = '\tblank test file'
@@ -34,13 +36,15 @@ def get_yahoo_data(s, **kwargs):
 #os.system("curl --silent 'http://download.finance.yahoo.com/d/quotes.csv?s=SLV&f=l' > tmp/SLV.csv")
 #http://table.finance.yahoo.com/table.csv?a=["fmonth","fmonth"]&b=["fday","fday"]&c=["fyear","fyear"]&d=["tmonth","tmonth"]&e=["tday","tday"]&f=["tyear","tyear"]&s=["ticker", "ticker"]&y=0&g=["per","per"]&ignore=.csv
 
-def multithread_yahoo_download(list_to_download='300B_1M.csv', thread_count = 10):
-    #This procedure will work after the DOS line endings have already been converted to LINUX. Use: sed -i 's/\r//' filename
+def multithread_yahoo_download(list_to_download='300B_1M.csv', thread_count = 10, update_check = True):
+    #This procedure will work after the DOS line endings have already been converted to LINUX.
+    #Use: sed -i 's/\r//' filename
     
     #The open command below will clear the log file each time this process is run
     logger = logging.getLogger(__name__)
     #open('/home/wilmott/Desktop/fourseasons/fourseasons/log/' + __name__ + '.log', 'w')
-    handler = logging.handlers.RotatingFileHandler('/home/wilmott/Desktop/fourseasons/fourseasons/log/' + __name__ + '.log', maxBytes=1024000, backupCount=5)
+    handler = logging.handlers.RotatingFileHandler('/home/wilmott/Desktop/fourseasons/fourseasons/log/' + \
+                                                   __name__ + '.log', maxBytes=1024000, backupCount=5)
     formatter = logging.Formatter('%(asctime)s %(threadName)s %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
@@ -59,27 +63,26 @@ def multithread_yahoo_download(list_to_download='300B_1M.csv', thread_count = 10
     #main_thread = threading.currentThread()
     for s in symbols:
         if len(threading.enumerate()) < (thread_count + 1):
-            print symbols.index(s), " if \t", s, "\t", len(threading.enumerate())
-            #logger.debug(str(symbols.index(s)) + ' if \t' + s + '\t' + str(len(threading.enumerate())))
-            d = threading.Thread(name='get_yahoo_data', target=get_yahoo_data, args=[s], kwargs={'log':logger})
+            logger.debug(str(symbols.index(s)) + ' if \t' + s + '\t' + str(len(threading.enumerate())))
+            d = threading.Thread(name='get_yahoo_data', target=get_yahoo_data, \
+                                 args=[s], kwargs={'log':logger, 'update_check':update_check})
             d.setDaemon(True)
             d.start()
 
 
         else:
-            print symbols.index(s), " else \t", s, "\t", len(threading.enumerate())
-            #logger.debug(str(symbols.index(s)) + ' else \t' + s + '\t' + str(len(threading.enumerate())))
+            logger.debug(str(symbols.index(s)) + ' else \t' + s + '\t' + str(len(threading.enumerate())))
             while (len(threading.enumerate()) >= (thread_count + 1)):
                 time.sleep(0.1)
-
-            d = threading.Thread(name='get_yahoo_data', target=get_yahoo_data, args=[s], kwargs={'log':logger})
+            d = threading.Thread(name='get_yahoo_data', target=get_yahoo_data, \
+                                 args=[s], kwargs={'log':logger, 'update_check':update_check})
             d.setDaemon(True)
             d.start()
 
     d.join()
     logger.debug("Ending Main Thread\n\n\n")
 
-def extract_symbols_with_historical_data():
+def extract_symbols_with_historical_data(search_in = '/home/wilmott/Desktop/fourseasons/fourseasons/tmp/'):
 
     search_in = '/home/wilmott/Desktop/fourseasons/fourseasons/tmp/'
     symbols = []
@@ -108,6 +111,8 @@ def objectify_data():
         symbols.append(n[0])
     symbols.sort()
 
+    symbols = ['AAPL']
+
     #stock_db = {}
     
     for symbol in symbols:
@@ -135,10 +140,11 @@ def objectify_data():
 
             stock_price_set.append(day_dict)
 
+        manage_redis.fill_redis(stock_price_set)
         #stock_db[symbol] = stock_price_set
 
-    print "Now Sleeping For 15 Seconds"
-    time.sleep(15)
+    #print "Now Sleeping For 15 Seconds"
+    #time.sleep(15)
 
 
 class PriceSet(object):
