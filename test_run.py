@@ -1,8 +1,6 @@
 from src.data_retriever import *
 
-#get_yahoo_data()
-#yahoo_post()
-#multithread_yahoo_download('300B_1M.csv', 20, update_check = False)
+multithread_yahoo_download('large_universe.csv', 10, update_check = True)
 #extract_symbols_with_historical_data()
 
-objectify_data()
+#objectify_data()
