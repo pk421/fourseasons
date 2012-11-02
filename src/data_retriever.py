@@ -18,7 +18,7 @@ def get_yahoo_data(s, **kwargs):
         logger.debug(s + "\tbefore request")
         test_file = '\texception in urlopen'
         try:
-            test_file = urllib2.urlopen(post_request, timeout=1).read()
+            test_file = urllib2.urlopen(post_request, timeout=5).read()
         except:
             logger.debug(s + '\thttp request failed')
             logger.debug(s + test_file)
@@ -36,7 +36,7 @@ def get_yahoo_data(s, **kwargs):
 #os.system("curl --silent 'http://download.finance.yahoo.com/d/quotes.csv?s=SLV&f=l' > tmp/SLV.csv")
 #http://table.finance.yahoo.com/table.csv?a=["fmonth","fmonth"]&b=["fday","fday"]&c=["fyear","fyear"]&d=["tmonth","tmonth"]&e=["tday","tday"]&f=["tyear","tyear"]&s=["ticker", "ticker"]&y=0&g=["per","per"]&ignore=.csv
 
-def multithread_yahoo_download(list_to_download='300B_1M.csv', thread_count = 10, update_check = True):
+def multithread_yahoo_download(list_to_download='300B_1M.csv', thread_count = 20, update_check = True):
     logger = logging.getLogger(__name__)
     handler = logging.handlers.RotatingFileHandler('/home/wilmott/Desktop/fourseasons/fourseasons/log/' + \
                                                    __name__ + '.log', maxBytes=1024000, backupCount=5)
@@ -59,7 +59,7 @@ def multithread_yahoo_download(list_to_download='300B_1M.csv', thread_count = 10
 
     #main_thread = threading.currentThread()
     for s in symbols:
-        print s
+        print s, '\tThreads: ', len(threading.enumerate())
         if len(threading.enumerate()) < (thread_count + 1):
             logger.debug(str(symbols.index(s)) + ' if \t' + s + '\t' + str(len(threading.enumerate())))
             d = threading.Thread(name='get_yahoo_data', target=get_yahoo_data, \
@@ -71,8 +71,8 @@ def multithread_yahoo_download(list_to_download='300B_1M.csv', thread_count = 10
         else:
             logger.debug(str(symbols.index(s)) + ' else \t' + s + '\t' + str(len(threading.enumerate())))
             while (len(threading.enumerate()) >= (thread_count + 1)):
-                #time.sleep(0.1)
-                d.join()
+                time.sleep(0.1)
+                #d.join()
             d = threading.Thread(name='get_yahoo_data', target=get_yahoo_data, \
                                  args=[s], kwargs={'log':logger, 'update_check':update_check})
             d.setDaemon(True)
