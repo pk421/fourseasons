@@ -20,6 +20,12 @@ tar -xzf yql-0.2.tar.gz
 cd yql-0.2
 python setup.py install
 
+Redis:
+- wget http://redis.googlecode.com/files/redis-2.6.2.tar.gz
+- tar -xzf redis-2.6.2.tar.gz
+- cd redis-2.6.2
+- make
+
 Useful Commands:
 -   Convert from DOS line endings to UNIX style:
     sed -i 's/\r//' filename

@@ -5,42 +5,65 @@ import threading
 import logging
 import logging.handlers
 import time
+import Queue
+import datetime
 
-def get_yahoo_data(s, **kwargs):
-
+def get_yahoo_data(queue, **kwargs):
     update_check = kwargs['update_check']
     logger = kwargs['log']
-    logger.debug(s + 'Entering thread')
-    file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/tmp/" + s + ".csv"
 
-    if (os.path.exists(file_path) == False) or os.path.getsize(file_path) < 3500 or update_check == False:
-        post_request = "http://table.finance.yahoo.com/table.csv?s=" + s + "&a=1&b=1&c=1950&d=10e=29&f=2012&ignore=.csv"
-        logger.debug(s + "\tbefore request")
-        test_file = '\texception in urlopen'
-        try:
-            test_file = urllib2.urlopen(post_request, timeout=5).read()
-        except:
-            logger.debug(s + '\thttp request failed')
-            logger.debug(s + test_file)
-            return
-        logger.debug(s + "\tafter request, will write to file")
-        fout = open(file_path, 'w')
-        fout.write(test_file)
-        fout.close()
-        return
-    else:
-        logger.debug(s + '\tskipping, file already present')
-        return
+    start_year = '1950'
+    start_month = '1'
+    start_day = '1'
+    current_year = str(datetime.datetime.today().year)
+    current_month = str(datetime.datetime.today().month)
+    current_day = str(datetime.datetime.today().day)
+
+    while True:
+        s = queue.get()
+        print s
+        file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/tmp/" + s + ".csv"
+        logger.debug(s + "\tbefore if" + str(os.path.exists(file_path)) + str(update_check))
+        if (os.path.exists(file_path) == False) or os.path.getsize(file_path) < 3500 or update_check == False:
+            request = "http://table.finance.yahoo.com/table.csv?s=" + s + '&a=' + start_month + \
+                                                                          '&b=' + start_day + \
+                                                                          '&c=' + start_year + \
+                                                                          '&d=' + current_month + \
+                                                                          '&e=' + current_day + \
+                                                                          '&f=' + current_year + \
+                                                                          '&ignore=.csv'
+            logger.debug(s + "\tbefore request")
+            test_file = '\texception in urlopen'
+            try:
+                time.sleep(0)
+                test_file = urllib2.urlopen(request, timeout=5).read()
+            except:
+                logger.debug(s + '\thttp request failed')
+                queue.task_done()
+                continue
+            logger.debug(s + "\tafter request, will write to file")
+            fout = open(file_path, 'w')
+            fout.write(test_file)
+            fout.close()
+            queue.task_done()
+            continue
+        else:
+            logger.debug(s + '\tskipping, file already present')
+            queue.task_done()
+            continue
 
 
 #os.system("curl --silent 'http://download.finance.yahoo.com/d/quotes.csv?s=SLV&f=l' > tmp/SLV.csv")
 #http://table.finance.yahoo.com/table.csv?a=["fmonth","fmonth"]&b=["fday","fday"]&c=["fyear","fyear"]&d=["tmonth","tmonth"]&e=["tday","tday"]&f=["tyear","tyear"]&s=["ticker", "ticker"]&y=0&g=["per","per"]&ignore=.csv
 
-def multithread_yahoo_download(list_to_download='300B_1M.csv', thread_count = 20, update_check = True):
+def multithread_yahoo_download(list_to_download='large_universe.csv', thread_count = 1, update_check = False):
+    queue = Queue.Queue()
+    #kill off previous processes:
+    os.system('kill -9 $(lsof src.data_retriever.log*)')
     logger = logging.getLogger(__name__)
     handler = logging.handlers.RotatingFileHandler('/home/wilmott/Desktop/fourseasons/fourseasons/log/' + \
                                                    __name__ + '.log', maxBytes=1024000, backupCount=5)
-    formatter = logging.Formatter('%(asctime)s %(threadName)s %(message)s')
+    formatter = logging.Formatter('%(asctime)s: %(threadName)s: %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
@@ -53,32 +76,20 @@ def multithread_yahoo_download(list_to_download='300B_1M.csv', thread_count = 20
     stock_list.close()
     
     #used to test a single symbol
-    #symbols = ['A']
-
+    #symbols = ['A', 'AA', 'AAPL', 'F', 'X', 'GOOG', 'bogus_symbol']
+    for s in symbols:
+        queue.put(s)
     print "Number of symbols to fetch: ", len(symbols)
 
-    #main_thread = threading.currentThread()
-    for s in symbols:
-        print s, '\tThreads: ', len(threading.enumerate())
-        if len(threading.enumerate()) < (thread_count + 1):
-            logger.debug(str(symbols.index(s)) + ' if \t' + s + '\t' + str(len(threading.enumerate())))
-            d = threading.Thread(name='get_yahoo_data', target=get_yahoo_data, \
-                                 args=[s], kwargs={'log':logger, 'update_check':update_check})
-            d.setDaemon(True)
-            d.start()
+    for d in range(thread_count):
+        logger.debug(str(symbols.index(s)) + ' if \t' + s + '\t' + str(len(threading.enumerate())))
+        d = threading.Thread(name='get_yahoo_data', target=get_yahoo_data, \
+                             args=[queue], kwargs={'log':logger, 'update_check':update_check})
+        d.setDaemon(True)
+        d.start()
 
-
-        else:
-            logger.debug(str(symbols.index(s)) + ' else \t' + s + '\t' + str(len(threading.enumerate())))
-            while (len(threading.enumerate()) >= (thread_count + 1)):
-                time.sleep(0.1)
-                #d.join()
-            d = threading.Thread(name='get_yahoo_data', target=get_yahoo_data, \
-                                 args=[s], kwargs={'log':logger, 'update_check':update_check})
-            d.setDaemon(True)
-            d.start()
-
-    d.join()
+    queue.join()
+    
     logger.debug("Ending Main Thread\n\n\n")
 
 def extract_symbols_with_historical_data(search_in = '/home/wilmott/Desktop/fourseasons/fourseasons/tmp/'):
@@ -99,25 +110,33 @@ def extract_symbols_with_historical_data(search_in = '/home/wilmott/Desktop/four
         fout.write(s)
     fout.close()
 
-def objectify_data():
+def objectify_data(stock='do_all', file_location='data/daily_price_data/test/data/'):
 
-#    file_path = '/home/wilmott/Desktop/fourseasons/fourseasons/data/daily_price_data/'
-    file_path = '/home/wilmott/Desktop/fourseasons/fourseasons/data/daily_price_data/test/'
+    file_path = '/home/wilmott/Desktop/fourseasons/fourseasons/' + file_location
+    #file_path = '/home/wilmott/Desktop/fourseasons/fourseasons/data/daily_price_data/'
     symbols = []
 
-    for csv_item in filter(lambda x: '.csv' in x, os.listdir(file_path)):
-        n = csv_item.rsplit('.csv')
-        symbols.append(n[0])
+    #if no symbol is specified, do it for all
+    if stock == 'do_all':
+        for csv_item in filter(lambda x: '.csv' in x, os.listdir(file_path)):
+            if csv_item == 'data_validation_results.csv.info':
+                continue
+            n = csv_item.rsplit('.csv')
+            symbols.append(n[0])
+    else:
+        symbols = stock
+        
     symbols.sort()
 
-    symbols = ['AAPL']
+    #symbols = ['AAPL']
 
-    #stock_db = {}
+#    stock_db = {}
     
+    validation_file = ''
+    failed_symbols = []
     for symbol in symbols:
         print symbol
         all_data = open(file_path + symbol + '.csv', 'r').read().rstrip()
-
         days = all_data.split('\n')
 
         #this removes the header title information
@@ -129,21 +148,65 @@ def objectify_data():
             day_items = day.split(',')
             day_dict = {}
 
-            day_dict['Date'] = day_items[0]
-            day_dict['Open'] = day_items[1]
-            day_dict['High'] = day_items[2]
-            day_dict['Low'] = day_items[3]
-            day_dict['Close'] = day_items[4]
-            day_dict['Volume'] = day_items[5]
-            day_dict['AdjClose'] = day_items[6]
+            day_dict['Symbol'] = str(symbol)
+            day_dict['Date'] = str(day_items[0])
+            day_dict['Open'] = float(day_items[1])
+            day_dict['High'] = float(day_items[2])
+            day_dict['Low'] = float(day_items[3])
+            day_dict['Close'] = float(day_items[4])
+            day_dict['Volume'] = float(day_items[5])
+            day_dict['AdjClose'] = float(day_items[6])
 
             stock_price_set.append(day_dict)
 
-        manage_redis.fill_redis(stock_price_set)
-        #stock_db[symbol] = stock_price_set
+        validation_results = validate_data(stock_price_set)
 
-    #print "Now Sleeping For 15 Seconds"
-    #time.sleep(15)
+        if validation_results is not True:
+            validation_file = validation_file + validation_results
+            failed_symbols.append(symbol)
+            print failed_symbols
+            print symbol, "\t failed at least one validation test"
+
+        manage_redis.fill_redis(stock_price_set)
+
+    fout = open(file_path + '/test/data_validation_results.csv.info', 'w')
+    fout.write(validation_file)
+    fout.close()
+    #stock_db[symbol] = stock_price_set
+
+def validate_data(stock_price_set):
+    """Takes in a stock_price_set list of dictionaries representing the data and performs simple validation on it,
+    noting any issues found in a csv format.
+    """
+    error_count = 0
+    results = ''
+
+    for day in stock_price_set:
+
+        if day['High'] < day['Open']:
+            results = results + day['Symbol'] + ',' + day['Date'] + ',' + 'High < Open\n'
+        if day['High'] < day['Close']:
+            results = results + day['Symbol'] + ',' + day['Date'] + ',' + 'High < Close\n'
+        if day['High'] < day['Low']:
+            results = results + day['Symbol'] + ',' + day['Date'] + ',' + 'High < Low\n'
+
+        if day['Low'] > day['Open']:
+            results = results + day['Symbol'] + ',' + day['Date'] + ',' + 'Low > Open\n'
+        if day['Low'] > day['Close']:
+            results = results + day['Symbol'] + ',' + day['Date'] + ',' + 'Low > Close\n'
+        if day['Low'] > day['Low']:
+            results = results + day['Symbol'] + ',' + day['Date'] + ',' + 'Low > Low\n'
+
+        if day['Open'] == 0 or day['High'] == 0 or day['Low'] == 0 or day['Close'] == 0:
+            results = results + day['Symbol'] + ',' + day['Date'] + 'Found a zero value in prices.\n'
+
+
+    if results is not '':
+        return results
+    else:
+        return True
+
+
 
 
 class PriceSet(object):
