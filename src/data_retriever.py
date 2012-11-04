@@ -21,10 +21,10 @@ def get_yahoo_data(queue, **kwargs):
 
     while True:
         s = queue.get()
-        print s
+        print s, "\t", queue.qsize()
         file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/tmp/" + s + ".csv"
         logger.debug(s + "\tbefore if" + str(os.path.exists(file_path)) + str(update_check))
-        if (os.path.exists(file_path) == False) or os.path.getsize(file_path) < 3500 or update_check == False:
+        if (os.path.exists(file_path) == False) or update_check == False:
             request = "http://table.finance.yahoo.com/table.csv?s=" + s + '&a=' + start_month + \
                                                                           '&b=' + start_day + \
                                                                           '&c=' + start_year + \
@@ -35,7 +35,6 @@ def get_yahoo_data(queue, **kwargs):
             logger.debug(s + "\tbefore request")
             test_file = '\texception in urlopen'
             try:
-                time.sleep(0)
                 test_file = urllib2.urlopen(request, timeout=5).read()
             except:
                 logger.debug(s + '\thttp request failed')
@@ -51,12 +50,13 @@ def get_yahoo_data(queue, **kwargs):
             logger.debug(s + '\tskipping, file already present')
             queue.task_done()
             continue
-
+        #catch anything that might have gotten thru other statements...this is to debug
+        queue.task_done()
 
 #os.system("curl --silent 'http://download.finance.yahoo.com/d/quotes.csv?s=SLV&f=l' > tmp/SLV.csv")
 #http://table.finance.yahoo.com/table.csv?a=["fmonth","fmonth"]&b=["fday","fday"]&c=["fyear","fyear"]&d=["tmonth","tmonth"]&e=["tday","tday"]&f=["tyear","tyear"]&s=["ticker", "ticker"]&y=0&g=["per","per"]&ignore=.csv
 
-def multithread_yahoo_download(list_to_download='large_universe.csv', thread_count = 1, update_check = False):
+def multithread_yahoo_download(list_to_download='large_universe.csv', thread_count=1, update_check=False, new_only=False):
     queue = Queue.Queue()
     #kill off previous processes:
     os.system('kill -9 $(lsof src.data_retriever.log*)')
@@ -74,6 +74,14 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
     for index, s in enumerate(symbols):
         symbols[index] = s.strip('\r')
     stock_list.close()
+
+    if new_only == True:
+        symbols_with_data = extract_symbols_with_historical_data()
+        symbols_without_data = []
+        for s in symbols:
+            if (s in symbols_with_data) == False:
+                symbols_without_data.append(s)
+        symbols = symbols_without_data
     
     #used to test a single symbol
     #symbols = ['A', 'AA', 'AAPL', 'F', 'X', 'GOOG', 'bogus_symbol']
@@ -89,26 +97,29 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
         d.start()
 
     queue.join()
-    
-    logger.debug("Ending Main Thread\n\n\n")
 
-def extract_symbols_with_historical_data(search_in = '/home/wilmott/Desktop/fourseasons/fourseasons/tmp/'):
+    logger.debug("Ending Main Thread\n\n\n")
+    handler.close()
+
+def extract_symbols_with_historical_data(search_in='/home/wilmott/Desktop/fourseasons/fourseasons/tmp/'):
 
     search_in = '/home/wilmott/Desktop/fourseasons/fourseasons/tmp/'
     symbols = []
 
     for csv_item in filter(lambda x: '.csv' in x, os.listdir(search_in)):
         n = csv_item.rsplit('.csv')
-        symbols.append(str(n[0] + '\n'))
+        symbols.append(str(n[0]))
 
-    print type(symbols)
-    print len(symbols)
+    print "# of symbols with existing data: ", len(symbols)
     symbols.sort()
     
-    fout = open(search_in + 'symbols_with_historical_data.csv', 'w')
+    fout = open('/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/symbols_with_historical_data.csv', 'w')
     for s in symbols:
-        fout.write(s)
+        fout.write(s + '\n')
     fout.close()
+
+    return symbols
+
 
 def objectify_data(stock='do_all', file_location='data/daily_price_data/test/data/'):
 
