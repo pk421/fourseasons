@@ -56,10 +56,11 @@ def get_yahoo_data(queue, **kwargs):
 #os.system("curl --silent 'http://download.finance.yahoo.com/d/quotes.csv?s=SLV&f=l' > tmp/SLV.csv")
 #http://table.finance.yahoo.com/table.csv?a=["fmonth","fmonth"]&b=["fday","fday"]&c=["fyear","fyear"]&d=["tmonth","tmonth"]&e=["tday","tday"]&f=["tyear","tyear"]&s=["ticker", "ticker"]&y=0&g=["per","per"]&ignore=.csv
 
-def multithread_yahoo_download(list_to_download='large_universe.csv', thread_count=1, update_check=False, new_only=False):
+def multithread_yahoo_download(list_to_download='large_universe.csv', thread_count=1, update_check=False,
+                               new_only=False):
     queue = Queue.Queue()
     #kill off previous processes:
-    os.system('kill -9 $(lsof src.data_retriever.log*)')
+    #os.system('kill -9 $(lsof src.data_retriever.log*)')
     logger = logging.getLogger(__name__)
     handler = logging.handlers.RotatingFileHandler('/home/wilmott/Desktop/fourseasons/fourseasons/log/' + \
                                                    __name__ + '.log', maxBytes=1024000, backupCount=5)
@@ -121,9 +122,11 @@ def extract_symbols_with_historical_data(search_in='/home/wilmott/Desktop/fourse
     return symbols
 
 
-def objectify_data(stock='do_all', file_location='data/daily_price_data/test/data/'):
+def load_redis(stock='do_all', file_location='data/test/'):
+    start_time = datetime.datetime.now()
 
-    file_path = '/home/wilmott/Desktop/fourseasons/fourseasons/' + file_location
+    base_path = '/home/wilmott/Desktop/fourseasons/fourseasons/'
+    file_path = base_path + file_location + 'data/'
     #file_path = '/home/wilmott/Desktop/fourseasons/fourseasons/data/daily_price_data/'
     symbols = []
 
@@ -139,14 +142,12 @@ def objectify_data(stock='do_all', file_location='data/daily_price_data/test/dat
         
     symbols.sort()
 
-    #symbols = ['AAPL']
-
-#    stock_db = {}
+    #symbols = ['A', 'AAPL']
     
     validation_file = ''
     failed_symbols = []
-    for symbol in symbols:
-        print symbol
+    
+    for k, symbol in enumerate(symbols):
         all_data = open(file_path + symbol + '.csv', 'r').read().rstrip()
         days = all_data.split('\n')
 
@@ -175,15 +176,21 @@ def objectify_data(stock='do_all', file_location='data/daily_price_data/test/dat
         if validation_results is not True:
             validation_file = validation_file + validation_results
             failed_symbols.append(symbol)
-            print failed_symbols
+            #print failed_symbols
             print symbol, "\t failed at least one validation test"
-
+            continue
         manage_redis.fill_redis(stock_price_set)
 
-    fout = open(file_path + '/test/data_validation_results.csv.info', 'w')
+        current_time = datetime.datetime.now() - start_time
+        print k, ' of ', len(symbols), '\t', current_time, '\t', symbol, '\tinto redis'
+        #stock_db[symbol] = stock_price_set
+
+    print "\nFailed Symbols: ", failed_symbols
+    print "\nNumber of failures: ", len(failed_symbols)
+
+    fout = open(base_path + file_location + 'failed_validation_results.csv.info', 'w')
     fout.write(validation_file)
     fout.close()
-    #stock_db[symbol] = stock_price_set
 
 def validate_data(stock_price_set):
     """Takes in a stock_price_set list of dictionaries representing the data and performs simple validation on it,
@@ -217,6 +224,13 @@ def validate_data(stock_price_set):
     else:
         return True
 
+def read_redis(stocks='all_stocks'):
+
+    stocks = ['A', 'AAPL']
+    list_of_stocks = []
+    list_of_stocks = manage_redis.read_redis(stocks)
+
+    return
 
 
 
@@ -227,8 +241,6 @@ class PriceSet(object):
 
     def fill_trading_days(self, input_data):
         pass
-
-
 
 
     

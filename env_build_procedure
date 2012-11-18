@@ -26,6 +26,9 @@ Redis:
 - cd redis-2.6.2
 - make
 
+Redis-Py:
+- sudo easy_install redis
+
 Useful Commands:
 -   Convert from DOS line endings to UNIX style:
     sed -i 's/\r//' filename
