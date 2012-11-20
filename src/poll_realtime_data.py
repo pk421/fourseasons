@@ -2,6 +2,9 @@ import urllib2
 import os
 import time
 import datetime
+import redis
+from data.redis.manage_redis import pack_realtime_data
+from data.redis.manage_redis import fill_realtime_redis
 
 def query_realtime_data():
     """
@@ -18,15 +21,23 @@ def query_realtime_data():
 
     counter = 0
     start_time = datetime.datetime.now()
-    while counter < 100:
-        time.sleep(0.01)
+    while counter < 1000:
+        time.sleep(0.25)
         current_time = datetime.datetime.now()
         current_second = current_time.second
 
-        if current_second % 2 == 0:
-            price_item = parse_data(input_data)
-            print "\n\n", counter, "\n",price_item
-            time.sleep(2)
+        if current_second > 0 and current_second < 5:
+            try:
+                test_file = urllib2.urlopen(request, timeout=2).read()
+            except:
+                time.sleep(2)
+                continue
+
+            price_item = parse_data(test_file, counter)
+            fill_realtime_redis(price_item, store_under='realtime_1min:', delete_old_data=False)
+
+            print "\n\n", counter, "\t", price_item['Last'], "\t", price_item['Time']
+            time.sleep(10)
             counter += 1
 
 
@@ -39,7 +50,7 @@ def query_realtime_data():
     
     return
 
-def parse_data(scraped_data):
+def parse_data(scraped_data, counter):
 
     find_gold = scraped_data.split('<nobr><a href="/commodities/gold" title="Gold" >Gold</a></nobr></td><td nowrap=\"nowrap\" class=\"m_t\">')
     #print len(find_gold)
@@ -60,7 +71,19 @@ def parse_data(scraped_data):
     change_pct = gold_parts[6].split(">")[1]
     last_time = gold_parts[7].split(">")[1]
 
-    return [last, previous, high, low, change, change_pct, last_time]
+    realtime_price_data = {}
+    realtime_price_data['Last'] = last
+    realtime_price_data['Previous'] = previous
+    realtime_price_data['High'] = high
+    realtime_price_data['Low'] = low
+    realtime_price_data['Change'] = change
+    realtime_price_data['ChangePct'] = change_pct
+    realtime_price_data['Time'] = last_time
+
+    realtime_price_data['Counter'] = counter
+    realtime_price_data['Symbol'] = 'Gold_Spot'
+
+    return realtime_price_data
 
 
     return price_item

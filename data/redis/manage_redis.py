@@ -5,17 +5,18 @@ def flushall():
     redis_db.flushall()
     return
 
-def fill_redis(stock_price_set):
+def fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=True):
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
     symbol = stock_price_set[0]['Symbol']
-    redis_db.delete(symbol)
+    if delete_old_data:
+        redis_db.delete(symbol)
 
     pairs = {}
     for day in stock_price_set:
         #redis_db.zadd(day['Symbol'], pack_date(day['Date']), pack_data(day))
         pairs[pack_data(day)] = pack_date(day['Date'])
 
-    redis_db.zadd('historical-D:' + day['Symbol'], **pairs)
+    redis_db.zadd(store_under + symbol, **pairs)
 
 def read_redis(stocks, start_date='19500101', end_date='20121111'):
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
@@ -93,4 +94,27 @@ def pack_data(in_data):
                     in_data['Volume'], in_data['AdjOpen'], in_data['AdjHigh'], in_data['AdjLow'], in_data['AdjClose']]
     out_data = ','.join(str(p) for p in serializable)
     return out_data
-        
+
+
+def fill_realtime_redis(price_set, store_under='historical-D:', delete_old_data=True):
+    redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
+    symbol = price_set['Symbol']
+    if delete_old_data:
+        redis_db.delete(symbol)
+
+    pairs = {}
+    pairs[pack_realtime_data(price_set)] = price_set['Counter']
+
+    redis_db.zadd(store_under + symbol, **pairs)
+
+
+def pack_realtime_data(in_data):
+    """
+    Packs real time data of format: Contract Date, Last, Previous, H, L, Change, % Change, Time
+    """
+
+    serializable = [in_data['Last'], in_data['Previous'], in_data['High'], in_data['Low'], in_data['Change'],
+                    in_data['ChangePct'], in_data['Time']]
+    
+    out_data = ','.join(str(p) for p in serializable)
+    return out_data
