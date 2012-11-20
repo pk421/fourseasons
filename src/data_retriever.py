@@ -58,6 +58,7 @@ def get_yahoo_data(queue, **kwargs):
             continue
         #catch anything that might have gotten thru other statements...this is to debug
         queue.task_done()
+    return
 
 #os.system("curl --silent 'http://download.finance.yahoo.com/d/quotes.csv?s=SLV&f=l' > tmp/SLV.csv")
 #http://table.finance.yahoo.com/table.csv?a=["fmonth","fmonth"]&b=["fday","fday"]&c=["fyear","fyear"]&d=["tmonth","tmonth"]&e=["tday","tday"]&f=["tyear","tyear"]&s=["ticker", "ticker"]&y=0&g=["per","per"]&ignore=.csv
@@ -109,6 +110,7 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
 
     logger.debug("Ending Main Thread\n\n\n")
     handler.close()
+    return
 
 def extract_symbols_with_historical_data(search_in='/home/wilmott/Desktop/fourseasons/fourseasons/tmp/'):
 
@@ -212,11 +214,13 @@ def load_redis(stock_list='do_all', file_location='data/test/'):
     print "\nNumber of no data failures: ", len(no_data_symbols)
     print "\nTime Required: ", time_required
 
+    return
+
 def validate_data(stock_price_set):
     """Takes in a stock_price_set list of dictionaries representing the data and performs simple validation on it,
     noting any issues found in a csv format.
     """
-    error_count = 0
+    
     results = ''
 
     for day in stock_price_set:
