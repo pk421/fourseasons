@@ -23,7 +23,7 @@ def get_yahoo_data(queue, **kwargs):
         s = queue.get()
         print s, "\t", queue.qsize()
         file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/tmp/" + s + ".csv"
-        logger.debug(s + "\tbefore if" + str(os.path.exists(file_path)) + str(update_check))
+        #logger.debug(s + "\tbefore if" + str(os.path.exists(file_path)) + str(update_check))
         if (os.path.exists(file_path) == False) or update_check == False:
             request = "http://table.finance.yahoo.com/table.csv?s=" + s + '&a=' + start_month + \
                                                                           '&b=' + start_day + \
@@ -32,22 +32,28 @@ def get_yahoo_data(queue, **kwargs):
                                                                           '&e=' + current_day + \
                                                                           '&f=' + current_year + \
                                                                           '&ignore=.csv'
-            logger.debug(s + "\tbefore request")
+            #logger.debug(s + "\tbefore request")
             test_file = '\texception in urlopen'
             try:
-                test_file = urllib2.urlopen(request, timeout=5).read()
+                test_file = urllib2.urlopen(request, timeout=2).read()
             except:
-                logger.debug(s + '\thttp request failed')
-                queue.task_done()
-                continue
-            logger.debug(s + "\tafter request, will write to file")
+                try:
+                    test_file = urllib2.urlopen(request, timeout=2).read()
+                except:
+                    try:
+                        test_file = urllib2.urlopen(request, timeout=5).read()
+                    except:
+                        logger.debug(s + ',http request failed 3 attempts')
+                        queue.task_done()
+                        continue
+            #logger.debug(s + "\tafter request, will write to file")
             fout = open(file_path, 'w')
             fout.write(test_file)
             fout.close()
             queue.task_done()
             continue
         else:
-            logger.debug(s + '\tskipping, file already present')
+            #logger.debug(s + '\tskipping, file already present')
             queue.task_done()
             continue
         #catch anything that might have gotten thru other statements...this is to debug
@@ -55,6 +61,7 @@ def get_yahoo_data(queue, **kwargs):
 
 #os.system("curl --silent 'http://download.finance.yahoo.com/d/quotes.csv?s=SLV&f=l' > tmp/SLV.csv")
 #http://table.finance.yahoo.com/table.csv?a=["fmonth","fmonth"]&b=["fday","fday"]&c=["fyear","fyear"]&d=["tmonth","tmonth"]&e=["tday","tday"]&f=["tyear","tyear"]&s=["ticker", "ticker"]&y=0&g=["per","per"]&ignore=.csv
+#http://table.finance.yahoo.com/table.csv?a=1&b=1&c=1900&d=2&e=2&f=2020&s=AMMD&ignore=.csv
 
 def multithread_yahoo_download(list_to_download='large_universe.csv', thread_count=1, update_check=False,
                                new_only=False):
@@ -86,12 +93,13 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
     
     #used to test a single symbol
     #symbols = ['A', 'AA', 'AAPL', 'F', 'X', 'GOOG', 'bogus_symbol']
+    #symbols = ['AMMD']
     for s in symbols:
         queue.put(s)
     print "Number of symbols to fetch: ", len(symbols)
 
     for d in range(thread_count):
-        logger.debug(str(symbols.index(s)) + ' if \t' + s + '\t' + str(len(threading.enumerate())))
+        #logger.debug(str(symbols.index(s)) + ' if \t' + s + '\t' + str(len(threading.enumerate())))
         d = threading.Thread(name='get_yahoo_data', target=get_yahoo_data, \
                              args=[queue], kwargs={'log':logger, 'update_check':update_check})
         d.setDaemon(True)
@@ -122,23 +130,24 @@ def extract_symbols_with_historical_data(search_in='/home/wilmott/Desktop/fourse
     return symbols
 
 
-def load_redis(stock='do_all', file_location='data/test/'):
+def load_redis(stock_list='do_all', file_location='data/test/'):
     start_time = datetime.datetime.now()
 
     base_path = '/home/wilmott/Desktop/fourseasons/fourseasons/'
     file_path = base_path + file_location + 'data/'
+    list_path = base_path + 'data/stock_lists/'
     #file_path = '/home/wilmott/Desktop/fourseasons/fourseasons/data/daily_price_data/'
     symbols = []
 
     #if no symbol is specified, do it for all
-    if stock == 'do_all':
+    if stock_list == 'do_all':
         for csv_item in filter(lambda x: '.csv' in x, os.listdir(file_path)):
             if csv_item == 'data_validation_results.csv.info':
                 continue
             n = csv_item.rsplit('.csv')
             symbols.append(n[0])
     else:
-        symbols = stock
+        symbols = open(list_path + stock_list, 'r').read().split()
         
     symbols.sort()
 
@@ -146,9 +155,16 @@ def load_redis(stock='do_all', file_location='data/test/'):
     
     validation_file = ''
     failed_symbols = []
+    no_data_symbols = []
     
     for k, symbol in enumerate(symbols):
-        all_data = open(file_path + symbol + '.csv', 'r').read().rstrip()
+        try:
+            all_data = open(file_path + symbol + '.csv', 'r').read().rstrip()
+        except:
+            print symbol, "\t not found in csv database"
+            no_data_symbols.append(symbol)
+            continue
+            
         days = all_data.split('\n')
 
         #this removes the header title information
@@ -185,12 +201,16 @@ def load_redis(stock='do_all', file_location='data/test/'):
         print k, ' of ', len(symbols), '\t', current_time, '\t', symbol, '\tinto redis'
         #stock_db[symbol] = stock_price_set
 
-    print "\nFailed Symbols: ", failed_symbols
-    print "\nNumber of failures: ", len(failed_symbols)
-
     fout = open(base_path + file_location + 'failed_validation_results.csv.info', 'w')
     fout.write(validation_file)
     fout.close()
+
+    end_time = datetime.datetime.now()
+    time_required = end_time - start_time
+    print "\nFailed Validation Symbols: ", failed_symbols
+    print "\nNumber of validation failures: ", len(failed_symbols)
+    print "\nNumber of no data failures: ", len(no_data_symbols)
+    print "\nTime Required: ", time_required
 
 def validate_data(stock_price_set):
     """Takes in a stock_price_set list of dictionaries representing the data and performs simple validation on it,
@@ -225,7 +245,11 @@ def validate_data(stock_price_set):
         return True
 
 def read_redis(stocks='all_stocks'):
-
+    """
+    list_of_stocks, the object returned by read_redis, will be structured as follows:
+    A list representing the data of many stocks. Each stock item in the list is itself a list of "day_dicts", where
+    each day of data is represented as a dictionary.
+    """
     stocks = ['A', 'AAPL']
     list_of_stocks = []
     list_of_stocks = manage_redis.read_redis(stocks)

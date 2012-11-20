@@ -15,13 +15,13 @@ extract_symbols:
 	$(MAKE) kill_python
 	python test_run.py --extract_symbols_with_historical_data
 
-objectify_data:
-	$(MAKE) kill_python
-	python test_run.py --objectify_data
-
 load_redis:
 	$(MAKE) kill_python
 	python test_run.py --load_redis
+
+poll_realtime_data:
+	$(MAKE) kill_python
+	python test_run.py --poll_realtime_data
 
 read_redis:
 	$(MAKE) kill_python
