@@ -21,24 +21,30 @@ def query_realtime_data():
 
     counter = 0
     start_time = datetime.datetime.now()
-    while counter < 1000:
+    while counter < 8000:
         time.sleep(0.25)
         current_time = datetime.datetime.now()
         current_second = current_time.second
-
+        
         if current_second > 0 and current_second < 5:
             try:
                 test_file = urllib2.urlopen(request, timeout=2).read()
+                price_item = parse_data(test_file, counter)
+
+                #This block deals with data that was retrieved after hours and contains a time of "day/month"
+                if '/' in price_item['Time']:
+                    continue
+
+                fill_realtime_redis(price_item, store_under='realtime_1min:', delete_old_data=False)
+
+                print counter, "\t", price_item['Last'], "\t", price_item['Time']
+                time.sleep(10)
+                counter += 1
+
             except:
                 time.sleep(2)
                 continue
 
-            price_item = parse_data(test_file, counter)
-            fill_realtime_redis(price_item, store_under='realtime_1min:', delete_old_data=False)
-
-            print "\n\n", counter, "\t", price_item['Last'], "\t", price_item['Time']
-            time.sleep(10)
-            counter += 1
 
 
     price_item = parse_data(input_data)
@@ -78,7 +84,9 @@ def parse_data(scraped_data, counter):
     realtime_price_data['Low'] = low
     realtime_price_data['Change'] = change
     realtime_price_data['ChangePct'] = change_pct
+
     realtime_price_data['Time'] = last_time
+    realtime_price_data['Date'] = str(datetime.datetime.today())
 
     realtime_price_data['Counter'] = counter
     realtime_price_data['Symbol'] = 'Gold_Spot'

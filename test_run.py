@@ -42,7 +42,7 @@ if args.extract_symbols_with_historical_data:
     extract_symbols_with_historical_data()
 
 if args.load_redis:
-    load_redis(stock_list='large_universe.csv')
+    load_redis(stock_list='300B_1M.csv')
 
 if args.poll_realtime_data:
     query_realtime_data()

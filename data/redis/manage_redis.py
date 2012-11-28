@@ -9,7 +9,7 @@ def fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=Tru
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
     symbol = stock_price_set[0]['Symbol']
     if delete_old_data:
-        redis_db.delete(symbol)
+        redis_db.delete(store_under + symbol)
 
     pairs = {}
     for day in stock_price_set:
@@ -70,6 +70,36 @@ def read_redis(stocks, start_date='19500101', end_date='20121111'):
 
     return list_of_stocks
 
+def read_intraday_data():
+
+    redis_symbol = 'realtime_1min:Gold_Spot'
+    start_date = '-inf'
+    end_date = '+inf'
+
+    out_file = open('/home/wilmott/Desktop/fourseasons/fourseasons/data/from_redis/' + redis_symbol.split(':')[1] + '.csv', 'w')
+
+    redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
+    raw = redis_db.zrangebyscore(redis_symbol, start_date, end_date)
+
+    print len(raw)
+    for line in raw:
+        for k,v in enumerate(line.split(',')):
+            #print k, v
+            if k == 6 and '/' in v:
+                #This block deals with data that was retrieved after hours and contains a time of "day/month"
+                print line
+                raw.remove(line)
+                break
+        print line
+        out_file.write(line)
+
+
+    print len(raw)
+
+    out_file.close()
+
+    return
+
 def pack_date(in_date):
     """
         Packs a date and converts it to an int format to put in redis
@@ -100,7 +130,7 @@ def fill_realtime_redis(price_set, store_under='historical-D:', delete_old_data=
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
     symbol = price_set['Symbol']
     if delete_old_data:
-        redis_db.delete(symbol)
+        redis_db.delete(store_under + symbol)
 
     pairs = {}
     pairs[pack_realtime_data(price_set)] = price_set['Counter']
@@ -114,7 +144,7 @@ def pack_realtime_data(in_data):
     """
 
     serializable = [in_data['Last'], in_data['Previous'], in_data['High'], in_data['Low'], in_data['Change'],
-                    in_data['ChangePct'], in_data['Time']]
+                    in_data['ChangePct'], in_data['Time'], in_data['Date']]
     
     out_data = ','.join(str(p) for p in serializable)
     return out_data

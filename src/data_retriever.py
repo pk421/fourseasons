@@ -254,11 +254,13 @@ def read_redis(stocks='all_stocks'):
     A list representing the data of many stocks. Each stock item in the list is itself a list of "day_dicts", where
     each day of data is represented as a dictionary.
     """
-    stocks = ['A', 'AAPL']
-    list_of_stocks = []
-    list_of_stocks = manage_redis.read_redis(stocks)
+    #stocks = ['A', 'AAPL']
+    #list_of_stocks = []
+    #list_of_stocks = manage_redis.read_redis(stocks)
+    manage_redis.read_intraday_data()
 
     return
+
 
 
 

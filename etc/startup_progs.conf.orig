@@ -1,0 +1,48 @@
+[program:message_bus]
+command=src/scripts/message_bus.py /tmp/message_bus
+autostart=true
+autorestart=true
+startretries=10000000
+stdout_logfile=var/log/%(program_name)s.log
+stdout_capture_maxbytes=1MB
+redirect_stderr=true
+priority=1
+
+[program:redis]
+command=bin/redis-server etc/redis.conf
+autostart=true
+autorestart=true
+startretries=10000000
+stdout_logfile=var/log/%(program_name)s.log
+stdout_capture_maxbytes=1MB
+redirect_stderr=true
+priority=0
+
+[program:test_redis]
+command=bin/redis-server etc/test_redis.conf
+autostart=true
+autorestart=true
+startretries=10000000
+stdout_logfile=var/log/%(program_name)s.log
+stdout_capture_maxbytes=1MB
+redirect_stderr=true
+priority=0
+
+[program:jobs]
+command=src/scripts/jobs.py /tmp/message_bus etc/jobs.yaml --routing_table etc/routing.table --trace
+autostart=false
+autorestart=true
+startretries=10000000
+stdout_logfile=var/log/%(program_name)s.log
+stdout_capture_maxbytes=1MB
+redirect_stderr=true
+
+[program:fake_market_updates]
+command=src/scripts/message_runner.py /tmp/message_bus --input test/rest/fake_market_update.yaml --sleep 10
+autostart=false
+autorestart=false
+startretries=10000000
+stdout_logfile=var/log/%(program_name)s.ingore
+stdout_capture_maxbytes=1MB
+redirect_stderr=true
+

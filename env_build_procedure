@@ -29,6 +29,9 @@ Redis:
 Redis-Py:
 - sudo easy_install redis
 
+Supervisor:
+- sudo easy_install supervisor
+
 Useful Commands:
 -   Convert from DOS line endings to UNIX style:
     sed -i 's/\r//' filename
