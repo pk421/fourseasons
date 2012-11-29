@@ -21,7 +21,7 @@ def query_realtime_data():
 
     counter = 0
     start_time = datetime.datetime.now()
-    while counter < 8000:
+    while True:
         time.sleep(0.25)
         current_time = datetime.datetime.now()
         current_second = current_time.second
@@ -29,7 +29,8 @@ def query_realtime_data():
         if current_second > 0 and current_second < 5:
             try:
                 test_file = urllib2.urlopen(request, timeout=2).read()
-                price_item = parse_data(test_file, counter)
+                timestamp = time.time()
+                price_item = parse_data(test_file, timestamp)
 
                 #This block deals with data that was retrieved after hours and contains a time of "day/month"
                 if '/' in price_item['Time']:
