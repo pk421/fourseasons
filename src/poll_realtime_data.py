@@ -13,9 +13,8 @@ def query_realtime_data():
 
     base_path = '/home/wilmott/Desktop/fourseasons/fourseasons/'
     request = "http://www.forexpros.com/commodities/"
-    #test_file = urllib2.urlopen(request, timeout=2).read()
 
-    input_file = open((base_path + "src/scrape_output.html"), 'r')
+    input_file = open((base_path + "var/ref/scrape_output.html"), 'r')
     input_data = input_file.read()
     input_file.close()
 
@@ -25,10 +24,11 @@ def query_realtime_data():
         time.sleep(0.25)
         current_time = datetime.datetime.now()
         current_second = current_time.second
-        
-#        if current_second >= 0 and current_second < 5:
-        if current_second % 1 == 0:
+
+#        if current_second % 1 == 0:
+        if current_second >= 0 and current_second < 5:
             try:
+#                test_file = input_data
                 test_file = urllib2.urlopen(request, timeout=2).read()
                 timestamp = time.time()
 
@@ -38,13 +38,16 @@ def query_realtime_data():
                                 'US Coffee C', 'US Corn', 'US Wheat', 'London Sugar', 'US Cotton No.2']
 
                 for item in items_to_get:
-                    price_item = parse_data(test_file, timestamp, date=date_now, item=item)
+                    try:
+                        price_item = parse_data(test_file, timestamp, date=date_now, item=item)
+                    except:
+                        continue
 
                     #This block deals with data that was retrieved after hours and contains a time of "day/month"
                     if '/' in price_item['Time']:
                         continue
 
-                    fill_realtime_redis(price_item, store_under='realtime_1min:', delete_old_data=False, db_number=1)
+                    fill_realtime_redis(price_item, store_under='rt_01_min:', delete_old_data=False, db_number=1)
 
                     print counter, "\t", price_item['Symbol'], "\t", price_item['Last'], "\t", price_item['Time']
 

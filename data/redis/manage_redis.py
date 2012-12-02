@@ -57,33 +57,35 @@ def read_redis(stocks, start_date='19500101', end_date='20121111'):
 
     return list_of_stocks
 
-def read_intraday_data():
-
-    redis_symbol = 'realtime_1min:Gold_Spot'
-    start_date = '-inf'
-    end_date = '+inf'
-
-    out_file = open('/home/wilmott/Desktop/fourseasons/fourseasons/data/from_redis/' + redis_symbol.split(':')[1] + '.csv', 'w')
+def read_realtime_data():
 
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
-    raw = redis_db.zrangebyscore(redis_symbol, start_date, end_date)
+    redis_keys = redis_db.keys(pattern='*')
 
-    print len(raw)
-    for line in raw:
-        for k,v in enumerate(line.split(',')):
-            #print k, v
-            if k == 6 and '/' in v:
-                #This block deals with data that was retrieved after hours and contains a time of "day/month"
-                print line
-                raw.remove(line)
-                break
-        print line
-        out_file.write(line)
+    for redis_symbol in redis_keys:
+#        redis_symbol = 'realtime_1min:Gold_Spot'
+        start_date = '-inf'
+        end_date = '+inf'
 
+        out_file = open('/home/wilmott/Desktop/fourseasons/fourseasons/data/from_redis/' + redis_symbol.split(':')[0] +\
+                        '-' + redis_symbol.split(':')[1] + '.csv', 'w')
 
-    print len(raw)
+        raw = redis_db.zrangebyscore(redis_symbol, start_date, end_date)
 
-    out_file.close()
+        for line in raw:
+            for k,v in enumerate(line.split(',')):
+                #print k, v
+                if k == 6 and '/' in v:
+                    #This block deals with data that was retrieved after hours and contains a time of "day/month"
+                    print line
+                    raw.remove(line)
+                    break
+            print line
+            out_file.write(line)
+            out_file.write('\n')
+
+        out_file.close()
+        print redis_symbol, len(raw)
 
     return
 

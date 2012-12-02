@@ -257,7 +257,7 @@ def read_redis(stocks='all_stocks'):
     #stocks = ['A', 'AAPL']
     #list_of_stocks = []
     #list_of_stocks = manage_redis.read_redis(stocks)
-    manage_redis.read_intraday_data()
+    manage_redis.read_realtime_data()
 
     return
 
