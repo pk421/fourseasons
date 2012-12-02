@@ -26,59 +26,85 @@ def query_realtime_data():
         current_time = datetime.datetime.now()
         current_second = current_time.second
         
-        if current_second > 0 and current_second < 5:
+#        if current_second >= 0 and current_second < 5:
+        if current_second % 1 == 0:
             try:
                 test_file = urllib2.urlopen(request, timeout=2).read()
                 timestamp = time.time()
-                price_item = parse_data(test_file, timestamp)
 
-                #This block deals with data that was retrieved after hours and contains a time of "day/month"
-                if '/' in price_item['Time']:
-                    continue
+                date_now = str(datetime.datetime.today())
+                items_to_get = ['Brent Oil', 'Crude Oil', 'Natural Gas', 'Heating Oil', \
+                                'Gold', 'Silver', 'Copper', 'Platinum', \
+                                'US Coffee C', 'US Corn', 'US Wheat', 'London Sugar', 'US Cotton No.2']
 
-                fill_realtime_redis(price_item, store_under='realtime_1min:', delete_old_data=False)
+                for item in items_to_get:
+                    price_item = parse_data(test_file, timestamp, date=date_now, item=item)
 
-                print counter, "\t", price_item['Last'], "\t", price_item['Time']
+                    #This block deals with data that was retrieved after hours and contains a time of "day/month"
+                    if '/' in price_item['Time']:
+                        continue
+
+                    fill_realtime_redis(price_item, store_under='realtime_1min:', delete_old_data=False, db_number=1)
+
+                    print counter, "\t", price_item['Symbol'], "\t", price_item['Last'], "\t", price_item['Time']
+
                 time.sleep(10)
                 counter += 1
 
             except:
                 time.sleep(2)
                 continue
-
-
-
-    price_item = parse_data(input_data)
-    print price_item
-
-#    fout = open((base_path + "/src/scrape_output.html"), 'w')
-#    fout.write(test_file)
-#    fout.close()
     
     return
 
-def parse_data(scraped_data, counter):
+def parse_data(scraped_data, timestamp, date, item):
 
-    find_gold = scraped_data.split('<nobr><a href="/commodities/gold" title="Gold" >Gold</a></nobr></td><td nowrap=\"nowrap\" class=\"m_t\">')
-    #print len(find_gold)
+    if item == 'Brent Oil':
+        splitters = ['brent-oil', 'Brent Oil', 'Brent Oil', 'Crude Oil', 'Brent_Oil_Spot']
+    elif item == 'Crude Oil':
+        splitters = ['crude-oil', 'Crude Oil', 'Crude Oil', 'Natural Gas', 'Crude_Oil_Spot']
+    elif item == 'Natural Gas':
+        splitters = ['natural-gas', 'Natural Gas', 'Natural Gas', 'Heating Oil', 'Natural_Gas_Spot']
+    elif item == 'Heating Oil':
+        splitters = ['heating-oil', 'Heating Oil', 'Heating Oil', 'Metals', 'Heating_Oil_Spot']
 
-    find_date = find_gold[1][0:6]
-    #print find_date
+    elif item == 'Gold':
+        splitters = ['gold', 'Gold', 'Gold', 'Silver', 'Gold_Spot']
+    elif item == 'Silver':
+        splitters = ['silver', 'Silver', 'Silver', 'copper', 'Silver_Spot']
+    elif item == 'Copper':
+        splitters = ['copper', 'Copper', 'Copper', 'platinum', 'Copper_Spot']
+    elif item == 'Platinum':
+        splitters = ['platinum', 'Platinum', 'Platinum', 'Agriculture', 'Platinum_Spot']
 
-    before_silver = find_gold[1].split("Silver")[0]
-    #print before_silver
+    elif item == 'US Coffee C':
+        splitters = ['us-coffee-c', 'US Coffee C', 'US Coffee C', 'US Corn', 'US_Coffee_C_Spot']
+    elif item == 'US Corn':
+        splitters = ['us-corn', 'US Corn', 'US Corn', 'US Wheat', 'US_Corn_Spot']
+    elif item == 'US Wheat':
+        splitters = ['us-wheat', 'US Wheat', 'US Wheat', 'London Sugar', 'US_Wheat_Spot']
+    elif item == 'London Sugar':
+        splitters = ['london-sugar', 'London Sugar', 'London Sugar', 'US Cotton No.2', 'London_Sugar_Spot']
+    elif item == 'US Cotton No.2':
+        splitters = ['us-cotton-no.2', 'US Cotton No.2', 'US Cotton No.2', '</tbody></table>', 'US_Cotton_No.2_Spot']
 
-    gold_parts = before_silver.split("</td>")
+    find_item_start = scraped_data.split('<nobr><a href="/commodities/' + splitters[0] + '" title="' + splitters[1] + \
+                                        '" >' + splitters[2] + '</a></nobr></td><td nowrap=\"nowrap\" class=\"m_t\">')
 
-    last = gold_parts[1].split(">")[1]
-    previous = gold_parts[2].split(">")[1]
-    high = gold_parts[3].split(">")[1]
-    low = gold_parts[4].split(">")[1]
-    change = gold_parts[5].split(">")[1]
-    change_pct = gold_parts[6].split(">")[1]
-    last_time = gold_parts[7].split(">")[1]
+    find_item_date = find_item_start[1][0:6]
+    item_before_next = find_item_start[1].split(splitters[3])[0]
+    item_parts = item_before_next.split("</td>")
+
+    last = item_parts[1].split(">")[1]
+    previous = item_parts[2].split(">")[1]
+    high = item_parts[3].split(">")[1]
+    low = item_parts[4].split(">")[1]
+    change = item_parts[5].split(">")[1]
+    change_pct = item_parts[6].split(">")[1]
+    last_time = item_parts[7].split(">")[1]
 
     realtime_price_data = {}
+
     realtime_price_data['Last'] = last
     realtime_price_data['Previous'] = previous
     realtime_price_data['High'] = high
@@ -87,16 +113,16 @@ def parse_data(scraped_data, counter):
     realtime_price_data['ChangePct'] = change_pct
 
     realtime_price_data['Time'] = last_time
-    realtime_price_data['Date'] = str(datetime.datetime.today())
+    realtime_price_data['Date'] = date
 
-    realtime_price_data['Counter'] = counter
-    realtime_price_data['Symbol'] = 'Gold_Spot'
+    realtime_price_data['Timestamp'] = timestamp
+    realtime_price_data['Symbol'] = splitters[4]
 
     return realtime_price_data
 
 
-    return price_item
 
+########################################################################################################################
 #    <h3><a href="/commodities/real-time-futures">Real Time Commodities</a> <span
 #    class="newSiteIconsSprite doubleArrowLink">&nbsp;</span></h3><h5 class="linkTitle subTitle">
 #    <a href="/commodities/energies">Energy</a> <span class="newSiteIconsSprite doubleArrowLinkSmall">&nbsp;</span>

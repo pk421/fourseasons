@@ -1,22 +1,9 @@
 import redis
 
-def flushall():
-    redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
-    redis_db.flushall()
+def flushdb(db_number=15):
+    redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
+    redis_db.flushdb()
     return
-
-def fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=True):
-    redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
-    symbol = stock_price_set[0]['Symbol']
-    if delete_old_data:
-        redis_db.delete(store_under + symbol)
-
-    pairs = {}
-    for day in stock_price_set:
-        #redis_db.zadd(day['Symbol'], pack_date(day['Date']), pack_data(day))
-        pairs[pack_data(day)] = pack_date(day['Date'])
-
-    redis_db.zadd(store_under + symbol, **pairs)
 
 def read_redis(stocks, start_date='19500101', end_date='20121111'):
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
@@ -100,6 +87,19 @@ def read_intraday_data():
 
     return
 
+def fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=True, db_number=15):
+    redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
+    symbol = stock_price_set[0]['Symbol']
+    if delete_old_data:
+        redis_db.delete(store_under + symbol)
+
+    pairs = {}
+    for day in stock_price_set:
+        #redis_db.zadd(day['Symbol'], pack_date(day['Date']), pack_data(day))
+        pairs[pack_data(day)] = pack_date(day['Date'])
+
+    redis_db.zadd(store_under + symbol, **pairs)
+
 def pack_date(in_date):
     """
         Packs a date and converts it to an int format to put in redis
@@ -126,14 +126,14 @@ def pack_data(in_data):
     return out_data
 
 
-def fill_realtime_redis(price_set, store_under='historical-D:', delete_old_data=True):
-    redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
+def fill_realtime_redis(price_set, store_under='historical-D:', delete_old_data=False, db_number=15):
+    redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
     symbol = price_set['Symbol']
     if delete_old_data:
         redis_db.delete(store_under + symbol)
 
     pairs = {}
-    pairs[pack_realtime_data(price_set)] = price_set['Counter']
+    pairs[pack_realtime_data(price_set)] = price_set['Timestamp']
 
     redis_db.zadd(store_under + symbol, **pairs)
 

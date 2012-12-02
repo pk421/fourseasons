@@ -197,7 +197,7 @@ def load_redis(stock_list='do_all', file_location='data/test/'):
             #print failed_symbols
             print symbol, "\t failed at least one validation test"
             continue
-        manage_redis.fill_redis(stock_price_set)
+        manage_redis.fill_redis(stock_price_set, db_number=0)
 
         current_time = datetime.datetime.now() - start_time
         print k, ' of ', len(symbols), '\t', current_time, '\t', symbol, '\tinto redis'
