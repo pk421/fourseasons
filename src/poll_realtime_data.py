@@ -48,7 +48,6 @@ def query_realtime_data():
                         continue
 
                     fill_realtime_redis(price_item, store_under='rt_01_min:', delete_old_data=False, db_number=1)
-
                     print counter, "\t", price_item['Symbol'], "\t", price_item['Last'], "\t", price_item['Time']
 
                 time.sleep(10)

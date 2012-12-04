@@ -132,7 +132,7 @@ def extract_symbols_with_historical_data(search_in='/home/wilmott/Desktop/fourse
     return symbols
 
 
-def load_redis(stock_list='do_all', file_location='data/test/'):
+def load_redis(stock_list='do_all', db_number=15, file_location='data/test/'):
     start_time = datetime.datetime.now()
 
     base_path = '/home/wilmott/Desktop/fourseasons/fourseasons/'
@@ -197,7 +197,7 @@ def load_redis(stock_list='do_all', file_location='data/test/'):
             #print failed_symbols
             print symbol, "\t failed at least one validation test"
             continue
-        manage_redis.fill_redis(stock_price_set, db_number=0)
+        manage_redis.fill_redis(stock_price_set, db_number=db_number)
 
         current_time = datetime.datetime.now() - start_time
         print k, ' of ', len(symbols), '\t', current_time, '\t', symbol, '\tinto redis'
@@ -212,7 +212,8 @@ def load_redis(stock_list='do_all', file_location='data/test/'):
     print "\nFailed Validation Symbols: ", failed_symbols
     print "\nNumber of validation failures: ", len(failed_symbols)
     print "\nNumber of no data failures: ", len(no_data_symbols)
-    print "\nTime Required: ", time_required
+    print "\nTotal Loaded: ", (len(symbols) - len(failed_symbols) - len(no_data_symbols))
+    print "Time Required: ", time_required
 
     return
 
@@ -248,18 +249,23 @@ def validate_data(stock_price_set):
     else:
         return True
 
-def read_redis(stocks='all_stocks'):
+def read_redis(stock='all_stocks', db_number=15, to_disk=True):
     """
     list_of_stocks, the object returned by read_redis, will be structured as follows:
     A list representing the data of many stocks. Each stock item in the list is itself a list of "day_dicts", where
     each day of data is represented as a dictionary.
     """
-    #stocks = ['A', 'AAPL']
-    #list_of_stocks = []
-    #list_of_stocks = manage_redis.read_redis(stocks)
-    manage_redis.read_realtime_data()
 
-    return
+    if to_disk:
+        #Assumes you are dumping real time data for now, since this data can't be re-downloaded from Yahoo
+        manage_redis.read_realtime_data(db_number=db_number)
+        return
+
+    else:
+        #This function assumes db=0, which is the db used for all of the Daily historical data, must call w/list arg!!
+        list_of_stocks = manage_redis.read_redis([stock])
+        return list_of_stocks
+    
 
 
 

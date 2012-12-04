@@ -32,6 +32,11 @@ Redis-Py:
 Supervisor:
 - sudo easy_install supervisor
 
+SciPy / Numpy:
+- sudo apt-get install python-numpy python-scipy
+
+########################################################################################################################
+
 Useful Commands:
 -   Convert from DOS line endings to UNIX style:
     sed -i 's/\r//' filename

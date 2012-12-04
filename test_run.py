@@ -1,5 +1,6 @@
 from src.data_retriever import *
 from src.poll_realtime_data import *
+from src.stock_analyzer import run_stock_analyzer
 import argparse
 import os
 
@@ -30,22 +31,29 @@ parser.add_argument("--read_redis",
                     help="read data from redis and put it in python objects in memory",
                     action="store_true")
 
+parser.add_argument("--stock_analyzer",
+                    help="run the analysis backend for some securities",
+                    action="store_true")
+
 args = parser.parse_args()
 #print args.square**2
 #if args.verbosity:
 #    print "verbosity turned on"
 
 if args.download_stocks:
-    multithread_yahoo_download('300B_1M.csv', thread_count=1, update_check=True, new_only=False)
+    multithread_yahoo_download('300B_1M.csv', thread_count=5, update_check=True, new_only=False)
 
 if args.extract_symbols_with_historical_data:
     extract_symbols_with_historical_data()
 
 if args.load_redis:
-    load_redis(stock_list='300B_1M.csv')
+    load_redis(stock_list='list_sp_500.csv', db_number=14, file_location='data/test/')
 
 if args.poll_realtime_data:
     query_realtime_data()
 
 if args.read_redis:
-    read_redis()
+    read_redis(db_number = 1, to_disk=True)
+
+if args.stock_analyzer:
+    run_stock_analyzer()

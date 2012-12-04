@@ -5,7 +5,7 @@ def flushdb(db_number=15):
     redis_db.flushdb()
     return
 
-def read_redis(stocks, start_date='19500101', end_date='20121111'):
+def read_redis(stocks, start_date='-inf', end_date='+inf'):
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
 
     list_of_stocks = []
@@ -13,11 +13,10 @@ def read_redis(stocks, start_date='19500101', end_date='20121111'):
     for s in stocks:
         all_days = []
         redis_symbol = "historical-D:" + s
-        #raw = redis_db.zrangebyscore(redis_symbol,'-inf','+inf')
         raw = redis_db.zrangebyscore(redis_symbol,start_date,end_date)
         for line in raw:
             day_dict = {}
-            print line
+#            print line
             for k, v in enumerate(line.split(',')):
                 day_dict['Symbol'] = s
                 if k == 0:
@@ -52,14 +51,13 @@ def read_redis(stocks, start_date='19500101', end_date='20121111'):
                     continue
 
             all_days.append(day_dict)
-
         list_of_stocks.append(all_days)
 
     return list_of_stocks
 
-def read_realtime_data():
+def read_realtime_data(db_number=15):
 
-    redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
+    redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
     redis_keys = redis_db.keys(pattern='*')
 
     for redis_symbol in redis_keys:
@@ -81,11 +79,12 @@ def read_realtime_data():
                     raw.remove(line)
                     break
             print line
-            out_file.write(line)
+            out_file.write(str(line))
             out_file.write('\n')
 
         out_file.close()
-        print redis_symbol, len(raw)
+        print "\n", redis_symbol
+        print "Total Entries: ", len(raw)
 
     return
 
@@ -104,7 +103,7 @@ def fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=Tru
 
 def pack_date(in_date):
     """
-        Packs a date and converts it to an int format to put in redis
+        Packs a date and converts it to an int format to put in redis. in_date is simply in format yyyy-mm-dd
     """
     out_date = ''
     for i in in_date.split('-'):

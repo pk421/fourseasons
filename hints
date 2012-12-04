@@ -17,3 +17,7 @@ TAR:
     -v: verbose (not necessary, it will print out file names that are extracted)
     -z: decompress files created by gzip
     -f: specify an archive o
+
+Using C With Price Data:
+    - Search for "strtod"
+    - http://grahamstratton.org/straightornamental/entries/cython
