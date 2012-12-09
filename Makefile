@@ -11,6 +11,18 @@ stop_services:
 	supervisorctl --configuration etc/supervisord.conf stop all
 	supervisorctl --configuration etc/supervisord.conf shutdown
 
+poll_start:
+	supervisorctl --configuration etc/supervisord.conf start poll_realtime_data
+
+poll_stop:
+	supervisorctl --configuration etc/supervisord.conf stop poll_realtime_data
+
+redis_start:
+	supervisorctl --configuration etc/supervisord.conf start redis
+
+redis_stop:
+	supervisorctl --configuration etc/supervisord.conf stop redis
+
 download_stocks:
 	python test_run.py --download_stocks
 

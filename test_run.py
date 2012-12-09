@@ -1,8 +1,10 @@
+import argparse
+import os
+import time
+
 from src.data_retriever import *
 from src.poll_realtime_data import *
 from src.stock_analyzer import run_stock_analyzer
-import argparse
-import os
 
 parser = argparse.ArgumentParser()
 #parser.add_argument("square",
@@ -40,6 +42,8 @@ args = parser.parse_args()
 #if args.verbosity:
 #    print "verbosity turned on"
 
+time_start = time.time()
+
 if args.download_stocks:
     multithread_yahoo_download('300B_1M.csv', thread_count=5, update_check=True, new_only=False)
 
@@ -57,3 +61,9 @@ if args.read_redis:
 
 if args.stock_analyzer:
     run_stock_analyzer()
+
+
+
+time_end = time.time()
+time_total = round(time_end - time_start, 4)
+print "\n\nTime Needed: ", time_total, " sec"

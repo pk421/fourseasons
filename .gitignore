@@ -28,5 +28,9 @@ pip-log.txt
 
 #My section:
 /tmp
-.log
-.idea/workspace.xml
+log/
+.idea/*
+*.rdb
+*.swp
+include
+data/
