@@ -2,9 +2,12 @@ import argparse
 import os
 import time
 
-from src.data_retriever import *
-from src.poll_realtime_data import *
-from src.stock_analyzer import run_stock_analyzer
+try:
+    from src.data_retriever import *
+    from src.poll_realtime_data import *
+    from src.stock_analyzer import run_stock_analyzer
+except:
+    print "\n\nCould not make all imports"
 
 parser = argparse.ArgumentParser()
 #parser.add_argument("square",

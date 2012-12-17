@@ -35,6 +35,9 @@ Supervisor:
 SciPy / Numpy:
 - sudo apt-get install python-numpy python-scipy
 
+Cython:
+- sudo easy_install cython
+
 ########################################################################################################################
 
 Useful Commands:

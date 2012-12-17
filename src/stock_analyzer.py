@@ -1,5 +1,6 @@
 from src.data_retriever import read_redis
 import numpy as np
+import tools as tools
 
 def run_stock_analyzer():
 
@@ -23,8 +24,52 @@ def run_stock_analyzer():
         for x in xrange(0, len_data):
             simple_price_data[x] = stock_data[x]['AdjClose']
 
-        print "Mean: ", np.mean(simple_price_data)
-        print "Median: ", np.median(simple_price_data)
+        v1 = 21
+        volatility = tools.volatility_bs_annualized(simple_price_data, v1=v1)
+
+        max_t = 0
+        max_under_vol_return = 0
+        max_over_vol_return = 0
+
+        test_values = []
+
+        for x in xrange(0, 100000):
+            test_values.append(x * 0.0000025)
+
+        for i, t in enumerate(test_values):
+            under_vol_returns = 1
+            under_vol_days = 0
+            over_vol_returns = 1
+            over_vol_days = 0
+
+            for k, v in enumerate(volatility):
+                
+                if k >= v1 and k <= (len_data - 1):
+                    today_return = np.log(np.abs(simple_price_data[k] / simple_price_data[k-1]))
+                    if v <= t:
+                        under_vol_returns = under_vol_returns * (1 + today_return)
+                        under_vol_days += 1
+                    elif v > t:
+                        over_vol_returns = under_vol_returns * (1 + today_return)
+                        over_vol_days += 1
+
+                    #print today_return
+
+
+            if under_vol_returns > max_under_vol_return:
+                max_over_vol_return = over_vol_returns
+                max_under_vol_return = under_vol_returns
+                max_t = t
+
+            if i % 100 == 0:
+                print i, t, "\t", max_t, "\t", max_under_vol_return, "\t", under_vol_returns
+
+        #print max_t,max_over_vol_return, max_under_vol_return
+
+        for k, v in enumerate(volatility):
+            #print stock_data[k]['Date'], "\t", k, "\t", round(v, 4)
+            pass
+        
         
 #        for x in xrange(0,len(stock_data)):
 #            today = stock_data[x]
