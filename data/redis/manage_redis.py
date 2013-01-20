@@ -1,8 +1,26 @@
 import redis
 
 def flushdb(db_number=15):
-    redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
-    redis_db.flushdb()
+    # redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
+    # redis_db.flushdb()
+
+   
+    # redis_db = redis.StrictRedis(host='localhost', port=6379, db=1) 
+    # items = redis_db.keys()
+    # items_to_del = []
+    # print len(items)
+    
+    # for i in items:
+    #     if 'rt_01' in i:
+    #         continue
+    #     else:
+    #         items_to_del.append(i)
+
+    # print len(items_to_del)
+
+    # for i in items_to_del:
+    #     redis_db.delete(i)
+
     return
 
 def read_redis(stocks, start_date='-inf', end_date='+inf'):
@@ -75,10 +93,10 @@ def read_realtime_data(db_number=15):
                 #print k, v
                 if k == 6 and '/' in v:
                     #This block deals with data that was retrieved after hours and contains a time of "day/month"
-                    print line
+                    #print line
                     raw.remove(line)
                     break
-            print line
+            #print line
             out_file.write(str(line))
             out_file.write('\n')
 

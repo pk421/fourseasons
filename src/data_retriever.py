@@ -1,12 +1,13 @@
 from data.redis import manage_redis
 import os
-import urllib2
+import requests
 import threading
 import logging
 import logging.handlers
 import time
 import Queue
 import datetime
+
 
 def get_yahoo_data(queue, **kwargs):
     update_check = kwargs['update_check']
@@ -25,7 +26,7 @@ def get_yahoo_data(queue, **kwargs):
         file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/tmp/" + s + ".csv"
         #logger.debug(s + "\tbefore if" + str(os.path.exists(file_path)) + str(update_check))
         if (os.path.exists(file_path) == False) or update_check == False:
-            request = "http://table.finance.yahoo.com/table.csv?s=" + s + '&a=' + start_month + \
+            query_url = 'http://table.finance.yahoo.com/table.csv?s=' + s + '&a=' + start_month + \
                                                                           '&b=' + start_day + \
                                                                           '&c=' + start_year + \
                                                                           '&d=' + current_month + \
@@ -35,23 +36,26 @@ def get_yahoo_data(queue, **kwargs):
             #logger.debug(s + "\tbefore request")
             test_file = '\texception in urlopen'
             try:
-                test_file = urllib2.urlopen(request, timeout=2).read()
+                test_file = requests.get(query_url, timeout=2)
+                if test_file.status_code != 200:
+                    test_file = requests.get(query_url, timeout=2)
             except:
                 try:
-                    test_file = urllib2.urlopen(request, timeout=2).read()
+                    test_file = requests.get(query_url, timeout=2)
                 except:
                     try:
-                        test_file = urllib2.urlopen(request, timeout=5).read()
+                        test_file = requests.get(query_url, timeout=10)
                     except:
-                        logger.debug(s + ',http request failed 3 attempts')
+                        logger.info(s + ',http request failed 3 attempts')
                         queue.task_done()
                         continue
             #logger.debug(s + "\tafter request, will write to file")
-            fout = open(file_path, 'w')
-            fout.write(test_file)
-            fout.close()
-            queue.task_done()
-            continue
+            if test_file.status_code == 200:
+                fout = open(file_path, 'w')
+                fout.write(test_file.text)
+                fout.close()
+                queue.task_done()
+                continue
         else:
             #logger.debug(s + '\tskipping, file already present')
             queue.task_done()
@@ -94,14 +98,14 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
     
     #used to test a single symbol
     #symbols = ['A', 'AA', 'AAPL', 'F', 'X', 'GOOG', 'bogus_symbol']
-    #symbols = ['AMMD']
+    #symbols = ['MEE']
     for s in symbols:
         queue.put(s)
     print "Number of symbols to fetch: ", len(symbols)
 
     for d in range(thread_count):
         #logger.debug(str(symbols.index(s)) + ' if \t' + s + '\t' + str(len(threading.enumerate())))
-        d = threading.Thread(name='get_yahoo_data', target=get_yahoo_data, \
+        d = threading.Thread(name=('get_yahoo_data_' + str(d)), target=get_yahoo_data, \
                              args=[queue], kwargs={'log':logger, 'update_check':update_check})
         d.setDaemon(True)
         d.start()
@@ -113,6 +117,9 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
     return
 
 def extract_symbols_with_historical_data(search_in='/home/wilmott/Desktop/fourseasons/fourseasons/tmp/'):
+    """
+    This will search the search_in dir and return a list of symbols that already contain csv data.
+    """
 
     search_in = '/home/wilmott/Desktop/fourseasons/fourseasons/tmp/'
     symbols = []
@@ -138,7 +145,7 @@ def load_redis(stock_list='do_all', db_number=15, file_location='data/test/'):
     base_path = '/home/wilmott/Desktop/fourseasons/fourseasons/'
     file_path = base_path + file_location + 'data/'
     list_path = base_path + 'data/stock_lists/'
-    #file_path = '/home/wilmott/Desktop/fourseasons/fourseasons/data/daily_price_data/'
+    file_path = '/home/wilmott/Desktop/fourseasons/fourseasons/tmp/'
     symbols = []
 
     #if no symbol is specified, do it for all
@@ -177,15 +184,18 @@ def load_redis(stock_list='do_all', db_number=15, file_location='data/test/'):
         for day in days:
             day_items = day.split(',')
             day_dict = {}
-
-            day_dict['Symbol'] = str(symbol)
-            day_dict['Date'] = str(day_items[0])
-            day_dict['Open'] = float(day_items[1])
-            day_dict['High'] = float(day_items[2])
-            day_dict['Low'] = float(day_items[3])
-            day_dict['Close'] = float(day_items[4])
-            day_dict['Volume'] = float(day_items[5])
-            day_dict['AdjClose'] = float(day_items[6])
+            try:
+                day_dict['Symbol'] = str(symbol)
+                day_dict['Date'] = str(day_items[0])
+                day_dict['Open'] = float(day_items[1])
+                day_dict['High'] = float(day_items[2])
+                day_dict['Low'] = float(day_items[3])
+                day_dict['Close'] = float(day_items[4])
+                day_dict['Volume'] = float(day_items[5])
+                day_dict['AdjClose'] = float(day_items[6])
+            except:
+                print symbol, '\n', day_items
+                exit(1)
 
             stock_price_set.append(day_dict)
 
@@ -211,6 +221,7 @@ def load_redis(stock_list='do_all', db_number=15, file_location='data/test/'):
     time_required = end_time - start_time
     print "\nFailed Validation Symbols: ", failed_symbols
     print "\nNumber of validation failures: ", len(failed_symbols)
+    print "\nNo Data Symbols: ", no_data_symbols
     print "\nNumber of no data failures: ", len(no_data_symbols)
     print "\nTotal Loaded: ", (len(symbols) - len(failed_symbols) - len(no_data_symbols))
     print "Time Required: ", time_required

@@ -40,3 +40,6 @@ read_redis:
 
 stock_analyzer:
 	python test_run.py --stock_analyzer
+
+vol_analyzer:
+	python test_run.py --vol_analyzer

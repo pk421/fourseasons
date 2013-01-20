@@ -38,6 +38,12 @@ SciPy / Numpy:
 Cython:
 - sudo easy_install cython
 
+Pip:
+- sudo apt-get install python-pip
+
+Requests Lib:
+- sudo pip install requests
+
 ########################################################################################################################
 
 Useful Commands:

@@ -20,18 +20,21 @@ def query_realtime_data():
 
     counter = 0
     start_time = datetime.datetime.now()
-    while True:
+    #while True:
+    while counter < 1:
         time.sleep(0.25)
         current_time = datetime.datetime.now()
         current_second = current_time.second
 
-#        if current_second % 1 == 0:
-        if current_second >= 0 and current_second < 5:
+        if current_second % 1 == 0:
+#        if current_second >= 0 and current_second < 5:
             try:
 #                test_file = input_data
                 test_file = urllib2.urlopen(request, timeout=2).read()
+                out_file = open((base_path + "var/ref/scrape_output-new.html"), 'w')
+                out_file.write(test_file)
+                outfile.close()
                 timestamp = time.time()
-
                 date_now = str(datetime.datetime.today())
                 items_to_get = ['Brent Oil', 'Crude Oil', 'Natural Gas', 'Heating Oil', \
                                 'Gold', 'Silver', 'Copper', 'Platinum', \
@@ -40,6 +43,7 @@ def query_realtime_data():
                 for item in items_to_get:
                     try:
                         price_item = parse_data(test_file, timestamp, date=date_now, item=item)
+
                     except:
                         continue
 
@@ -56,7 +60,7 @@ def query_realtime_data():
             except:
                 time.sleep(2)
                 continue
-    
+                
     return
 
 def parse_data(scraped_data, timestamp, date, item):

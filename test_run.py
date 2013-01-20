@@ -6,6 +6,8 @@ try:
     from src.data_retriever import *
     from src.poll_realtime_data import *
     from src.stock_analyzer import run_stock_analyzer
+    from src.vol_analyzer import run_vol_analyzer
+
 except:
     print "\n\nCould not make all imports"
 
@@ -40,6 +42,10 @@ parser.add_argument("--stock_analyzer",
                     help="run the analysis backend for some securities",
                     action="store_true")
 
+parser.add_argument("--vol_analyzer",
+                    help="run the volatility analysis backend for some securities",
+                    action="store_true")
+
 args = parser.parse_args()
 #print args.square**2
 #if args.verbosity:
@@ -48,24 +54,29 @@ args = parser.parse_args()
 time_start = time.time()
 
 if args.download_stocks:
-    multithread_yahoo_download('300B_1M.csv', thread_count=5, update_check=True, new_only=False)
+    """
+    if update_check = True, then this will will NOT overwrite existing files in folder
+    if new_only = True, then this will NOT download any files that already exist in the folder
+    """
+    multithread_yahoo_download('large_universe.csv', thread_count=20, update_check=False, new_only=False)
 
 if args.extract_symbols_with_historical_data:
     extract_symbols_with_historical_data()
 
 if args.load_redis:
-    load_redis(stock_list='list_sp_500.csv', db_number=14, file_location='data/test/')
+    load_redis(stock_list='list_sp_500.csv', db_number=0, file_location='tmp/')
 
 if args.poll_realtime_data:
     query_realtime_data()
 
 if args.read_redis:
-    read_redis(db_number = 1, to_disk=True)
+    read_redis(db_number=1, to_disk=True)
 
 if args.stock_analyzer:
     run_stock_analyzer()
 
-
+if args.vol_analyzer:
+    run_vol_analyzer()
 
 time_end = time.time()
 time_total = round(time_end - time_start, 4)
