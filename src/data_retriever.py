@@ -1,17 +1,20 @@
 from data.redis import manage_redis
 import os
 import requests
-import threading
+# import threading
 import logging
 import logging.handlers
 import time
-import Queue
+# import Queue
 import datetime
+import multiprocessing
+from multi_proc import q_runner, worker1
 
 
-def get_yahoo_data(queue, **kwargs):
-    update_check = kwargs['update_check']
-    logger = kwargs['log']
+def get_yahoo_data(input, output):
+    # update_check = kwargs['update_check']
+    # logger = kwargs['log']
+    update_check = False
 
     start_year = '1950'
     start_month = '1'
@@ -20,9 +23,11 @@ def get_yahoo_data(queue, **kwargs):
     current_month = str(datetime.datetime.today().month)
     current_day = str(datetime.datetime.today().day)
 
-    while True:
-        s = queue.get()
-        print s, "\t", queue.qsize()
+    for c in iter(input.get, 'STOP'):
+        s = c
+        print s
+        # s = q.get()
+        # print s, "\t", q.qsize()
         file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/tmp/" + s + ".csv"
         #logger.debug(s + "\tbefore if" + str(os.path.exists(file_path)) + str(update_check))
         if (os.path.exists(file_path) == False) or update_check == False:
@@ -46,22 +51,23 @@ def get_yahoo_data(queue, **kwargs):
                     try:
                         test_file = requests.get(query_url, timeout=10)
                     except:
-                        logger.info(s + ',http request failed 3 attempts')
-                        queue.task_done()
+                        # logger.info(s + ',http request failed 3 attempts')
+                        ####################
+                        # q.task_done()
                         continue
             #logger.debug(s + "\tafter request, will write to file")
             if test_file.status_code == 200:
                 fout = open(file_path, 'w')
                 fout.write(test_file.text)
                 fout.close()
-                queue.task_done()
+                # q.task_done()
                 continue
         else:
             #logger.debug(s + '\tskipping, file already present')
-            queue.task_done()
+            # q.task_done()
             continue
         #catch anything that might have gotten thru other statements...this is to debug
-        queue.task_done()
+        # q.task_done()
     return
 
 #os.system("curl --silent 'http://download.finance.yahoo.com/d/quotes.csv?s=SLV&f=l' > tmp/SLV.csv")
@@ -70,7 +76,6 @@ def get_yahoo_data(queue, **kwargs):
 
 def multithread_yahoo_download(list_to_download='large_universe.csv', thread_count=1, update_check=False,
                                new_only=False):
-    queue = Queue.Queue()
     #kill off previous processes:
     #os.system('kill -9 $(lsof src.data_retriever.log*)')
     logger = logging.getLogger(__name__)
@@ -99,18 +104,35 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
     #used to test a single symbol
     #symbols = ['A', 'AA', 'AAPL', 'F', 'X', 'GOOG', 'bogus_symbol']
     #symbols = ['MEE']
-    for s in symbols:
-        queue.put(s)
+   
+    # q = multiprocessing.Queue()
+    # for s in symbols:
+    #     q.put(s)
+
     print "Number of symbols to fetch: ", len(symbols)
 
     for d in range(thread_count):
         #logger.debug(str(symbols.index(s)) + ' if \t' + s + '\t' + str(len(threading.enumerate())))
-        d = threading.Thread(name=('get_yahoo_data_' + str(d)), target=get_yahoo_data, \
-                             args=[queue], kwargs={'log':logger, 'update_check':update_check})
-        d.setDaemon(True)
-        d.start()
+        # d = threading.Thread(name=('get_yahoo_data_' + str(d)), target=get_yahoo_data, \
+        #                      args=[queue], kwargs={'log':logger, 'update_check':update_check})
+        # d.setDaemon(True)
+        # d.start()
+        
 
-    queue.join()
+        # p = multiprocessing.Process(name=('get_yahoo_data_' + str(d)), target=get_yahoo_data, \
+        #                      args=[q], kwargs={'log':logger, 'update_check':update_check})
+        # p.daemon = True
+        # p.start()
+        pass
+
+    r1 = q_runner(thread_count, symbols, get_yahoo_data)
+
+    # queue.join()
+
+
+    # pool = multiprocessing.Pool(thread_count)
+    # for s in symbols:
+    #     pool.apply_async(get_yahoo_data(args=[queue], kwargs={'log':logger, 'update_check':update_check})
 
     logger.debug("Ending Main Thread\n\n\n")
     handler.close()
