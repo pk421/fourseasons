@@ -25,7 +25,8 @@ def get_yahoo_data(input, output):
 
     for c in iter(input.get, 'STOP'):
         s = c
-        print s
+        # print s
+        output.put(s)
         # s = q.get()
         # print s, "\t", q.qsize()
         file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/tmp/" + s + ".csv"
