@@ -1,8 +1,15 @@
 from src.data_retriever import read_redis
 import numpy as np
-import tools as tools
+import toolsx as tools
 
 def run_vol_analyzer():
+	"""
+	This is not really a volatility analyzer. It actually does a simply entry/exit analysis of trades based on the
+	changes in short term SMAs. The algo started by attempting to look into inflection points in the SMA (second
+	derivative). Now, however, it is simply looking at changes in the slope of the SMA (first derivative). It then
+	applies a simple smoothing to this facto (see "delta_sma") to reduce noise. I think the second derivative is worth
+	reinvestigating.
+	"""
 
 	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/list_sp_500.csv'
 	in_file = open(location, 'r')
@@ -41,13 +48,14 @@ def run_vol_analyzer():
 			delta[k] = (sma[k] - sma[k-1])
 			delta_sma[k] = np.mean(delta[k-4:k+1])
 			
-			
 
 		if delta_sma[k] > 0 and delta_sma[k-1] < 0:
+			# entry conditions for a trade, k is the day we enter	
 			flag = k
 			# print k, stock_data[k]['Date'], simple_close_data[k], sma[k], round(delta[k], 4), round(delta_sma[k], 4), '\t\tBUY'
 		
 		elif delta_sma[k] < 0 and delta_sma[k-1] > 0:
+			# exit conditions for the trade, k is the day we entered
 			if flag != 0:
 				ret = simple_close_data[k] / simple_close_data[flag]
 				final_ret[k] = ret
@@ -66,3 +74,5 @@ def run_vol_analyzer():
 	print "Total Return: ", total_return
 
 	return
+
+

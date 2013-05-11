@@ -1,5 +1,8 @@
 #!/bin/sh
 
+cython:
+	python setup.py build_ext --inplace
+
 kill_python:
 	killall -9 python
 
@@ -23,11 +26,16 @@ redis_start:
 redis_stop:
 	supervisorctl --configuration etc/supervisord.conf stop redis
 
+
+
 download_stocks:
 	python test_run.py --download_stocks
 
 extract_symbols:
 	python test_run.py --extract_symbols_with_historical_data
+
+harding_seasonality:
+	python test_run.py --harding_seasonality
 
 load_redis:
 	python test_run.py --load_redis

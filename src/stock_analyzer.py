@@ -1,6 +1,6 @@
 from src.data_retriever import read_redis
 import numpy as np
-import tools as tools
+import toolsx as tools
 
 def run_stock_analyzer():
 

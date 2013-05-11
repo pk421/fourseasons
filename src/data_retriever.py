@@ -143,9 +143,10 @@ def load_redis(stock_list='do_all', db_number=15, file_location='data/test/'):
     start_time = datetime.datetime.now()
 
     base_path = '/home/wilmott/Desktop/fourseasons/fourseasons/'
-    file_path = base_path + file_location + 'data/'
+    # file_path = base_path + file_location + 'data/'
+    file_path = base_path + file_location
     list_path = base_path + 'data/stock_lists/'
-    file_path = '/home/wilmott/Desktop/fourseasons/fourseasons/tmp/'
+    
     symbols = []
 
     #if no symbol is specified, do it for all

@@ -1,3 +1,6 @@
+# import pyximport
+# pyximport.install()
+
 import argparse
 import os
 import time
@@ -7,6 +10,7 @@ try:
     from src.poll_realtime_data import *
     from src.stock_analyzer import run_stock_analyzer
     from src.vol_analyzer import run_vol_analyzer
+    from src.harding_seasonality import run_harding_seasonality
 
 except:
     print "\n\nCould not make all imports"
@@ -24,6 +28,10 @@ parser.add_argument("--download_stocks",
 
 parser.add_argument("--extract_symbols_with_historical_data",
                     help="find symbols that have historical data",
+                    action="store_true")
+
+parser.add_argument("--harding_seasonality",
+                    help="Analyze a seasonal system with simple technical indicators.",
                     action="store_true")
 
 parser.add_argument("--load_redis",
@@ -46,6 +54,10 @@ parser.add_argument("--vol_analyzer",
                     help="run the volatility analysis backend for some securities",
                     action="store_true")
 
+parser.add_argument("--returns_analyzer",
+                    help="run the returns analyzer for some securities",
+                    action="store_true")
+
 args = parser.parse_args()
 #print args.square**2
 #if args.verbosity:
@@ -63,8 +75,11 @@ if args.download_stocks:
 if args.extract_symbols_with_historical_data:
     extract_symbols_with_historical_data()
 
+if args.harding_seasonality:
+    run_harding_seasonality()
+
 if args.load_redis:
-    load_redis(stock_list='list_sp_500.csv', db_number=0, file_location='tmp/')
+    load_redis(stock_list='300B_1M.csv', db_number=0, file_location='tmp/')
 
 if args.poll_realtime_data:
     query_realtime_data()
@@ -77,6 +92,9 @@ if args.stock_analyzer:
 
 if args.vol_analyzer:
     run_vol_analyzer()
+
+if args.returns_analyser:
+    run_returns_analyzer()
 
 time_end = time.time()
 time_total = round(time_end - time_start, 4)
