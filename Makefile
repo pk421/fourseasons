@@ -46,6 +46,9 @@ poll_realtime_data:
 read_redis:
 	python test_run.py --read_redis
 
+returns_analyzer:
+	python test_run.py --returns_analyzer
+
 stock_analyzer:
 	python test_run.py --stock_analyzer
 

@@ -8,9 +8,10 @@ import time
 try:
     from src.data_retriever import *
     from src.poll_realtime_data import *
+    from src.harding_seasonality import run_harding_seasonality
+    from src.returns_analyzer import run_returns_analyzer
     from src.stock_analyzer import run_stock_analyzer
     from src.vol_analyzer import run_vol_analyzer
-    from src.harding_seasonality import run_harding_seasonality
 
 except:
     print "\n\nCould not make all imports"
@@ -46,6 +47,10 @@ parser.add_argument("--read_redis",
                     help="read data from redis and put it in python objects in memory",
                     action="store_true")
 
+parser.add_argument("--returns_analyzer",
+                    help="run the returns analyzer for some securities",
+                    action="store_true")
+
 parser.add_argument("--stock_analyzer",
                     help="run the analysis backend for some securities",
                     action="store_true")
@@ -54,9 +59,6 @@ parser.add_argument("--vol_analyzer",
                     help="run the volatility analysis backend for some securities",
                     action="store_true")
 
-parser.add_argument("--returns_analyzer",
-                    help="run the returns analyzer for some securities",
-                    action="store_true")
 
 args = parser.parse_args()
 #print args.square**2
@@ -87,14 +89,15 @@ if args.poll_realtime_data:
 if args.read_redis:
     read_redis(db_number=1, to_disk=True)
 
+if args.returns_analyzer:
+    run_returns_analyzer()
+
 if args.stock_analyzer:
     run_stock_analyzer()
 
 if args.vol_analyzer:
     run_vol_analyzer()
 
-if args.returns_analyser:
-    run_returns_analyzer()
 
 time_end = time.time()
 time_total = round(time_end - time_start, 4)
