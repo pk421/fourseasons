@@ -4,10 +4,10 @@ import toolsx as tools
 
 def run_vol_analyzer():
 	"""
-	This is not really a volatility analyzer. It actually does a simply entry/exit analysis of trades based on the
+	This is not really a volatility analyzer. It actually does a simple entry/exit analysis of trades based on the
 	changes in short term SMAs. The algo started by attempting to look into inflection points in the SMA (second
 	derivative). Now, however, it is simply looking at changes in the slope of the SMA (first derivative). It then
-	applies a simple smoothing to this facto (see "delta_sma") to reduce noise. I think the second derivative is worth
+	applies a simple smoothing to this factor (see "delta_sma") to reduce noise. I think the second derivative is worth
 	reinvestigating.
 	"""
 
@@ -29,48 +29,51 @@ def run_vol_analyzer():
 
 	sma = tools.simple_moving_average(simple_close_data, 50)
 
-	buy = np.zeros(len(stock_data))
-	delta = buy
+	delta = np.zeros(len(stock_data))
 	delta_sma = np.empty(len(stock_data))
-	final_ret = delta_sma
+	final_ret = np.empty(len(stock_data))
 
-	buy[0:51] = 0
 	delta[0:51] = 0
 
-	flag = 0
+	trade_entry_index = 0
 	for k, v in enumerate(sma):
-		final_ret[k] = 1
+		final_ret[k] = 1.0
 
-		delta[k] = 0
 		if k >= 50:
-			# print k, sma[k], sma[k-1], sma[k-2]
-			
-			delta[k] = (sma[k] - sma[k-1])
-			delta_sma[k] = np.mean(delta[k-4:k+1])
-			
+			# print k, sma[k], sma[k-1], sma[k-2]		
+			# delta is simply the one day change in the sma
+			delta[k] = (sma[k] - sma[k-1])	
+			delta_sma[k] = np.mean(delta[(k-4):(k+1)])			
 
+		# Trade entry
 		if delta_sma[k] > 0 and delta_sma[k-1] < 0:
 			# entry conditions for a trade, k is the day we enter	
-			flag = k
+			if trade_entry_index == 0:
+				trade_entry_index = k
 			# print k, stock_data[k]['Date'], simple_close_data[k], sma[k], round(delta[k], 4), round(delta_sma[k], 4), '\t\tBUY'
 		
+		# Trade exit
 		elif delta_sma[k] < 0 and delta_sma[k-1] > 0:
-			# exit conditions for the trade, k is the day we entered
-			if flag != 0:
-				ret = simple_close_data[k] / simple_close_data[flag]
+			# exit conditions for the trade, k is the day we exit
+			if trade_entry_index != 0:
+				ret = simple_close_data[k] / simple_close_data[trade_entry_index]
 				final_ret[k] = ret
-				print ret, final_ret[k]	
+				# print "Ret zero in exit: ", ret, final_ret[k], k, trade_entry_index
 				# print k, stock_data[k]['Date'], simple_close_data[k], sma[k], round(delta[k], 4), round(delta_sma[k], 4), round(ret, 4), '\t\tSELL\n'
-			flag = 0
-		
+			trade_entry_index = 0
+
 		else:
 			# print k, stock_data[k]['Date'], simple_close_data[k], sma[k], round(delta[k], 4), delta_sma[k]
 			pass
 
 		if final_ret[k] == 0:
-			print k, flag
+			print k, trade_entry_index, final_ret[k], simple_close_data[k], simple_close_data[trade_entry_index]
 
-	total_return = np.product(final_ret)
+	for k, v in enumerate(final_ret):
+		if v != 1.0:
+		 	print k, v
+
+	total_return = np.prod(final_ret)
 	print "Total Return: ", total_return
 
 	return
