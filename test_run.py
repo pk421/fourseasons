@@ -96,7 +96,9 @@ if args.stock_analyzer:
     run_stock_analyzer()
 
 if args.vol_analyzer:
-    run_vol_analyzer()
+    for x in xrange(0, 100):
+        run_vol_analyzer()
+        print x
 
 
 time_end = time.time()

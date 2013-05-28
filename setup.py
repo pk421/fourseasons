@@ -6,10 +6,13 @@ from Cython.Distutils import build_ext
 # from Cython.Build import cythonize
 # Cython.Compiler.Options.annotate = True
 
-ext_modules = [Extension('src.toolsx', ['src/toolsx.pyx'])]
+ext_modules = [
+              Extension('src.toolsx', ['src/toolsx.pyx']),
+              Extension('src.vol_analyzer', ['src/vol_analyzer.pyx'])
+              ]
 
 setup(
-  name = 'Toolsx',
+  name = 'modules to build',
   cmdclass = {'build_ext': build_ext},
   ext_modules = ext_modules
 

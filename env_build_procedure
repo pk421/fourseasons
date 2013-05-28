@@ -44,6 +44,10 @@ Pip:
 Requests Lib:
 - sudo pip install requests
 
+GProf2Dot:
+- apt-get install python graphviz
+- get gprof2dot.py here: https://code.google.com/p/jrfonseca/wiki/Gprof2Dot
+
 ########################################################################################################################
 
 Useful Commands:

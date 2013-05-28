@@ -1,7 +1,13 @@
 #!/bin/sh
 
+clean:
+	killall -9 python
+	find /home/wilmott/Desktop/fourseasons/fourseasons/src -name *.pyc | xargs rm
+	find /home/wilmott/Desktop/fourseasons/fourseasons/src -name *.so | xargs rm
+	find /home/wilmott/Desktop/fourseasons/fourseasons/src -name *.c | xargs rm
+
 cython:
-	python setup.py build_ext --inplace
+	python setup.py build_ext --inplace --pyrex-c-in-temp
 
 kill_python:
 	killall -9 python
@@ -54,3 +60,12 @@ stock_analyzer:
 
 vol_analyzer:
 	python test_run.py --vol_analyzer
+
+
+
+profile:
+	python -m cProfile -o AAAprofile.stats test_run.py --vol_analyzer
+	# python test_run.py --vol_analyzer;  python util/gprof2dot.py -n0.5 -e0.5 -f pstats AAAprofile.stats | dot -Tpng -o output.png
+
+gprof:
+	util/gprof2dot.py -n0.5 -e0.5 -f pstats AAAprofile.stats | dot -Tpng -o output.png
