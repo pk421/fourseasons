@@ -1,7 +1,6 @@
 #!/bin/sh
 
 clean:
-	killall -9 python
 	find /home/wilmott/Desktop/fourseasons/fourseasons/src -name *.pyc | xargs rm
 	find /home/wilmott/Desktop/fourseasons/fourseasons/src -name *.so | xargs rm
 	find /home/wilmott/Desktop/fourseasons/fourseasons/src -name *.c | xargs rm

@@ -1,4 +1,4 @@
-*.py[co]
+### .py[co]
 
 # Packages
 *.egg
@@ -33,4 +33,9 @@ log/
 *.rdb
 *.swp
 include
-data/
+data/*.csv
+*.so
+*.c
+*.png
+*.stats
+*.pyc
