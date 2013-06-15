@@ -8,6 +8,8 @@ import time
 import Queue
 import datetime
 
+from util.profile import profile
+
 
 def get_yahoo_data(queue, **kwargs):
     update_check = kwargs['update_check']

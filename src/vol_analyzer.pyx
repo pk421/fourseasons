@@ -2,6 +2,9 @@ from src.data_retriever import read_redis
 import numpy as np
 import toolsx as tools
 
+from util.profile import profile
+from util.memoize import memoize
+
 
 # from libc.math cimport log as log
 
@@ -15,17 +18,8 @@ import toolsx as tools
 # 		if x % 1000000 == 0:
 # 			print x, y, z
 
-
-def run_vol_analyzer():
-
-	"""
-	This is not really a volatility analyzer. It actually does a simple entry/exit analysis of trades based on the
-	changes in short term SMAs. The algo started by attempting to look into inflection points in the SMA (second
-	derivative). Now, however, it is simply looking at changes in the slope of the SMA (first derivative). It then
-	applies a simple smoothing to this factor (see "delta_sma") to reduce noise. I think the second derivative is worth
-	reinvestigating.
-	"""
-
+@memoize
+def get_data():
 	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/list_sp_500.csv'
 	in_file = open(location, 'r')
 	stock_list = in_file.read().split('\n')
@@ -36,7 +30,20 @@ def run_vol_analyzer():
 
 	stock = stock_list[0]
 	stock_data = read_redis(stock=stock, db_number=0, to_disk=False)[0]
+	return stock_data
 
+@profile
+def run_vol_analyzer():
+
+	"""
+	This is not really a volatility analyzer. It actually does a simple entry/exit analysis of trades based on the
+	changes in short term SMAs. The algo started by attempting to look into inflection points in the SMA (second
+	derivative). Now, however, it is simply looking at changes in the slope of the SMA (first derivative). It then
+	applies a simple smoothing to this factor (see "delta_sma") to reduce noise. I think the second derivative is worth
+	reinvestigating.
+	"""
+
+	stock_data = get_data()
 	simple_close_data = np.empty(len(stock_data))
 
 	for k, v in enumerate(stock_data):

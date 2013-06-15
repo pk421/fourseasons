@@ -34,6 +34,9 @@ log/
 *.swp
 include
 data/*.csv
+data/daily_price_data
+data/from_redis
+data/test
 *.so
 *.c
 *.png

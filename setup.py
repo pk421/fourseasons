@@ -9,7 +9,13 @@ from Cython.Distutils import build_ext
 ext_modules = [
               Extension('src.toolsx', ['src/toolsx.pyx']),
               Extension('src.vol_analyzer', ['src/vol_analyzer.pyx']),
+
+              ## Redis / data
               # Extension('data.redis.manage_redis', ['data/redis/manage_redis.pyx'])
+
+              ## Utilities - memoize and profile don't benefit much at all from cython in vol_analyzer
+              # Extension('util.memoize', ['util/memoize.pyx']),
+              # Extension('util.profile', ['util/profile.pyx']),
               ]
 
 setup(

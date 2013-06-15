@@ -33,6 +33,9 @@ redis_stop:
 
 
 
+correlations:
+	python test_run.py --correlations
+
 download_stocks:
 	python test_run.py --download_stocks
 
@@ -67,4 +70,4 @@ profile:
 	# python test_run.py --vol_analyzer;  python util/gprof2dot.py -n0.5 -e0.5 -f pstats AAAprofile.stats | dot -Tpng -o output.png
 
 gprof:
-	util/gprof2dot.py -n0.5 -e0.5 -f pstats AAAprofile.stats | dot -Tpng -o output.png
+	util/gprof2dot.py -n0.5 -e0.5 -f pstats AAAprofile.stats | dot -Tpng -o output.stats.png

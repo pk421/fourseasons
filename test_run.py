@@ -6,6 +6,7 @@ import os
 import time
 
 try:
+    from src.correlations import run_correlations
     from src.data_retriever import *
     from src.poll_realtime_data import *
     from src.harding_seasonality import run_harding_seasonality
@@ -23,6 +24,10 @@ parser = argparse.ArgumentParser()
 #parser.add_argument("-v", "--verbosity",
 #                    help="increase output verbosity",
 #                    action="store_true")
+parser.add_argument("--correlations",
+                    help="run correlation analysis",
+                    action="store_true")
+
 parser.add_argument("--download_stocks",
                     help="run multithreaded download from yahoo",
                     action="store_true")
@@ -67,6 +72,9 @@ args = parser.parse_args()
 
 time_start = time.time()
 
+if args.correlations:
+    run_correlations()
+
 if args.download_stocks:
     """
     if update_check = True, then this will will NOT overwrite existing files in folder
@@ -96,7 +104,7 @@ if args.stock_analyzer:
     run_stock_analyzer()
 
 if args.vol_analyzer:
-    for x in xrange(0, 100):
+    for x in xrange(0, 1):
         run_vol_analyzer()
         print x
 
