@@ -32,7 +32,7 @@ def get_data():
 	stock_data = read_redis(stock=stock, db_number=0, to_disk=False)[0]
 	return stock_data
 
-@profile
+#@profile
 def run_vol_analyzer():
 
 	"""

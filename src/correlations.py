@@ -1,0 +1,170 @@
+from src.data_retriever import read_redis
+import numpy as np
+import toolsx as tools
+import datetime
+
+from util.profile import profile
+from util.memoize import memoize, MemoizeMutable
+
+
+@MemoizeMutable
+def get_data(sector=None, stock=None):
+	if stock:
+		return read_redis(stock=stock, db_number=0, to_disk=False)[0]
+
+	# if sector is None:
+	# 	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/list_sp_500.csv'
+	# else:
+	# 	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/sectors/sectors' + sector + '.csv'
+
+	# in_file = open(location, 'r')
+	# stock_list = in_file.read().split('\n')
+	# in_file.close()
+
+	# stock_list = ['AAPL', 'GOOG', 'GLD', 'SLV', 'NEM', 'ABX', 'XOM', 'CVX']
+	# stock_list = ['SPY']
+
+	# stock = stock_list[0]
+	# stock_data = read_redis(stock=stock, db_number=0, to_disk=False)[0]
+	# return stock_data
+
+def get_corr_coeff(stock_1_data, stock_2_data):
+
+	stock_1_trimmed, stock_2_trimmed = trim_data(stock_1_data, stock_2_data)
+
+	simple_1_close = np.empty(len(stock_1_trimmed))
+	simple_2_close = np.empty(len(stock_2_trimmed))
+
+	for k, v in enumerate(stock_1_trimmed):
+		simple_1_close[k] = stock_1_trimmed[k]['Close']
+		simple_2_close[k] = stock_2_trimmed[k]['Close']
+
+	corr_coeff = np.corrcoef(simple_1_close, simple_2_close)[0][1]
+
+	return corr_coeff
+
+#@MemoizeMutable
+def trim_data(stock_1_data, stock_2_data):
+
+	stock_1_start = datetime.datetime.strptime(stock_1_data[0]['Date'], '%Y-%m-%d').date()
+	stock_2_start = datetime.datetime.strptime(stock_2_data[0]['Date'], '%Y-%m-%d').date()
+
+	if stock_1_start < stock_2_start:
+		# print "1 is earlier"
+		for x in xrange(0, len(stock_1_data)):
+			# if datetime.datetime.strptime(stock_2_data[x]['Date'], '%Y-%m-%d').date() >= \
+			#    datetime.datetime.strptime(stock_1_data[0]['Date'], '%Y-%m-%d').date():
+			if stock_1_data[x]['Date'] == stock_2_data[0]['Date']:
+				trim_at = x
+				break
+		stock_1_data = stock_1_data[trim_at:]
+	
+	elif stock_2_start < stock_1_start:
+		# print "2 is earlier"
+		for x in xrange(0, len(stock_2_data)):
+			# if datetime.datetime.strptime(stock_2_data[x]['Date'], '%Y-%m-%d').date() >= \
+			#    datetime.datetime.strptime(stock_1_data[0]['Date'], '%Y-%m-%d').date():
+			if stock_2_data[x]['Date'] == stock_1_data[0]['Date']:
+				trim_at = x
+				break
+		stock_2_data = stock_2_data[trim_at:]
+
+	if len(stock_1_data) != len(stock_2_data) or \
+		stock_2_data[len(stock_2_data)-1]['Date'] != stock_1_data[len(stock_1_data)-1]['Date'] or \
+		stock_2_data[0]['Date'] != stock_1_data[0]['Date']:
+		# print "\n**************"
+		# print stock_1_data[0]['Symbol'], stock_2_data[0]['Symbol']
+		# print len(stock_1_data), len(stock_2_data)
+		# print stock_1_data[0]['Date'], stock_2_data[0]['Date']
+		# print stock_1_data[len(stock_1_data)-1]['Date'], stock_2_data[len(stock_2_data)-1]['Date']
+		# for x in xrange(len(stock_1_data)):
+		# 		if stock_1_data[x]['Date'] != stock_2_data[x]['Date']:
+		# 			print stock_1_data[x]['Date'], stock_2_data[x]['Date']
+		# 			print "**************"
+		# 			break
+		e = stock_1_data[0]['Symbol'] + ' and ' + stock_2_data[0]['Symbol']
+		raise Exception(e + ' did not trim properly and cannot be processed')
+
+	# if stock_1_end > stock_2_end:
+	# 	print "1 ends later"
+
+	# elif stock_2_end > stock_1_end:
+	# 	print "2 ends later"
+
+	return stock_1_data, stock_2_data
+
+def get_paired_stock_list(stocks):
+
+	len_stocks = len(stocks)
+	paired_list = []
+
+	for x in xrange(0, len_stocks):
+		stock_1 = stocks[x].split()[0]
+
+		for y in xrange(x+1, len_stocks):
+			stock_2 = stocks[y].split()[0]
+
+			item = {'stock_1' : stock_1, 'stock_2' : stock_2, 'corr_coeff' : 0.0}
+			paired_list.append(item)
+
+	print "Paired list length: ", len(paired_list)
+	return paired_list
+
+
+#@profile
+def run_correlations():
+
+	sectors = ('basic_materials', 'conglomerates', 'consumer_goods', 'financial', 'healthcare', 'industrial_services', \
+			   'services', 'technology', 'utilities')
+
+	#location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/list_sp_500.csv'
+	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/300B_1M.csv'
+	in_file = open(location, 'r')
+	stock_list = in_file.read().split('\n')
+	in_file.close()
+
+	paired_list = get_paired_stock_list(stock_list)
+
+	good_corr_data = []
+
+	no_data = 0
+	bad_trim = 0
+	len_pairs = len(paired_list)
+
+	out_file = open('/home/wilmott/Desktop/fourseasons/fourseasons/correlation_results.csv', 'w')
+
+	for k, item in enumerate(paired_list):
+		stock_1_data = get_data(stock = item['stock_1'])
+		stock_2_data = get_data(stock = item['stock_2'])
+
+		if len(stock_1_data) == 0 or len(stock_2_data) == 0:
+			# the -8888 code will indicate that no data was retrieved for the item, example an index with special chars
+			item['corr_coeff'] = -8888
+			print k, len_pairs, item['corr_coeff'], item['stock_1'], item['stock_2']
+			no_data += 1
+			continue
+
+		try:
+			item ['corr_coeff'] = get_corr_coeff(stock_1_data, stock_2_data)
+		except:
+			# this is intended to indicate an error condition, usually the -9999 will indicate that the stocks
+			# could not be trimmed properly together.
+			item['corr_coeff'] = -9999
+			bad_trim += 1
+			print k, len_pairs, item['corr_coeff'], item['stock_1'], item['stock_2']
+			continue
+
+		out_string = item['stock_1'] +','+ item['stock_2'] +','+ str(item['corr_coeff']) + '\n'
+		out_file.write(out_string)
+		good_corr_data.append(item)
+		print k, len_pairs, item['corr_coeff'], item['stock_1'], item['stock_2']	
+
+
+	out_file.close()
+	print "\nFinished: ", len_pairs
+	print "bad trim: ", bad_trim
+	print "good corr data: ", len(good_corr_data)
+	print "no data: ", no_data
+	
+	return
+

@@ -3,6 +3,9 @@ import numpy as np
 import toolsx as tools
 import math
 
+from util.profile import profile
+
+#@profile
 def run_returns_analyzer():
 	"""
 	This is a simple script that will run a returns analysis for a list of stocks. You can specify a list of stocks to

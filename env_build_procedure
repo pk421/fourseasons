@@ -33,7 +33,15 @@ Supervisor:
 - sudo easy_install supervisor
 
 SciPy / Numpy:
+# must use version 1.7.1 or newer to calculate correlation coefficient
+# I recently had greater success with using only the pip lines below. Try that
 - sudo apt-get install python-numpy python-scipy
+
+- sudo apt-get install libatlas-base-dev gfortran		# necessary for scipy
+- sudo pip install numpy
+- sudo pip install scipy
+- sudo pip install matplotlib   # "recommended"
+- sudo pip install --upgrade numpy scipy
 
 Cython:
 - sudo easy_install cython
