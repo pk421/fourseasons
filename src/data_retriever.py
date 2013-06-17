@@ -278,9 +278,9 @@ def read_redis(stock='all_stocks', db_number=15, to_disk=True):
     else:
         #This function assumes db=0, which is the db used for all of the Daily historical data, must call w/list arg!!
         if not isinstance(stock, list):
-            list_of_stocks = manage_redis.read_redis([stock])
+            list_of_stocks = manage_redis.read_redis([stock], start_date='-inf', end_date='+inf')
         else:
-            list_of_stocks = manage_redis.read_redis(stock)
+            list_of_stocks = manage_redis.read_redis(stock, start_date='-inf', end_date='+inf')
         return list_of_stocks
     
 

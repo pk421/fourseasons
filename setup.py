@@ -12,7 +12,7 @@ ext_modules = [
               # Extension('src.correlations', ['src/correlations.pyx']),
 
               ## Redis / data
-              # Extension('data.redis.manage_redis', ['data/redis/manage_redis.pyx'])
+              Extension('data.redis.manage_redis', ['data/redis/manage_redis.pyx'])
 
               ## Utilities - memoize and profile don't benefit much at all from cython in vol_analyzer
               # Extension('util.memoize', ['util/memoize.pyx']),

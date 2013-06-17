@@ -31,6 +31,7 @@ def read_redis(stocks, start_date='-inf', end_date='+inf'):
     for s in stocks:
         all_days = []
         redis_symbol = "historical-D:" + s
+        # if you want to change start_date/end_date, it must be in format: YYYYMMDD, pushed in as a string
         raw = redis_db.zrangebyscore(redis_symbol,start_date,end_date)
         for line in raw:
             day_dict = {}
@@ -107,6 +108,11 @@ def read_realtime_data(db_number=15):
     return
 
 def fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=True, db_number=15):
+    """
+    In order to use zrangebyscore, this is a little backwards. Basically we are storing the data as the "key" and then
+    storing the date as the "value." When the data is retrieved, the values (store dates) can be sorted, which enables
+    us to retrieve the dates in a nicely sorted order.
+    """
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
     symbol = stock_price_set[0]['Symbol']
     if delete_old_data:

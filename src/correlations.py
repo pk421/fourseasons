@@ -2,6 +2,7 @@ from src.data_retriever import read_redis
 import numpy as np
 import toolsx as tools
 import datetime
+import copy
 
 from util.profile import profile
 from util.memoize import memoize, MemoizeMutable
@@ -9,24 +10,9 @@ from util.memoize import memoize, MemoizeMutable
 
 @MemoizeMutable
 def get_data(sector=None, stock=None):
+
 	if stock:
 		return read_redis(stock=stock, db_number=0, to_disk=False)[0]
-
-	# if sector is None:
-	# 	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/list_sp_500.csv'
-	# else:
-	# 	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/sectors/sectors' + sector + '.csv'
-
-	# in_file = open(location, 'r')
-	# stock_list = in_file.read().split('\n')
-	# in_file.close()
-
-	# stock_list = ['AAPL', 'GOOG', 'GLD', 'SLV', 'NEM', 'ABX', 'XOM', 'CVX']
-	# stock_list = ['SPY']
-
-	# stock = stock_list[0]
-	# stock_data = read_redis(stock=stock, db_number=0, to_disk=False)[0]
-	# return stock_data
 
 def get_corr_coeff(stock_1_data, stock_2_data):
 
@@ -69,6 +55,9 @@ def trim_data(stock_1_data, stock_2_data):
 				break
 		stock_2_data = stock_2_data[trim_at:]
 
+	if len(stock_1_data) != len(stock_2_data):
+		stock_1_data, stock_2_data = propagate_on_fly(stock_1_data, stock_2_data)
+
 	if len(stock_1_data) != len(stock_2_data) or \
 		stock_2_data[len(stock_2_data)-1]['Date'] != stock_1_data[len(stock_1_data)-1]['Date'] or \
 		stock_2_data[0]['Date'] != stock_1_data[0]['Date']:
@@ -93,16 +82,45 @@ def trim_data(stock_1_data, stock_2_data):
 
 	return stock_1_data, stock_2_data
 
+def propagate_on_fly(stock_1_data, stock_2_data):
+
+	x_max = max(len(stock_1_data), len(stock_2_data))
+	
+	for x in xrange(0, x_max):
+		
+		# if x > 3397 and x < 3407:
+		# 	print x, stock_1_data[x]['Date'], stock_2_data[x]['Date'], stock_1_data[x]['Close'], stock_2_data[x]['Close']
+		if stock_1_data[x]['Date'] != stock_2_data[x]['Date']:
+			if datetime.datetime.strptime(stock_1_data[x]['Date'], '%Y-%m-%d').date() > \
+				datetime.datetime.strptime(stock_2_data[x]['Date'], '%Y-%m-%d').date():
+				temp = copy.deepcopy(stock_1_data[x-1])
+				temp['Date'] = copy.deepcopy(stock_2_data[x]['Date'])
+				stock_1_data.insert(x, temp)
+
+			elif datetime.datetime.strptime(stock_2_data[x]['Date'], '%Y-%m-%d').date() > \
+				datetime.datetime.strptime(stock_1_data[x]['Date'], '%Y-%m-%d').date():
+				temp = copy.deepcopy(stock_2_data[x-1])
+				temp['Date'] = copy.deepcopy(stock_1_data[x]['Date'])
+				stock_2_data.insert(x, temp)
+
+	# for x in xrange(3397, 3408):
+	# 	print x, stock_1_data[x]['Date'], stock_2_data[x]['Date'], stock_1_data[x]['Close'], stock_2_data[x]['Close']
+		# if stock_1_data[x]['Date'] != stock_2_data[x]['Date']:
+		# 	# print stock_1_data[x]['Date'], stock_2_data[x]['Date']
+		# 	break
+
+	return stock_1_data, stock_2_data
+
 def get_paired_stock_list(stocks):
 
 	len_stocks = len(stocks)
 	paired_list = []
 
 	for x in xrange(0, len_stocks):
-		stock_1 = stocks[x].split()[0]
+		stock_1 = stocks[x]
 
 		for y in xrange(x+1, len_stocks):
-			stock_2 = stocks[y].split()[0]
+			stock_2 = stocks[y]
 
 			item = {'stock_1' : stock_1, 'stock_2' : stock_2, 'corr_coeff' : 0.0}
 			paired_list.append(item)
@@ -118,15 +136,20 @@ def run_correlations():
 			   'services', 'technology', 'utilities')
 
 	#location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/list_sp_500.csv'
-	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/300B_1M.csv'
+	#location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/300B_1M.csv'
+	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/sectors/technology.csv'
 	in_file = open(location, 'r')
 	stock_list = in_file.read().split('\n')
+	for k, item in enumerate(stock_list):
+		new_val = item.split('\r')[0]
+		stock_list[k] = new_val
 	in_file.close()
+
+	# stock_list = ['AA', 'APC', 'SPY', 'GOOG', 'XOM']
 
 	paired_list = get_paired_stock_list(stock_list)
 
 	good_corr_data = []
-
 	no_data = 0
 	bad_trim = 0
 	len_pairs = len(paired_list)
@@ -168,3 +191,21 @@ def run_correlations():
 	
 	return
 
+
+
+def test_redis():
+
+	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/300B_1M.csv'
+	in_file = open(location, 'r')
+	stock_list = in_file.read().split('\n')
+	in_file.close()
+
+	# for k, item in enumerate(stock_list[0:50]):
+	# 	res = get_data(stock=item.split()[0])
+	# 	print k, item
+
+	for x in xrange(0,100):
+		res = get_data(stock='ADS')
+		print x
+
+	return
