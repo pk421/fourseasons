@@ -23,62 +23,50 @@ def flushdb(db_number=15):
 
     return
 
-def read_redis(stocks, db_number=15, dict_size=10, start_date='-inf', end_date='+inf'):
-    redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
+def read_redis(stocks, start_date='-inf', end_date='+inf'):
+    redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
 
     list_of_stocks = []
 
     for s in stocks:
         all_days = []
         redis_symbol = "historical-D:" + s
-        # if you want to change start_date/end_date, it must be in format: YYYYMMDD, pushed in as a string
         raw = redis_db.zrangebyscore(redis_symbol,start_date,end_date)
         for line in raw:
             day_dict = {}
-#            print line\
-            if dict_size == 10:
-                for k, v in enumerate(line.split(',')):
-                    day_dict['Symbol'] = s
-                    if k == 0:
-                        day_dict['Date'] = v
-                        continue
-                    if k == 1:
-                        day_dict['Open'] = float(v)
-                        continue
-                    if k == 2:
-                        day_dict['High'] = float(v)
-                        continue
-                    if k == 3:
-                        day_dict['Low'] = float(v)
-                        continue
-                    if k == 4:
-                        day_dict['Close'] = float(v)
-                        continue
-                    if k == 5:
-                        day_dict['Volume'] = float(v)
-                        continue
-                    if k == 6:
-                        day_dict['AdjOpen'] = float(v)
-                        continue
-                    if k == 7:
-                        day_dict['AdjHigh'] = float(v)
-                        continue
-                    if k == 8:
-                        day_dict['AdjLow'] = float(v)
-                        continue
-                    if k == 9:
-                        day_dict['AdjClose'] = float(v)
-                        continue
-
-            if dict_size == 2:
-                for k, v in enumerate(line.split(',')):
-                    day_dict['Symbol'] = s
-                    if k == 0:
-                        day_dict['Date'] = v
-                        continue
-                    if k == 1:
-                        day_dict['AdjClose'] = float(v)
-                        continue
+#            print line
+            for k, v in enumerate(line.split(',')):
+                day_dict['Symbol'] = s
+                if k == 0:
+                    day_dict['Date'] = v
+                    continue
+                if k == 1:
+                    day_dict['Open'] = float(v)
+                    continue
+                if k == 2:
+                    day_dict['High'] = float(v)
+                    continue
+                if k == 3:
+                    day_dict['Low'] = float(v)
+                    continue
+                if k == 4:
+                    day_dict['Close'] = float(v)
+                    continue
+                if k == 5:
+                    day_dict['Volume'] = float(v)
+                    continue
+                if k == 6:
+                    day_dict['AdjOpen'] = float(v)
+                    continue
+                if k == 7:
+                    day_dict['AdjHigh'] = float(v)
+                    continue
+                if k == 8:
+                    day_dict['AdjLow'] = float(v)
+                    continue
+                if k == 9:
+                    day_dict['AdjClose'] = float(v)
+                    continue
 
             all_days.append(day_dict)
         list_of_stocks.append(all_days)
@@ -118,12 +106,7 @@ def read_realtime_data(db_number=15):
 
     return
 
-def fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=True, db_number=15, dict_size=10):
-    """
-    In order to use zrangebyscore, this is a little backwards. Basically we are storing the data as the "key" and then
-    storing the date as the "value." When the data is retrieved, the values (store dates) can be sorted, which enables
-    us to retrieve the dates in a nicely sorted order.
-    """
+def fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=True, db_number=15):
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
     symbol = stock_price_set[0]['Symbol']
     if delete_old_data:
@@ -132,9 +115,8 @@ def fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=Tru
     pairs = {}
     for day in stock_price_set:
         #redis_db.zadd(day['Symbol'], pack_date(day['Date']), pack_data(day))
-        pairs[pack_data(day, dict_size)] = pack_date(day['Date'])
+        pairs[pack_data(day)] = pack_date(day['Date'])
 
-    
     redis_db.zadd(store_under + symbol, **pairs)
 
 def pack_date(in_date):
@@ -146,7 +128,7 @@ def pack_date(in_date):
         out_date += i
     return int(out_date)
 
-def pack_data(in_data, dict_size):
+def pack_data(in_data):
     """
         Packs the other data into redis in the form of a csv of O, H, L, AC, Vol
         See here for adjustment algo for OHL: http://trading.cheno.net/downloading-yahoo-finance-historical-data-with-python/
@@ -157,11 +139,8 @@ def pack_data(in_data, dict_size):
     in_data['AdjHigh'] = str(round ((in_data['High'] * adj_factor), 2))
     in_data['AdjLow'] = str(round((in_data['Low'] * adj_factor), 2))
 
-    if dict_size == 10:
-        serializable = [in_data['Date'], in_data['Open'], in_data['High'], in_data['Low'], in_data['Close'],
-                        in_data['Volume'], in_data['AdjOpen'], in_data['AdjHigh'], in_data['AdjLow'], in_data['AdjClose']]
-    elif dict_size == 2:
-         serializable = [in_data['Date'], in_data['AdjClose']]       
+    serializable = [in_data['Date'], in_data['Open'], in_data['High'], in_data['Low'], in_data['Close'],
+                    in_data['Volume'], in_data['AdjOpen'], in_data['AdjHigh'], in_data['AdjLow'], in_data['AdjClose']]
     out_data = ','.join(str(p) for p in serializable)
     return out_data
 
@@ -188,34 +167,3 @@ def pack_realtime_data(in_data):
     
     out_data = ','.join(str(p) for p in serializable)
     return out_data
-
-
-def parse_data(str stock):
-    """
-    This should be used when a massive raw string of stock data was dumped into redis as a value. This will parse out
-    the csv and return a list of dictionaries. Note carefully: it was designed to parse out the data of the type stored
-    in db 0 in redis, which is not raw csv, but actually contains the OHLC stings, etc.
-    """
-    redis_db = redis.StrictRedis(host='localhost', port=6379, db=3)
-    stock_data = redis_db.get(stock)
-
-    output_data = []
-
-    all_days = stock_data.split('}, {')
-    for day in all_days:
-        day = day.strip('{}[]')
-
-        keys = []
-        values = []
-        for e in day.split(', '):
-            k = e.split(': ')
-            keys.append(k[0].strip('\''))
-            try:
-                values.append(float(k[1]))
-            except:
-                values.append(k[1].strip('\''))
-
-        todays_dict = dict(zip(keys, values))
-        output_data.append(todays_dict)
-
-    return output_data

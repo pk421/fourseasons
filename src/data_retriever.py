@@ -141,7 +141,7 @@ def extract_symbols_with_historical_data(search_in='/home/wilmott/Desktop/fourse
     return symbols
 
 
-def load_redis(stock_list='do_all', db_number=15, file_location='data/test/'):
+def load_redis(stock_list='do_all', db_number=15, file_location='tmp/', dict_size=10):
     start_time = datetime.datetime.now()
 
     base_path = '/home/wilmott/Desktop/fourseasons/fourseasons/'
@@ -210,7 +210,7 @@ def load_redis(stock_list='do_all', db_number=15, file_location='data/test/'):
             #print failed_symbols
             print symbol, "\t failed at least one validation test"
             continue
-        manage_redis.fill_redis(stock_price_set, db_number=db_number)
+        manage_redis.fill_redis(stock_price_set, db_number=db_number, dict_size=dict_size)
 
         current_time = datetime.datetime.now() - start_time
         print k, ' of ', len(symbols), '\t', current_time, '\t', symbol, '\tinto redis'
@@ -263,7 +263,7 @@ def validate_data(stock_price_set):
     else:
         return True
 
-def read_redis(stock='all_stocks', db_number=15, to_disk=True):
+def read_redis(stock='all_stocks', db_number=15, dict_size=10, to_disk=False, start_date='-inf', end_date='+inf'):
     """
     list_of_stocks, the object returned by read_redis, will be structured as follows:
     A list representing the data of many stocks. Each stock item in the list is itself a list of "day_dicts", where
@@ -278,9 +278,9 @@ def read_redis(stock='all_stocks', db_number=15, to_disk=True):
     else:
         #This function assumes db=0, which is the db used for all of the Daily historical data, must call w/list arg!!
         if not isinstance(stock, list):
-            list_of_stocks = manage_redis.read_redis([stock], start_date='-inf', end_date='+inf')
-        else:
-            list_of_stocks = manage_redis.read_redis(stock, start_date='-inf', end_date='+inf')
+            stock = [stock]
+        list_of_stocks = manage_redis.read_redis(stock, db_number=db_number, dict_size=dict_size, start_date='-inf', \
+                                                 end_date='+inf')
         return list_of_stocks
     
 

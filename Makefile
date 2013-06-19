@@ -11,6 +11,9 @@ cython:
 kill_python:
 	killall -9 python
 
+mount_shares:
+	sudo mount.vboxsf fourseasons Desktop/fourseasons/
+
 start_services:
 	#./start_services.sh
 	supervisord --configuration etc/supervisord.conf

@@ -1,0 +1,64 @@
+Log Of Changes / Insights:
+
+**********
+2013-06-18 - Speeding up redis
+
+	I recently noticed that redis was behaving slowly and it was really hurting performance when querying a lot of data.
+For example, My typical behavior would be to query all the stock data using zrangebyscore, where the "key" was a string
+representing all of the data for 1 day of the stock and the value was the date, stored in a compacted form. Thus, the
+entire set could be sorted by the dates and could be ordered.
+
+	Typical speeds for this were approximately 1.9 seconds to obtain the data for 12908 days. This was unacceptably
+slow, especially when heavy iteration was performed.
+
+	Next, I tried memoizing the calls for a particular stock so that at least subsequent calls would be fast. The
+subsequent calls were lightning fast, but the memory usage was unacceptably high for caching all of those calls. That
+said, it does no harm to use memoize in the future.
+
+	Next I ran some tests where I simply put in a string that represented a full day of data and I timed how long a GET
+would be on that data. Typical speeds were as follows for the simple GETS. The size represents the number of characters
+that were represented in the value for each of the strings. 100,000 iterations were performed:
+
+1 byte (bare minimum)   		=	48.079 sec
+14 bytes (2 item trading day)	=	49.885 sec
+58 bytes (full 10 item day)		=	52.59 sec
+
+	Next I tried pipelining the read commands to see the performance. This is accomplished like this:
+
+	############
+	import redis
+	redis_db = redis.StrictRedis(host='localhost', port=6379, db=15)
+	pipe = redis_db.pipeline(transaction=True, shard_hint=None)
+
+	redis_db.set('testKey', 'testValue')
+
+	for x in xrange(0, 10):
+		pipe.get('testKey')
+	pipe.execute()
+	############
+
+	This increased speed, but only somewhat. The corresponding results to the above tests are as follows:
+
+1 byte (bare minimum)   		=	39.1228 sec
+14 bytes (2 item trading day)	=	38.6515 sec
+58 bytes (full 10 item day)		=	38.9248 sec	
+
+	The discrepancy is probably random. They are essentially the same.
+
+	Finally, realized that in my test I was testing 100,000 trading days using GET. Even when I pipelined the commands
+it was still pulling 100k keys. A stock with a long history might have 13,000 trading days. So essentially my test was
+about 7.69 stocks worth of data. Very slow. And in fact, we can see that if we divide the results by this number
+of trading days we get a "per stock" time of about 5.026 seconds, even for the fastest pipelined result. Thus, we can
+see that the 1.9 seconds that were required for zrangebyscore are actually a very "good deal" when we allow redis to
+handle the internals using only a single query like that.
+
+	The result is that there is significant "query overhead" when many queries are made. ZRangeByScore *is* indeed
+efficient for what it is doing. But we must realize that it is sorting a great number of keys and values that already
+exist in the database in sorted order. If we had a situation where days could be added randomly, then its sort feature
+would be very helpful. But in performance tuning the speed, we can afford to avoid the sorting.
+
+	When we obtain the full list of data for a stock such as AA (12,908 days of data), convert it to a string, store it,
+and then query for the string 10 times, the time required is 2.320 seconds. But this represents "10 stocks" worth of
+data which means that is nearly 10 times faster than the zrangebyscore. The only catch is that it must be parsed
+into a python list/dictionary now. I think it will still be faster after doing this, but we will have to see.
+
