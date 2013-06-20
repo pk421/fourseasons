@@ -62,3 +62,22 @@ and then query for the string 10 times, the time required is 2.320 seconds. But 
 data which means that is nearly 10 times faster than the zrangebyscore. The only catch is that it must be parsed
 into a python list/dictionary now. I think it will still be faster after doing this, but we will have to see.
 
+
+**********
+2013-06-19 - Redis Update
+
+	I've now created functions that transfer the zrangebyscore data and format the entire block as a single string. It
+is then pushed into redis using a SET and accessed using a GET. Thus, there is only one simple redis command used to
+obtain the entire history of data for a stock. The data is pushed into redis using the format that it was stored in the
+previous redis, using labels for Open, High, Low, Close, etc. As a result, the string *IS* a lot larger than it would
+need to be if we chose to apply a mask to the data...
+	
+	After the new format of the data is obtained, it is then parsed using a custom made cython compiler. It is put into
+a list of dictionaries (1 dictionary for each day) in the same format as the zrangebyscore redis functioned. I ran rough
+test using a list of 68 tech stocks. Using the "old version" it required approximately 123 seconds to read all the data
+and perform simple correlation calculations on it. Using the new method, the entire procedure took 12.9 seconds. It is
+true that the correlation calculations add some overhead so the reality is that the speed improvement here would be
+slightly understated.
+
+	I needed to add in some error catching logic and it took a while to get this right, but it seems to be a very viable
+alternative now. And the cython parser for the reads from redis is only perhaps 30 lines long. No big deal :)

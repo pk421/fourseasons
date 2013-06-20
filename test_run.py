@@ -89,7 +89,7 @@ if args.harding_seasonality:
     run_harding_seasonality()
 
 if args.load_redis:
-    load_redis(stock_list='300B_1M.csv', db_number=2, file_location='tmp/', dict_size=2)
+    load_redis(stock_list='300B_1M.csv', db_number=0, file_location='tmp/', dict_size=10)
 
 if args.poll_realtime_data:
     query_realtime_data()

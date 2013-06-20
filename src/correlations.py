@@ -14,7 +14,7 @@ from data.redis import manage_redis
 def get_data(stock=None):
 
 	if stock:
-		return read_redis(stock=stock, db_number=2, dict_size=2)[0]
+		return read_redis(stock=stock, db_number=0, dict_size=10)[0]
 
 def get_corr_coeff(stock_1_data, stock_2_data):
 
@@ -148,15 +148,16 @@ def get_paired_stock_list(stocks, fixed_stock=None):
 
 #@profile
 def run_correlations():
-	fill_redis()
-	return
+	# test_redis()
+	# fill_redis()
+	# return
 
 	sectors = ('basic_materials', 'conglomerates', 'consumer_goods', 'financial', 'healthcare', 'industrial_services', \
 			   'services', 'technology', 'utilities')
 
 	#location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/list_sp_500.csv'
 	#location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/300B_1M.csv'
-	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/sectors/utilities.csv'
+	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/sectors/technology.csv'
 	in_file = open(location, 'r')
 	stock_list = in_file.read().split('\n')
 	for k, item in enumerate(stock_list):
@@ -164,7 +165,7 @@ def run_correlations():
 		stock_list[k] = new_val
 	in_file.close()
 
-	# stock_list = ['GLD', 'XOM']
+	# stock_list = ['HPQ', 'GRMN']
 
 	paired_list = get_paired_stock_list(stock_list, fixed_stock='SPY')
 
@@ -178,15 +179,19 @@ def run_correlations():
 	out_file = open('/home/wilmott/Desktop/fourseasons/fourseasons/correlation_results.csv', 'w')
 
 	for k, item in enumerate(paired_list):
-		## stock_1_data = get_data(stock=item['stock_1'])
-		## stock_2_data = get_data(stock=item['stock_2'])
+		# stock_1_data = get_data(stock=item['stock_1'])
+		# stock_2_data = get_data(stock=item['stock_2'])
 		stock_1_data = manage_redis.parse_data(item['stock_1'])
 		stock_2_data = manage_redis.parse_data(item['stock_2'])
 
-		if len(stock_1_data) == 0 or len(stock_2_data) == 0:
-			# the -8888 code will indicate that no data was retrieved for the item, example an index with special chars
+		if stock_1_data is None or len(stock_1_data) == 0:
 			item['corr_coeff'] = -8888
-			print k, len_pairs, item['corr_coeff'], item['beta'], item['stock_1'], item['stock_2']
+			print "\n", k, len_pairs, item['corr_coeff'], item['beta'], item['stock_1'], "ERROR: No Data"
+			no_data += 1
+			continue
+		if stock_2_data is None or len(stock_2_data) == 0:
+			item['corr_coeff'] = -8888
+			print "\n", k, len_pairs, item['corr_coeff'], item['beta'], item['stock_2'], "ERROR: No Data"
 			no_data += 1
 			continue
 
@@ -227,9 +232,14 @@ def fill_redis():
 	import redis
 	redis_writer = redis.StrictRedis(host='localhost', port=6379, db=3)
 
+	for x in xrange(0, len(stock_list)):
+		stock_list[x] = stock_list[x].strip('\n')
+	# print stock_list
+
 	for stock in stock_list:
-		raw_read = read_redis(stock='AA', db_number=0, dict_size=10)[0]
+		raw_read = read_redis(stock=stock, db_number=0, dict_size=10)[0]
 		st_version = str(raw_read)
+		# print st_version
 		input_key = 'historical:fast:' + stock
 		redis_writer.set(input_key, st_version)
 		print stock, " Loaded"

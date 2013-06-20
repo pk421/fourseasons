@@ -190,32 +190,42 @@ def pack_realtime_data(in_data):
     return out_data
 
 
-def parse_data(str stock):
+def parse_data(stock):
     """
     This should be used when a massive raw string of stock data was dumped into redis as a value. This will parse out
     the csv and return a list of dictionaries. Note carefully: it was designed to parse out the data of the type stored
     in db 0 in redis, which is not raw csv, but actually contains the OHLC stings, etc.
     """
+
+    # cdef str get_query, stock_data, day, e
+    # cdef list output_data, all_days, keys, values, k
+    # cdef struct todays_dict
+
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=3)
-    stock_data = redis_db.get(stock)
+    get_query = 'historical:fast:' + stock
+    stock_data = redis_db.get(get_query)
 
     output_data = []
 
-    all_days = stock_data.split('}, {')
-    for day in all_days:
-        day = day.strip('{}[]')
+    try:
+        all_days = stock_data.split('}, {')
+        for day in all_days:
+            day = day.strip('{}[]')
 
-        keys = []
-        values = []
-        for e in day.split(', '):
-            k = e.split(': ')
-            keys.append(k[0].strip('\''))
-            try:
-                values.append(float(k[1]))
-            except:
-                values.append(k[1].strip('\''))
+            keys = []
+            values = []
+            for e in day.split(', '):
+                k = e.split(': ')
+                keys.append(k[0].strip('\''))
+                try:
+                    values.append(float(k[1]))
+                except:
+                    # print "\n\n\n****", stock, day, e, k
+                    values.append(k[1].strip('\''))
 
-        todays_dict = dict(zip(keys, values))
-        output_data.append(todays_dict)
+            todays_dict = dict(zip(keys, values))
+            output_data.append(todays_dict)
+    except:
+        return None
 
     return output_data
