@@ -20,6 +20,7 @@ ext_modules = [
 
               ## Technical / Math
               Extension('src.toolsx', ['src/toolsx.pyx']),
+              Extension('src.math_tools', ['src/math_tools.pyx']),
               ]
 
 setup(

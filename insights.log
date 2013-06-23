@@ -81,3 +81,4 @@ slightly understated.
 
 	I needed to add in some error catching logic and it took a while to get this right, but it seems to be a very viable
 alternative now. And the cython parser for the reads from redis is only perhaps 30 lines long. No big deal :)
+

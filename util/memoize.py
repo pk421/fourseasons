@@ -28,16 +28,41 @@ class memoize(object):
       return functools.partial(self.__call__, obj)
 
 
+# class MemoizeMutable:
+#     def __init__(self, fn):
+#         self.fn = fn
+#         self.memo = {}
+#     def __call__(self, *args, **kwds):
+#         import cPickle
+#         str = cPickle.dumps(args, 1)+cPickle.dumps(kwds, 1)
+#         if not self.memo.has_key(str): 
+#             # print "miss"  # DEBUG INFO
+#             self.memo[str] = self.fn(*args, **kwds)
+#         # else:
+#             # print "hit"  # DEBUG INFO
+
+#         return self.memo[str]
+
 class MemoizeMutable:
+    """
+      This will only cache a few items, see the elif statement.
+    """
     def __init__(self, fn):
         self.fn = fn
         self.memo = {}
+        self.item_count = 0
     def __call__(self, *args, **kwds):
         import cPickle
         str = cPickle.dumps(args, 1)+cPickle.dumps(kwds, 1)
-        if not self.memo.has_key(str): 
+        if self.memo.has_key(str):
+            return self.memo[str]
+        
+        elif self.item_count <= 1: 
             # print "miss"  # DEBUG INFO
             self.memo[str] = self.fn(*args, **kwds)
+            self.item_count += 1
+        else:
+          return self.fn(*args, **kwds)
         # else:
             # print "hit"  # DEBUG INFO
 

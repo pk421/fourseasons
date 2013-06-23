@@ -10,7 +10,10 @@ import datetime
 
 from util.profile import profile
 
-
+"""
+Good data sites:
+ETF/ETN list in csv format, frequently updated: http://masterdata.com/HelpFiles/ETF_List.htm
+"""
 def get_yahoo_data(queue, **kwargs):
     update_check = kwargs['update_check']
     logger = kwargs['log']
@@ -86,6 +89,7 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
 
     stock_list = open('/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + list_to_download, 'r')
     symbols = stock_list.read().rstrip().split('\n')
+
     for index, s in enumerate(symbols):
         symbols[index] = s.strip('\r')
     stock_list.close()
@@ -210,7 +214,8 @@ def load_redis(stock_list='do_all', db_number=15, file_location='tmp/', dict_siz
             #print failed_symbols
             print symbol, "\t failed at least one validation test"
             continue
-        manage_redis.fill_redis(stock_price_set, db_number=db_number, dict_size=dict_size)
+        ## manage_redis.fill_redis(stock_price_set, db_number=db_number, dict_size=dict_size)
+        manage_redis.fill_fast_redis(stock_price_set, db_number=db_number, dict_size=dict_size)
 
         current_time = datetime.datetime.now() - start_time
         print k, ' of ', len(symbols), '\t', current_time, '\t', symbol, '\tinto redis'

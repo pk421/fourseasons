@@ -8,6 +8,7 @@ from util.profile import profile
 from util.memoize import memoize, MemoizeMutable
 
 from data.redis import manage_redis
+from src import math_tools
 
 
 #@MemoizeMutable
@@ -27,8 +28,14 @@ def get_corr_coeff(stock_1_data, stock_2_data):
 		simple_1_close[k] = stock_1_trimmed[k]['AdjClose']
 		simple_2_close[k] = stock_2_trimmed[k]['AdjClose']
 
-	corr_coeff = np.corrcoef(simple_1_close, simple_2_close)[0][1]
-	cov_coeff = np.cov(simple_1_close, simple_2_close)
+	simple_1_returns = math_tools.get_ln_returns(simple_1_close)
+	simple_2_returns = math_tools.get_ln_returns(simple_2_close)
+
+	# simple_1_returns = simple_1_close
+	# simple_2_returns = simple_2_close
+
+	corr_coeff = np.corrcoef(simple_1_returns, simple_2_returns)[0][1]
+	cov_coeff = np.cov(simple_1_returns, simple_2_returns)
 	variance_1 = cov_coeff[0][0]
 	variance_2 = cov_coeff[1][1]
 	covariance = cov_coeff[0][1]
@@ -122,6 +129,20 @@ def propagate_on_fly(stock_1_data, stock_2_data):
 
 	return stock_1_data, stock_2_data
 
+# @MemoizeMutable
+# def get_ln_returns(stock_close):
+
+# 	len_data = len(stock_close)
+# 	stock_ln_returns = []
+
+# 	# print len_data, type(stock_ln_returns), stock_close
+# 	for x in xrange(1, len_data):
+# 		ret = math.log(float(stock_close[x])) / math.log(float(stock_close[x-1]))
+# 		stock_ln_returns.append(ret)
+
+# 	return stock_ln_returns
+
+
 def get_paired_stock_list(stocks, fixed_stock=None):
 
 	len_stocks = len(stocks)
@@ -149,15 +170,18 @@ def get_paired_stock_list(stocks, fixed_stock=None):
 #@profile
 def run_correlations():
 	# test_redis()
-	# fill_redis()
+	# fix_etf_list()
+	# manage_redis.fill_fast_redis()
 	# return
 
 	sectors = ('basic_materials', 'conglomerates', 'consumer_goods', 'financial', 'healthcare', 'industrial_services', \
 			   'services', 'technology', 'utilities')
 
 	#location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/list_sp_500.csv'
-	#location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/300B_1M.csv'
-	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/sectors/technology.csv'
+	# location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/300B_1M.csv'
+	# location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/sectors/technology.csv'
+	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/300B_1M_and_etfs_etns.csv'
+
 	in_file = open(location, 'r')
 	stock_list = in_file.read().split('\n')
 	for k, item in enumerate(stock_list):
@@ -165,8 +189,8 @@ def run_correlations():
 		stock_list[k] = new_val
 	in_file.close()
 
-	# stock_list = ['HPQ', 'GRMN']
-
+	# stock_list = ['MSFT', 'GLD']
+	
 	paired_list = get_paired_stock_list(stock_list, fixed_stock='SPY')
 
 	good_corr_data = []
@@ -176,13 +200,15 @@ def run_correlations():
 	bad_trim = 0
 	len_pairs = len(paired_list)
 
+	neg_betas = []
+
 	out_file = open('/home/wilmott/Desktop/fourseasons/fourseasons/correlation_results.csv', 'w')
 
 	for k, item in enumerate(paired_list):
 		# stock_1_data = get_data(stock=item['stock_1'])
 		# stock_2_data = get_data(stock=item['stock_2'])
-		stock_1_data = manage_redis.parse_data(item['stock_1'])
-		stock_2_data = manage_redis.parse_data(item['stock_2'])
+		stock_1_data = manage_redis.parse_fast_data(item['stock_1'])
+		stock_2_data = manage_redis.parse_fast_data(item['stock_2'])
 
 		if stock_1_data is None or len(stock_1_data) == 0:
 			item['corr_coeff'] = -8888
@@ -199,6 +225,9 @@ def run_correlations():
 			item ['corr_coeff'], item['beta'] = get_corr_coeff(stock_1_data, stock_2_data)
 			corr_list.append(item['corr_coeff'])
 			beta_list.append(item['beta'])
+
+			if item['beta'] <= 0:
+				neg_betas.append(item)
 		except:
 			# this is intended to indicate an error condition, usually the -9999 will indicate that the stocks
 			# could not be trimmed properly together.
@@ -220,30 +249,57 @@ def run_correlations():
 	print "\nbad trim: ", bad_trim
 	print "good corr data: ", len(good_corr_data)
 	print "no data: ", no_data
+
+	print "Neg Betas:"
+	for item in neg_betas:
+		print item['stock_1'], item['stock_2'], item['corr_coeff'], item['beta']
 	
 	return
 
-def fill_redis():
-	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/300B_1M.csv'
-	in_file = open(location, 'r')
-	stock_list = in_file.read().split('\r')
-	in_file.close()
+# def fill__fast_redis():
+# 	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/300B_1M.csv'
+# 	in_file = open(location, 'r')
+# 	stock_list = in_file.read().split('\r')
+# 	in_file.close()
 
-	import redis
-	redis_writer = redis.StrictRedis(host='localhost', port=6379, db=3)
+# 	import redis
+# 	redis_writer = redis.StrictRedis(host='localhost', port=6379, db=3)
 
-	for x in xrange(0, len(stock_list)):
-		stock_list[x] = stock_list[x].strip('\n')
-	# print stock_list
+# 	for x in xrange(0, len(stock_list)):
+# 		stock_list[x] = stock_list[x].strip('\n')
+# 	# print stock_list
 
-	for stock in stock_list:
-		raw_read = read_redis(stock=stock, db_number=0, dict_size=10)[0]
-		st_version = str(raw_read)
-		# print st_version
-		input_key = 'historical:fast:' + stock
-		redis_writer.set(input_key, st_version)
-		print stock, " Loaded"
+# 	for stock in stock_list:
+# 		raw_read = read_redis(stock=stock, db_number=0, dict_size=10)[0]
+# 		st_version = str(raw_read)
+# 		# print st_version
+# 		input_key = 'historical:fast:' + stock
+# 		redis_writer.set(input_key, st_version)
+# 		print stock, " Loaded"
 
+def fix_etf_list():
+
+	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/etfs_etns_raw.csv'
+	stock_list = open(location, 'r')
+	symbols = stock_list.read().rstrip().split('\n')
+
+	out_location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/etfs_etns.csv'
+	out_file = open(out_location, 'w')
+
+	outstr = ''
+	new_symbols = []
+	for x in xrange(len(symbols)):
+		# new_symbols.append(symbols[x].split(',')[1])
+		# print symbols[x].split(',')[1]
+		# out_file.write(symbols[x].split(',')[1])
+		# out_file.write('\n')
+		if symbols[x].split(',')[1] == 'Symbol':
+			continue
+		outstr += symbols[x].split(',')[1]
+		outstr += '\n'
+	out_file.write(outstr)
+	out_file.close()
+	return
 
 def test_redis():
 
@@ -288,31 +344,3 @@ def test_redis():
 	print "time in gets: ", end-start
 
 	return
-
-# def parse_data(stock_data):
-
-# 	output_data = []
-
-#  	all_days = stock_data.split('}, {')
-#  	print len(all_days)
-#  	for day in all_days:
-#  		day = day.strip('{}[]')
-
-#  		keys = []
-#  		values = []
-#  		for e in day.split(', '):
-#  			# print day
-#  			# print "E is: ", e.split(': ')
-#  			k = e.split(': ')
-# 			keys.append(k[0].strip('\''))
-# 			# print "K0: ", k[0]
-# 			try:
-# 				values.append(float(k[1]))
-# 			except:
-# 				values.append(k[1].strip('\''))
-
-# 		todays_dict = dict(zip(keys, values))
-# 		output_data.append(todays_dict)
-# 		# print "Today's Dict: ", todays_dict
-
-# 	return output_data

@@ -1,4 +1,5 @@
 import redis
+from util.memoize import memoize, MemoizeMutable
 
 def flushdb(db_number=15):
     # redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
@@ -189,8 +190,55 @@ def pack_realtime_data(in_data):
     out_data = ','.join(str(p) for p in serializable)
     return out_data
 
+#@MemoizeMutable
+def get_data(stock=None):
+    if stock:
+        return read_redis([stock], db_number=15, dict_size=10)[0]
 
-def parse_data(stock):
+def fill_fast_redis(stock_price_set, db_number=15, dict_size=10):
+    """
+    This is slow to load because it will load the items in into a "ZRangeByScore" type database, then read from there
+    and push them into a "fast" style database, then delete the key, value from the ZRangeByScore db. It does extra
+    work, but it basically allows it to simply access the zrangebyscore db using the same api and would make it easy
+    to switch between the two methods of storage. Eventually, with more confidence, I think ZRangeByScore could be
+    eliminated as long as we could SORT the keys before putting them into a set/get style.
+    """
+    redis_reader = redis.StrictRedis(host='localhost', port=6379, db=15)
+    redis_writer = redis.StrictRedis(host='localhost', port=6379, db=db_number)
+
+    stock_symbol = stock_price_set[0]['Symbol']
+    # print "Symbol: ", stock_symbol
+
+    # print stock_price_set
+    fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=True, db_number=15, dict_size=dict_size)
+    # read_redis(stock_symbol, db_number=15, dict_size=dict_size, start_date='-inf', end_date='+inf')
+
+    raw_read = get_data(stock_symbol)
+    st_version = str(raw_read)
+    # print st_version
+    input_key = 'historical:fast:' + stock_symbol
+    redis_writer.set(input_key, st_version)
+    # print stock_symbol, " Loaded"
+
+    redis_reader.flushdb()
+    return
+    
+
+    # for x in xrange(0, len(stock_list)):
+    #     stock_list[x] = stock_list[x].strip('\n')
+    # # print stock_list
+
+    # for stock in stock_list:
+    #     raw_read = read_redis(stock, db_number=0, dict_size=10)[0]
+    #     st_version = str(raw_read)
+    #     # print st_version
+    #     input_key = 'historical:fast:' + stock
+    #     redis_writer.set(input_key, st_version)
+    #     print stock, " Loaded"
+
+@MemoizeMutable
+# cdef list parse_data(str stock):
+def parse_fast_data(stock):
     """
     This should be used when a massive raw string of stock data was dumped into redis as a value. This will parse out
     the csv and return a list of dictionaries. Note carefully: it was designed to parse out the data of the type stored
@@ -201,7 +249,7 @@ def parse_data(stock):
     # cdef list output_data, all_days, keys, values, k
     # cdef struct todays_dict
 
-    redis_db = redis.StrictRedis(host='localhost', port=6379, db=3)
+    redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
     get_query = 'historical:fast:' + stock
     stock_data = redis_db.get(get_query)
 
@@ -220,6 +268,7 @@ def parse_data(stock):
                 try:
                     values.append(float(k[1]))
                 except:
+                    # This handles situations when the key is Symbol or Date and cannot be a float
                     # print "\n\n\n****", stock, day, e, k
                     values.append(k[1].strip('\''))
 
