@@ -43,27 +43,156 @@ class memoize(object):
 
 #         return self.memo[str]
 
+
+
+# class MemoizeMutable:
+#     """
+#       This will only cache a few items, see the elif statement.
+#     """
+#     def __init__(self, fn):
+#         self.fn = fn
+#         self.memo = {}
+#         self.item_count = 0
+#     def __call__(self, *args, **kwds):
+#         import cPickle
+#         str = cPickle.dumps(args, 1)+cPickle.dumps(kwds, 1)
+#         if self.memo.has_key(str):
+#             return self.memo[str]
+        
+#         elif self.item_count <= 1: 
+#             # print "miss"  # DEBUG INFO
+#             self.memo[str] = self.fn(*args, **kwds)
+#             self.item_count += 1
+#         else:
+#           return self.fn(*args, **kwds)
+#         # else:
+#             # print "hit"  # DEBUG INFO
+
+#         return self.memo[str]
+
+
+
+
 class MemoizeMutable:
     """
       This will only cache a few items, see the elif statement.
+      New algo is such that we *know* for most of these calls they will alternate between a fixed stock and a variable
+      stock. As such, we expect to see the fixed stock every other call. Thus, we only cache something if we have
+      seen it precisely two calls ago.
     """
     def __init__(self, fn):
         self.fn = fn
         self.memo = {}
         self.item_count = 0
+        self.max_cached_items = 1
+        self.one_fn_ago = fn
+        self.two_fns_ago = fn
+        # self.args_one_call_ago = []
+        # self.kwargs_one_call_ago = {}
+        # self.args_two_calls_ago = []
+        # self.kwargs_two_calls_ago = {}
     def __call__(self, *args, **kwds):
         import cPickle
         str = cPickle.dumps(args, 1)+cPickle.dumps(kwds, 1)
         if self.memo.has_key(str):
+            # it was previously cached, and there is no need to update it
+            # print "reading cache, has key already", args, kwds
+            self.two_fns_ago = self.one_fn_ago
+            self.one_fn_ago = str
             return self.memo[str]
         
-        elif self.item_count <= 1: 
-            # print "miss"  # DEBUG INFO
+        elif self.item_count < self.max_cached_items:
+            # this is for the very first run to set up the caching when the history is not established
+            # notice everything gets set
+            print "first run", args, kwds
             self.memo[str] = self.fn(*args, **kwds)
+            self.two_fns_ago = str
+            self.one_fn_ago = str
             self.item_count += 1
+            return self.memo[str]
+
+        elif str == self.two_fns_ago:
+            # cache the item, basically, this is the second time we are seeing it
+            # print "miss"  # DEBUG INFO
+            print "caching now", args, kwds
+            self.memo[str] = self.fn(*args, **kwds)
+            self.two_fns_ago = self.one_fn_ago
+            self.one_fn_ago = str
+            self.item_count += 1
+            return self.memo[str]
+
         else:
+          # the item was not cached and will not be cached now
+          "not caching now", args, kwds
+          self.two_fns_ago = self.one_fn_ago
+          self.one_fn_ago = str
           return self.fn(*args, **kwds)
         # else:
             # print "hit"  # DEBUG INFO
 
         return self.memo[str]
+
+
+
+
+
+
+
+# class MemoizeMutable:
+#     """
+#       This will only cache a few items, see the elif statement.
+#       New algo is such that we *know* for most of these calls they will alternate between a fixed stock and a variable
+#       stock. As such, we expect to see the fixed stock every other call. Thus, we only cache something if we have
+#       seen it precisely two calls ago.
+#     """
+#     def __init__(self, fn):
+#         self.fn = fn
+#         self.memo = {}
+#         self.item_count = 0
+#         self.max_cached_items = 1
+#         self.one_fn_ago = fn
+#         self.two_fns_ago = fn
+#         # self.args_one_call_ago = []
+#         # self.kwargs_one_call_ago = {}
+#         # self.args_two_calls_ago = []
+#         # self.kwargs_two_calls_ago = {}
+#     def __call__(self, *args, **kwds):
+#         import cPickle
+#         str = cPickle.dumps(args, 1)+cPickle.dumps(kwds, 1)
+#         if self.memo.has_key(str):
+#             # it was previously cached, and there is no need to update it
+#             # print "reading cache, has key already", args, kwds
+#             self.two_fns_ago = self.one_fn_ago
+#             self.one_fn_ago = self.fn(*args, **kwds)
+#             return self.memo[str]
+        
+#         elif self.item_count < self.max_cached_items:
+#             # this is for the very first run to set up the caching when the history is not established
+#             # notice everything gets set
+#             print "first run", args, kwds
+#             self.memo[str] = self.fn(*args, **kwds)
+#             self.two_fns_ago = self.fn(*args, **kwds)
+#             self.one_fn_ago = self.fn(*args, **kwds)
+#             self.item_count += 1
+#             return self.memo[str]
+
+#         elif self.fn(*args, **kwds) == self.two_fns_ago:
+#             # cache the item, basically, this is the second time we are seeing it
+#             # print "miss"  # DEBUG INFO
+#             print "caching now", args, kwds
+#             self.memo[str] = self.fn(*args, **kwds)
+#             self.two_fns_ago = self.one_fn_ago
+#             self.one_fn_ago = self.fn(*args, **kwds)
+#             self.item_count += 1
+#             return self.memo[str]
+
+#         else:
+#           # the item was not cached and will not be cached now
+#           "not caching now", args, kwds
+#           self.two_fns_ago = self.one_fn_ago
+#           self.one_fn_ago = self.fn(*args, **kwds)
+#           return self.fn(*args, **kwds)
+#         # else:
+#             # print "hit"  # DEBUG INFO
+
+#         return self.memo[str]
