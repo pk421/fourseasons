@@ -6,10 +6,11 @@ import os
 import time
 
 try:
+    from src.cointegrations import run_cointegrations
     from src.correlations import run_correlations
     from src.data_retriever import *
     from src.poll_realtime_data import *
-    #from src.harding_seasonality import run_harding_seasonality
+    from src.harding_seasonality import run_harding_seasonality
     from src.returns_analyzer import run_returns_analyzer
     from src.stock_analyzer import run_stock_analyzer
     from src.vol_analyzer import run_vol_analyzer
@@ -24,6 +25,10 @@ parser = argparse.ArgumentParser()
 #parser.add_argument("-v", "--verbosity",
 #                    help="increase output verbosity",
 #                    action="store_true")
+parser.add_argument("--cointegrations",
+                    help="run cointegration analysis",
+                    action="store_true")
+
 parser.add_argument("--correlations",
                     help="run correlation analysis",
                     action="store_true")
@@ -72,6 +77,9 @@ args = parser.parse_args()
 
 time_start = time.time()
 
+if args.cointegrations:
+    run_cointegrations()
+
 if args.correlations:
     run_correlations()
 
@@ -89,7 +97,7 @@ if args.harding_seasonality:
     run_harding_seasonality()
 
 if args.load_redis:
-    load_redis(stock_list='300B_1M.csv', db_number=0, file_location='tmp/', dict_size=10)
+    load_redis(stock_list='300B_1M_and_etfs_etns.csv', db_number=0, file_location='tmp/', dict_size=10)
 
 if args.poll_realtime_data:
     query_realtime_data()

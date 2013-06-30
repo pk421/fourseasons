@@ -9,6 +9,7 @@ from Cython.Distutils import build_ext
 ext_modules = [
               Extension('src.toolsx', ['src/toolsx.pyx']),
               Extension('src.vol_analyzer', ['src/vol_analyzer.pyx']),
+              Extension('src.correlations', ['src/correlations.pyx']),
               # Extension('src.correlations', ['src/correlations.pyx']),
 
               ## Redis / data

@@ -1,6 +1,8 @@
 from src.data_retriever import read_redis
 import numpy as np
 import toolsx as tools
+from data.redis import manage_redis
+
 
 from util.profile import profile
 from util.memoize import memoize
@@ -26,10 +28,11 @@ def get_data():
 	in_file.close()
 
 	stock_list = ['AAPL', 'GOOG', 'GLD', 'SLV', 'NEM', 'ABX', 'XOM', 'CVX']
-	stock_list = ['SPY']
+	#stock_list = ['SPY']
 
 	stock = stock_list[0]
-	stock_data = read_redis(stock=stock, db_number=0, to_disk=False)[0]
+	# stock_data = read_redis(stock=stock, db_number=0, to_disk=False)[0]
+	stock_data = manage_redis.parse_fast_data(stock)
 	return stock_data
 
 #@profile

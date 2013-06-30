@@ -214,7 +214,8 @@ def load_redis(stock_list='do_all', db_number=15, file_location='tmp/', dict_siz
             #print failed_symbols
             print symbol, "\t failed at least one validation test"
             continue
-        ## manage_redis.fill_redis(stock_price_set, db_number=db_number, dict_size=dict_size)
+        
+        ### manage_redis.fill_redis(stock_price_set, db_number=db_number, dict_size=dict_size)
         manage_redis.fill_fast_redis(stock_price_set, db_number=db_number, dict_size=dict_size)
 
         current_time = datetime.datetime.now() - start_time
@@ -287,19 +288,44 @@ def read_redis(stock='all_stocks', db_number=15, dict_size=10, to_disk=False, st
         list_of_stocks = manage_redis.read_redis(stock, db_number=db_number, dict_size=dict_size, start_date='-inf', \
                                                  end_date='+inf')
         return list_of_stocks
+
+
+def fix_etf_list():
+    """
+    This simple script cleans up the format of the etf list that I have. It simplifies the list of things down to
+    only symbols so that they can be used by this engine.
+    """
+
+    location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/etfs_etns_raw.csv'
+    stock_list = open(location, 'r')
+    symbols = stock_list.read().rstrip().split('\n')
+
+    out_location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/etfs_etns.csv'
+    out_file = open(out_location, 'w')
+
+    outstr = ''
+    new_symbols = []
+    for x in xrange(len(symbols)):
+        # new_symbols.append(symbols[x].split(',')[1])
+        # print symbols[x].split(',')[1]
+        # out_file.write(symbols[x].split(',')[1])
+        # out_file.write('\n')
+        if symbols[x].split(',')[1] == 'Symbol':
+            continue
+        outstr += symbols[x].split(',')[1]
+        outstr += '\n'
+    out_file.write(outstr)
+    out_file.close()
+    return
     
 
 
 
-
+    
 class PriceSet(object):
 
     def __init__(self):
         self.trading_days = []
 
     def fill_trading_days(self, input_data):
-        pass
-
-
-    
-    
+        pass   

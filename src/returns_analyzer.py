@@ -3,6 +3,8 @@ import numpy as np
 import toolsx as tools
 import math
 
+from data.redis import manage_redis
+
 from util.profile import profile
 
 #@profile
@@ -10,7 +12,7 @@ def run_returns_analyzer():
 	"""
 	This is a simple script that will run a returns analysis for a list of stocks. You can specify a list of stocks to
 	analyze and this will allow you to put the returns into a number of "bins." The number of bins is configurable. The
-	result will be what could easily be the input into a chart chart shows the returns distributions. From this chart,
+	result will be what could easily be the input into a chart shows the returns distributions. From this chart,
 	a returns model could be built, that would show the mean and sigma of the returns.
 	"""
 
@@ -36,7 +38,13 @@ def run_returns_analyzer():
 
 	for number, stock in enumerate(stock_list):
 		# stock = stock_list[0]
-		stock_data = read_redis(stock=stock, db_number=0, to_disk=False)[0]
+		# stock_data = read_redis(stock=stock, db_number=0, to_disk=False)[0]
+		try:
+			stock_data = manage_redis.parse_fast_data(stock)
+			if len(stock_data) == 0:
+				continue
+		except:
+			continue
 
 		simple_close_data = np.empty(len(stock_data))
 		simple_date_data = []

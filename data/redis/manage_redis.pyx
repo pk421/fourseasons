@@ -29,6 +29,9 @@ def read_redis(stocks, db_number=15, dict_size=10, start_date='-inf', end_date='
 
     list_of_stocks = []
 
+    if dict_size != 10 and dict_size != 2:
+        raise Exception('Only dict sizes of 2 or 10 are implemented')
+
     for s in stocks:
         all_days = []
         redis_symbol = "historical-D:" + s

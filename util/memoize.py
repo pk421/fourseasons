@@ -104,7 +104,8 @@ class MemoizeMutable:
         elif self.item_count < self.max_cached_items:
             # this is for the very first run to set up the caching when the history is not established
             # notice everything gets set
-            print "first run", args, kwds
+            print "first run memoization", args, kwds
+            self.memo.clear()
             self.memo[str] = self.fn(*args, **kwds)
             self.two_fns_ago = str
             self.one_fn_ago = str
@@ -113,8 +114,8 @@ class MemoizeMutable:
 
         elif str == self.two_fns_ago:
             # cache the item, basically, this is the second time we are seeing it
-            # print "miss"  # DEBUG INFO
-            print "caching now", args, kwds
+            # print "caching now", args, kwds
+            self.memo.clear()
             self.memo[str] = self.fn(*args, **kwds)
             self.two_fns_ago = self.one_fn_ago
             self.one_fn_ago = str
@@ -123,7 +124,7 @@ class MemoizeMutable:
 
         else:
           # the item was not cached and will not be cached now
-          "not caching now", args, kwds
+          "not caching now memoization", args, kwds
           self.two_fns_ago = self.one_fn_ago
           self.one_fn_ago = str
           return self.fn(*args, **kwds)

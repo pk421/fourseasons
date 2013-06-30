@@ -36,6 +36,9 @@ redis_stop:
 
 
 
+cointegrations:
+	python test_run.py --cointegrations
+
 correlations:
 	python test_run.py --correlations
 
