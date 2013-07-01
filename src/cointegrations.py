@@ -2,6 +2,7 @@ import numpy as np
 import scipy as scipy
 import datetime
 import time
+import copy
 
 from util.memoize import memoize, MemoizeMutable
 
@@ -182,17 +183,17 @@ def run_cointegrations():
 
 		end_data = 10969
 		end_data = len(stock_1_close)
-		window_size = 120
+		window_size = 400
 		for x in xrange(0, end_data - window_size):
 			end_index = x + window_size
-
+				
 			stock_1_window = stock_1_close[x : end_index+1]
 			stock_2_window = stock_2_close[x : end_index+1]
-			
+
 			slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(stock_1_window, stock_2_window)
 
 			if r_value >= 0.90 and x >= 5000:
-				result = show_residuals(stock_1_window, stock_2_window)
+				result = show_residuals(stock_1_close, stock_2_close, x, end_index, stock_1_trimmed, stock_2_trimmed)
 				print "\nIndex of price corr: ", x, end_index
 				
 				if result is not None:
@@ -203,11 +204,6 @@ def run_cointegrations():
 					out_file.close
 					return
 
-
-
-	
-
-
 	out_file.close()
 	print "\nFinished: ", len_pairs
 	print "\nbad trim: ", bad_trim
@@ -216,41 +212,207 @@ def run_cointegrations():
 	
 	return
 
-def show_residuals(stock_1_window, stock_2_window):
 
+
+def show_residuals(stock_1_close, stock_2_close, start_index, end_index, stock_1_trimmed, stock_2_trimmed):
+			
+	stock_1_window = stock_1_close[start_index : end_index]
+	stock_2_window = stock_2_close[start_index : end_index]
+	
 	len_stock_1_window = len(stock_1_window)
 
 	slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(stock_1_window, stock_2_window)
+
+	### Remember for the regressions: if we have this: first = [0,1,2,3,4] and second = [0,2,4,6,8] and we do:
+	# linregress(first, second), we get an equation of second = slope*first + intercept
 	
 	residuals = []
+	total_residuals = []
 	current_residual = 0
 	total_residual = 0
 	spread_list = []
 	output_string = ''
 
-	for x in xrange(0, len_stock_1_window):
+	price_ratio_1_2 = stock_1_close[start_index] / stock_2_close[start_index]
+	hedge_ratio = slope
+
+	print "Start: ", stock_1_close[start_index], stock_2_close[start_index], price_ratio_1_2, hedge_ratio
+	print "\n\n"
+	#raise Exception
+	previous_position_value = 0
+	for x in xrange(start_index, end_index):
 		
-		stock_1_expected = (stock_2_window[x] - intercept) / slope
-		current_residual = stock_1_expected - stock_1_window[x]
-		total_residual += current_residual
+		# placeholder in output string
+		stock_2_expected = 0
+
+		current_position_value = (hedge_ratio * stock_1_close[x]) - stock_2_close[x]
+		previous_position_value = (hedge_ratio * stock_1_close[x-1]) - stock_2_close[x-1]
+		current_residual = current_position_value - previous_position_value
 		residuals.append(current_residual)
+		total_residual += current_residual
+		total_residuals.append(total_residual)
 
-		spread = stock_2_window[x] - (slope * stock_1_window[x])
-		spread_list.append(spread)
+		date = stock_1_trimmed[x]['Date']
+		print x, date, slope, intercept, stock_1_close[x], stock_2_close[x], current_residual, total_residual
 
-		# print stock_2_window[x], '\t', stock_1_window[x], '\t', stock_1_expected, current_residual, total_residual
-		# output_string += ','.join([str(stock_2_window[x]), str(stock_1_window[x]), str(stock_1_expected), \
-		#  						   str(stock_2_expected), str(current_residual), str(total_residual)]) + '\n'
-		output_string += ','.join([str(spread),
-								   str(stock_2_window[x]), 
-								   str(stock_1_window[x]),
-								   str(stock_1_expected),
+		output_string += ','.join([
+								   # str(spread),
+								   str(stock_1_close[x]), 
+								   str(stock_2_close[x]),
+								   str(stock_2_expected),
 								   str(current_residual),
 								   str(total_residual),
 								   ]) + '\n'
 
 
+	rslope, rintercept, rr_value, rp_value, rstd_err = scipy.stats.linregress(range(len_stock_1_window), total_residuals)
+	
+	print '\nRes slope, int, p, r: %.4f, %.4f, %.4f, %.4f' % (rslope, rintercept, rp_value, rr_value)
+	print "r, slope, intercept: ", r_value, slope, intercept
 
+	# if abs(rr_value) <= 0.3 and abs(rslope) < 0.001:
+	if abs(rr_value) <= 0.003 and abs(rp_value) >= 0.95:
+
+		# we need to add to the residual list here to continue the simulation
+		###################
+		
+		print "\n"
+		for y in xrange(0, 500):
+
+			i = y + end_index
+
+			stock_2_expected = 0
+
+			current_position_value = (hedge_ratio * stock_1_close[i]) - stock_2_close[i]
+			previous_position_value = (hedge_ratio * stock_1_close[i-1]) - stock_2_close[i-1]
+			current_residual = current_position_value - previous_position_value
+			residuals.append(current_residual)
+			total_residual += current_residual
+			total_residuals.append(total_residual)
+
+			date = stock_1_trimmed[i]['Date']
+			print i, date, slope, intercept, stock_1_close[i], stock_2_close[i], current_residual, total_residual
+
+			output_string += ','.join([
+									   # str(spread),
+									   str(stock_1_close[i]), 
+									   str(stock_2_close[i]),
+									   str(stock_2_expected),
+									   str(current_residual),
+									   str(total_residual),
+									   ]) + '\n'
+
+
+
+
+		print "\nMean / Sigma of total resid: ", np.mean(total_residuals), np.std(total_residuals)
+		####################
+		return output_string
+	else:
+		return None
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# def show_residuals(stock_1_close, stock_2_close, start_index, end_index):
+			
+# 	stock_1_window = stock_1_close[start_index : end_index]
+# 	stock_2_window = stock_2_close[start_index : end_index]
+	
+# 	len_stock_1_window = len(stock_1_window)
+
+# 	# print "Len: ", len_stock_1_window, (end_index - start_index), start_index, end_index
+# 	# print stock_1_window
+# 	# print stock_2_window
+
+# 	slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(stock_1_window, stock_2_window)
+
+# 	### Remember for the regressions: if we have this: first = [0,1,2,3,4] and second = [0,2,4,6,8] and we do:
+# 	# linregress(first, second), we get an equation of second = slope*first + intercept
+	
+# 	residuals = []
+# 	current_residual = 0
+# 	total_residual = 0
+# 	spread_list = []
+# 	output_string = ''
+
+# 	for x in xrange(start_index, end_index):
+		
+# 		stock_2_expected = (slope * stock_1_close[x]) + intercept
+# 		current_residual = stock_2_expected - stock_2_close[x]
+# 		total_residual += current_residual
+# 		residuals.append(current_residual)
+
+# 		print x, slope, intercept, stock_1_close[x], stock_2_close[x], stock_2_expected, current_residual, total_residual
+
+# 		output_string += ','.join([
+# 								   # str(spread),
+# 								   str(stock_1_close[x]), 
+# 								   str(stock_2_close[x]),
+# 								   str(stock_2_expected),
+# 								   str(current_residual),
+# 								   str(total_residual),
+# 								   ]) + '\n'
+
+
+# 	rslope, rintercept, rr_value, rp_value, rstd_err = scipy.stats.linregress(range(len_stock_1_window), residuals)
+	
+# 	print '\nRes slope, int, p, r: %.4f, %.4f, %.4f, %.4f' % (rslope, rintercept, rp_value, rr_value)
+# 	print "r, slope, intercept: ", r_value, slope, intercept
+
+# 	# if abs(rr_value) <= 0.3 and abs(rslope) < 0.001:
+# 	if abs(rr_value) <= 0.003 and abs(rp_value) >= 0.95:
+
+# 		# we need to add to the residual list here to continue the simulation
+# 		###################
+		
+# 		print "\n"
+# 		for y in xrange(0, 50):
+
+# 			i = y + end_index
+
+# 			stock_2_expected = (slope * stock_1_close[i]) + intercept
+# 			current_residual = stock_2_expected - stock_2_close[i]
+# 			total_residual += current_residual
+# 			residuals.append(current_residual)
+
+# 			print i, slope, intercept, stock_1_close[i], stock_2_close[i], stock_2_expected, current_residual, total_residual
+
+# 			output_string += ','.join([
+# 									# str(spread),
+# 									str(stock_1_close[i]), 
+# 									str(stock_2_close[i]),
+# 									str(stock_2_expected),
+# 									str(current_residual),
+# 									str(total_residual),
+# 									]) + '\n'
+
+
+
+
+# 		####################
+# 		return output_string
+# 	else:
+# 		return None
+
+	# print "\nCorr Coeff: ", np.corrcoef(stock_1_window, stock_2_window)[0][1]
 
 	# print "\n\nResidual Slope: ", rslope
 	# print "Residual Intercept: ", rintercept
@@ -263,21 +425,3 @@ def show_residuals(stock_1_window, stock_2_window):
 	# print "R Value: ", r_value
 	# print "P Value: ", p_value
 	# print "Std Err: ", std_err
-
-
-	regress_list = []
-	for x in xrange(1, len_stock_1_window + 1):
-		regress_list.append(x)
-
-	rslope, rintercept, rr_value, rp_value, rstd_err = scipy.stats.linregress(residuals, range(len_stock_1_window))
-	print "\nRes slope, int, p, r, mean: ", round(rslope, 4), round(rintercept, 4), rp_value, rr_value, np.mean(residuals)
-	print "r, slope, intercept: ", r_value, slope, intercept
-
-	if rr_value <= 1 and abs(rslope) < 0.5:
-		
-
-		return output_string
-	else:
-		return None
-
-	# print "\nCorr Coeff: ", np.corrcoef(stock_1_window, stock_2_window)[0][1]
