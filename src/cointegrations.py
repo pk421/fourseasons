@@ -228,6 +228,7 @@ def show_residuals(stock_1_close, stock_2_close, start_index, end_index, stock_1
 	
 	residuals = []
 	total_residuals = []
+	smoothed_total_residuals = []
 	current_residual = 0
 	total_residual = 0
 	spread_list = []
@@ -252,6 +253,16 @@ def show_residuals(stock_1_close, stock_2_close, start_index, end_index, stock_1
 		total_residual += current_residual
 		total_residuals.append(total_residual)
 
+
+		if len(total_residuals) > 7:
+			z = x - start_index
+			smoothed_total_residual = np.mean(total_residuals[z-6:z+1])
+			smoothed_total_residuals.append(smoothed_total_residual)
+		else:
+			smoothed_total_residual = 0
+			smoothed_total_residuals.append(smoothed_total_residual)
+
+
 		date = stock_1_trimmed[x]['Date']
 		print x, date, slope, intercept, stock_1_close[x], stock_2_close[x], current_residual, total_residual
 
@@ -262,6 +273,7 @@ def show_residuals(stock_1_close, stock_2_close, start_index, end_index, stock_1
 								   str(stock_2_expected),
 								   str(current_residual),
 								   str(total_residual),
+								   # str(smoothed_total_residual),
 								   ]) + '\n'
 
 
@@ -275,7 +287,6 @@ def show_residuals(stock_1_close, stock_2_close, start_index, end_index, stock_1
 
 		# we need to add to the residual list here to continue the simulation
 		###################
-		
 		print "\n"
 		for y in xrange(0, 500):
 
@@ -290,6 +301,12 @@ def show_residuals(stock_1_close, stock_2_close, start_index, end_index, stock_1
 			total_residual += current_residual
 			total_residuals.append(total_residual)
 
+
+			z = len_stock_1_window + y
+			smoothed_total_residual = np.mean(total_residuals[z-6:z+1])
+			smoothed_total_residuals.append(smoothed_total_residual)
+
+
 			date = stock_1_trimmed[i]['Date']
 			print i, date, slope, intercept, stock_1_close[i], stock_2_close[i], current_residual, total_residual
 
@@ -300,6 +317,7 @@ def show_residuals(stock_1_close, stock_2_close, start_index, end_index, stock_1
 									   str(stock_2_expected),
 									   str(current_residual),
 									   str(total_residual),
+									   # str(smoothed_total_residual)
 									   ]) + '\n'
 
 
