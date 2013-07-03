@@ -128,6 +128,7 @@ def fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=Tru
     storing the date as the "value." When the data is retrieved, the values (store dates) can be sorted, which enables
     us to retrieve the dates in a nicely sorted order.
     """
+
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
     symbol = stock_price_set[0]['Symbol']
     if delete_old_data:
@@ -194,9 +195,9 @@ def pack_realtime_data(in_data):
     return out_data
 
 #@MemoizeMutable
-def get_data(stock=None):
+def get_data(stock=None, dict_size=10):
     if stock:
-        return read_redis([stock], db_number=15, dict_size=10)[0]
+        return read_redis([stock], db_number=15, dict_size=dict_size)[0]
 
 def fill_fast_redis(stock_price_set, db_number=15, dict_size=10):
     """
@@ -215,8 +216,7 @@ def fill_fast_redis(stock_price_set, db_number=15, dict_size=10):
     # print stock_price_set
     fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=True, db_number=15, dict_size=dict_size)
     # read_redis(stock_symbol, db_number=15, dict_size=dict_size, start_date='-inf', end_date='+inf')
-
-    raw_read = get_data(stock_symbol)
+    raw_read = get_data(stock_symbol, dict_size=dict_size)
     st_version = str(raw_read)
     # print st_version
     input_key = 'historical:fast:' + stock_symbol
