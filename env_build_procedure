@@ -56,7 +56,14 @@ GProf2Dot:
 - apt-get install python graphviz
 - get gprof2dot.py here: https://code.google.com/p/jrfonseca/wiki/Gprof2Dot
 
-########################################################################################################################
+Pandas:
+- sudo pip install pandas
+
+Patsy:
+- sudo pip install patsy 		# this is necessary for stats models to work properly
+
+Stats Models:
+- sudo pip install statstoolmodels
 
 Useful Commands:
 -   Convert from DOS line endings to UNIX style:

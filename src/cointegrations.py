@@ -192,7 +192,7 @@ def run_cointegrations():
 
 			slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(stock_1_window, stock_2_window)
 
-			if r_value >= 0.90 and x >= 5000:
+			if r_value >= 0.90 and x >= 6000:
 				result = show_residuals(stock_1_close, stock_2_close, x, end_index, stock_1_trimmed, stock_2_trimmed)
 				print "\nIndex of price corr: ", x, end_index
 				
@@ -284,6 +284,12 @@ def show_residuals(stock_1_close, stock_2_close, start_index, end_index, stock_1
 
 	# if abs(rr_value) <= 0.3 and abs(rslope) < 0.001:
 	if abs(rr_value) <= 0.003 and abs(rp_value) >= 0.95:
+
+		import statsmodels.tsa.stattools as stats
+		# see here: http://statsmodels.sourceforge.net/stable/generated/statsmodels.tsa.stattools.adfuller.html#statsmodels.tsa.stattools.adfuller
+		result = stats.adfuller(residuals)
+		print result, '\n\n\n'
+		raise Exception
 
 		# we need to add to the residual list here to continue the simulation
 		###################
