@@ -3,11 +3,14 @@ import scipy as scipy
 import datetime
 import time
 
+from math import log
+
 from util.memoize import memoize, MemoizeMutable
 
 from data.redis import manage_redis
 # from src import math_tools
-from src.cointegrations_data import get_paired_stock_list, get_corrected_data, trim_data, propagate_on_fly
+from src.cointegrations_data import get_paired_stock_list, get_corrected_data, trim_data, propagate_on_fly, \
+									get_bunches_of_pairs
 
 
 def run_cointegrations():
@@ -32,7 +35,9 @@ def run_cointegrations():
 
 	stock_list = ['GS', 'JPM']
 
-	paired_list = get_paired_stock_list(stock_list, fixed_stock=None)
+	# paired_list = get_paired_stock_list(stock_list, fixed_stock=None)
+
+	paired_list = get_bunches_of_pairs()
 
 	good_corr_data = []
 	corr_list = []
@@ -42,59 +47,95 @@ def run_cointegrations():
 	len_pairs = len(paired_list)
 
 	interest_items = []
+	trade_log = []
 
 	out_file = open('/home/wilmott/Desktop/fourseasons/fourseasons/cointegration_results.csv', 'w')
 
-	time_start = time.time()
-
 	for k, item in enumerate(paired_list):
-		stock_1_data = manage_redis.parse_fast_data(item['stock_1'])
-		stock_2_data = manage_redis.parse_fast_data(item['stock_2'])
-		stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
 
-		end_data = len(stock_1_close)
-		window_size = 400
-		for x in xrange(0, end_data - window_size):
-		# for x in xrange(0, 12000):
-			end_index = x + window_size
-				
-			stock_1_window = stock_1_close[x : end_index+1]
-			stock_2_window = stock_2_close[x : end_index+1]
+		output, trades = do_cointegration_test(item, k, len(paired_list))
+		if trades is not None and len(trades) > 0:
+			trade_log.extend(trades)
 
-			slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(stock_1_window, stock_2_window)
-			lin_reg_results = (slope, intercept, r_value, p_value, std_err)
+	
 
-			# Here, we will only consider stocks where we can first see that a linreg of their prices can be done with
-			# a high r-value. If we can't even find a good correlation between the stocks' prices, we skip. This is like
-			# a sanity check - we should not be trying to trade 'MSFT' and 'XOM' as a pair trade!!!
-			if r_value >= 0.90:
-				result = create_synthetic_investment(stock_1_close, stock_2_close, x, end_index, stock_1_trimmed, \
-													 stock_2_trimmed, lin_reg_results)
-				# print "Window of high correlation used for prev. ADF Test: ", x, end_index
-				if result is not None:
-					print "\nFound a good window: "
-					print "Start: ", stock_1_trimmed[x]['Date']
-					print "End: ", stock_2_trimmed[end_index]['Date']
-					out_file.write(result)
-					out_file.close
-					return
-					pass
-			else:
-				# print "PRICES NOT CORRELATED", x
-				pass
 
+	output_fields = ('stock_1', 'stock_2', 'entry_date', 'window_length', 'price_correlation_coeff', \
+					 'df_test_statistic', 'df_five_pc_crit_val', 'df_p_value', 'df_decay_half_life', 'synthetic_mu', \
+					 'synthetic_sigma')
+	output_string = ','.join(output_fields)
+	output_string += '\n'
+
+	for trade_item in trade_log:
+
+		for item in output_fields:
+			#output_string += str(getattr(trade_item, item))
+			#output_string += ','
+			pass
+
+		output_string += ','.join([str(getattr(trade_item, item)) for item in output_fields])
+		output_string += '\n'
+
+	out_file.write(output_string)
 	out_file.close()
+
+
 	print "\nFinished: ", len_pairs
 	print "\nbad trim: ", bad_trim
 	print "no data: ", no_data
 
-	
-	return
+
+def do_cointegration_test(item, k, len_paired_list):
+
+	stock_1_data = manage_redis.parse_fast_data(item['stock_1'])
+	stock_2_data = manage_redis.parse_fast_data(item['stock_2'])
+	stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
+
+	trade_log = []
+
+	end_data = len(stock_1_close)
+	output = None
+	result = None
+
+	window_size = 400
+	for x in xrange(0, end_data - window_size):
+	# for x in xrange(0, 12000):
+		end_index = x + window_size
+			
+		stock_1_window = stock_1_close[x : end_index+1]
+		stock_2_window = stock_2_close[x : end_index+1]
+
+		slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(stock_1_window, stock_2_window)
+		lin_reg_results = (slope, intercept, r_value, p_value, std_err)
+
+		# Here, we will only consider stocks where we can first see that a linreg of their prices can be done with
+		# a high r-value. If we can't even find a good correlation between the stocks' prices, we skip. This is like
+		# a sanity check - we should not be trying to trade 'MSFT' and 'XOM' as a pair trade!!!
+		if r_value >= 0.90:
+			output, result = create_synthetic_investment(stock_1_close, stock_2_close, x, end_index, stock_1_trimmed, \
+												 stock_2_trimmed, lin_reg_results, k, len_paired_list)
+
+			if result:
+				trade_log.append(result)
+			# print "Window of high correlation used for prev. ADF Test: ", x, end_index
+			if output is not None:
+				# print "\nFound a good window: "
+				# print "Start: ", stock_1_trimmed[x]['Date']
+				# print "End: ", stock_2_trimmed[end_index]['Date']
+				# out_file.write(output)
+				# out_file.close
+				# return
+				pass
+		else:
+			# print "PRICES NOT CORRELATED", x
+			pass
+
+	return output, trade_log
 
 
 
 def create_synthetic_investment(stock_1_close, stock_2_close, start_index, end_index, stock_1_trimmed, \
-							    stock_2_trimmed, lin_reg_results):
+							    stock_2_trimmed, lin_reg_results, k, len_paired_list):
 	"""
 	This uses the hedge ratio (slope) of the regression to create a synthetic investment and create a list of all the
 	residuals of that sythetic investment based on the hedge ratio. If the hedge ratio were perfect, the synthetic
@@ -163,29 +204,45 @@ def create_synthetic_investment(stock_1_close, stock_2_close, start_index, end_i
 	# investment is somewhat low - it should be, indicating that it is not particularly correlated to the time. 
 	if abs(rr_value) <= 0.5:
 		# print 'Synth inv: %i %.4f %.4f %.4f %.4f %.4f' % (start_index, rslope, rintercept, rr_value, rp_value, rstd_err)
-		result = do_df_test(synthetic_prices_pc)
+		df_result = do_df_test(synthetic_prices_pc)
 	else:
 		# print 'SKIPPED: ', start_index
-		return None
+		return None, None
 
-	if result and result[0] <= result[4]['5%'] and result[1] < 0.1:
-		print start_index, stock_1_trimmed[start_index]['Date'], result[0], result[4]['5%'], result[1], \
-			  round(slope, 4), round(intercept, 4)
+	if df_result and df_result[0] <= df_result[4]['5%'] and df_result[1] < 0.1:
+		print '%i %i %i %s %s %s %.3f %.3f %.4f %.3f %.4f' % (k, len_paired_list, start_index, \
+									stock_1_trimmed[0]['Symbol'], stock_2_trimmed[0]['Symbol'], \
+									stock_1_trimmed[start_index]['Date'], df_result[0], \
+									df_result[4]['5%'], df_result[1], slope, intercept)
 		
 		mean_price = round(np.mean(synthetic_prices_pc), 5)
 		sigma_price = round(np.std(synthetic_prices_pc), 5)
 		if sigma_price < 0.05:
-			return None
+			return None, None
 
-		print "Synth investment stats: ", mean_price, sigma_price, '\n'
-		return output_string
-	elif result:
+		print "Synth investment stats: %.4f %.4f" % (mean_price, sigma_price), '\n'
+		result = trade_result()
+
+		result.stock_1 = stock_1_trimmed[0]['Symbol']
+		result.stock_2 = stock_2_trimmed[0]['Symbol']
+		result.window_length = end_index - start_index
+		result.entry_date = stock_1_trimmed[start_index]['Date']
+
+		result.price_correlation_coeff = r_value
+		result.df_test_statistic =df_result[0]
+		result.df_five_pc_crit_val = df_result[4]['5%']
+		result.df_p_value = df_result[1]
+		result.df_decay_half_life = -(log(2,10) / result.df_test_statistic) * result.window_length
+		
+		result.synthetic_mu = mean_price
+		result.synthetic_sigma = sigma_price
+
+		return output_string, result
+	elif df_result:
 		# print "FAILED DF TEST: ", start_index, result[0], result[4]['5%'], result[1], round(slope, 4), round(intercept, 4)
 		pass
 	
-	return None
-
-
+	return None, None
 
 def do_df_test(prices):
 
@@ -196,13 +253,23 @@ def do_df_test(prices):
 	return result
 
 
+class trade_result():
+
+	def __init__(self):
+		self.stock_1 = None
+		self.stock_2 = None
+		self.start_date = None
+		
+		self.window_length = 0
+		self.price_correlation_coeff = 0
+		
+		self.df_test_statistic = 0
+		self.df_five_pc_crit_val = 0
+		self.df_p_value = 0
+		self.df_decay_half_life = 0
+
+		self.synthetic_mu = 0
+		self.synthetic_sigma = 0
 
 
-### I had an idea to use smoothing on the residuals but I don't think this makes sense...
-# if len(total_residuals) > 7:
-# 	z = x - start_index
-# 	smoothed_total_residual = np.mean(total_residuals[z-6:z+1])
-# 	smoothed_total_residuals.append(smoothed_total_residual)
-# else:
-# 	smoothed_total_residual = 0
-# 	smoothed_total_residuals.append(smoothed_total_residual)
+

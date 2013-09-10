@@ -149,3 +149,25 @@ def get_paired_stock_list(stocks, fixed_stock=None):
 	return paired_list
 
 
+def get_bunches_of_pairs():
+
+	tech_stocks = ('MSFT', 'AAPL', 'ORCL', 'NVDA', 'GOOG')
+	banks = ('JPM', 'GS', 'BAC', 'C', 'WFC', 'BBT', 'MS')
+	oil_majors = ('XOM', 'COP', 'CVX', 'OIL', 'RIG', 'HAL')
+	gold = ('GLD', 'SLV', 'ABX', 'NEM', 'SLW', 'AUY', 'KGC', 'GOLD')
+	developed = ('SPY', 'DIA', 'SDY', 'QQQQ', 'RUT', 'EWA', 'EWP', 'EEM', 'VGK', 'EWG', 'FEZ', 'EWL', 'EWI', 'EWQ', 'EWD', 'EWN')
+	developing = ('EEM', 'DEM', 'FXI', 'MCHI', 'GXG', 'EWZ')
+	defense = ('LMT', 'BA', 'RTN', 'NOC')
+
+	lists_to_use = (tech_stocks, banks, oil_majors, gold, developed, defense)
+
+	paired_list = []
+	for item in lists_to_use:
+
+		pairs = get_paired_stock_list(item)
+		paired_list.extend(pairs)
+
+	print len(paired_list)
+	return paired_list
+
+
