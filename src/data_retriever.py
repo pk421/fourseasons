@@ -167,7 +167,7 @@ def load_redis(stock_list='do_all', db_number=15, file_location='tmp/', dict_siz
         
     symbols.sort()
 
-    #symbols = ['A', 'AAPL']
+    # symbols = ['ABIO']
     
     validation_file = ''
     failed_symbols = []

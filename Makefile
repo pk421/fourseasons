@@ -72,7 +72,7 @@ vol_analyzer:
 
 
 profile:
-	python -m cProfile -o AAAprofile.stats test_run.py --correlations
+	python -m cProfile -o AAAprofile.stats test_run.py --cointegrations
 	# python test_run.py --vol_analyzer;  python util/gprof2dot.py -n0.5 -e0.5 -f pstats AAAprofile.stats | dot -Tpng -o output.png
 
 gprof:

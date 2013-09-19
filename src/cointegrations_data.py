@@ -92,12 +92,11 @@ def propagate_on_fly(stock_1_data, stock_2_data):
 	found in the more complete data series. 
 	"""
 
-	x_max = max(len(stock_1_data), len(stock_2_data))
-	
+	x_max = max(len(stock_1_data), len(stock_2_data))	
 	for x in xrange(0, x_max):
-		
 		# if x > 3397 and x < 3407:
-		# 	print x, stock_1_data[x]['Date'], stock_2_data[x]['Date'], stock_1_data[x]['Close'], stock_2_data[x]['Close']
+		# print x, stock_1_data[x]['Date'], stock_2_data[x]['Date'], stock_1_data[x]['Close'], stock_2_data[x]['Close']
+
 		if stock_1_data[x]['Date'] != stock_2_data[x]['Date']:
 			if datetime.datetime.strptime(stock_1_data[x]['Date'], '%Y-%m-%d').date() > \
 				datetime.datetime.strptime(stock_2_data[x]['Date'], '%Y-%m-%d').date():
@@ -151,15 +150,29 @@ def get_paired_stock_list(stocks, fixed_stock=None):
 
 def get_bunches_of_pairs():
 
-	tech_stocks = ('MSFT', 'AAPL', 'ORCL', 'NVDA', 'GOOG')
-	banks = ('JPM', 'GS', 'BAC', 'C', 'WFC', 'BBT', 'MS')
-	oil_majors = ('XOM', 'COP', 'CVX', 'OIL', 'RIG', 'HAL')
-	gold = ('GLD', 'SLV', 'ABX', 'NEM', 'SLW', 'AUY', 'KGC', 'GOLD')
-	developed = ('SPY', 'DIA', 'SDY', 'QQQQ', 'RUT', 'EWA', 'EWP', 'EEM', 'VGK', 'EWG', 'FEZ', 'EWL', 'EWI', 'EWQ', 'EWD', 'EWN')
-	developing = ('EEM', 'DEM', 'FXI', 'MCHI', 'GXG', 'EWZ')
-	defense = ('LMT', 'BA', 'RTN', 'NOC')
+	"""
+	Data Failures: 
+	BA, BRIS, BRIL, HPQ, IDZ, KO, LNKD, MNST, RUT
+	"""
 
-	lists_to_use = (tech_stocks, banks, oil_majors, gold, developed, defense)
+	tech = ('MSFT', 'AAPL', 'ORCL', 'NVDA', 'GOOG', 'ADBE', 'CSCO', 'CRM', 'IBM', 'SMDK', 'SYMC', 'MSI')
+	banks = ('JPM', 'GS', 'BAC', 'C', 'WFC', 'BBT', 'MS')
+	oil_majors = ('XOM', 'COP', 'CVX', 'RIG', 'HAL', 'OIL', 'SLB', 'APA', 'APC', 'CHK', 'DVN', 'BHI')
+	gold = ('GLD', 'SLV', 'ABX', 'NEM', 'SLW', 'AUY', 'KGC', 'GOLD', 'GDX', 'GDXJ', 'AEM', 'GG')
+	developed = ('SPY', 'DIA', 'SDY', 'QQQ', 'EWA', 'EWP', 'EEM', 'VGK', 'EWG', 'FEZ', 'EWL', 'EWI', 'EWQ', 'EWD', 'EWN')
+	developing = ('EEM', 'DEM', 'FXI', 'MCHI', 'GXG', 'EWZ')
+	defense = ('LMT', 'RTN', 'NOC', 'TXT', 'GD')
+	drinks = ('CCE', 'DPS', 'PEP', 'ABV', 'BUD', 'TAP')
+	health_insurance = ('A', 'CI')
+	drugs = ('AZN', 'BMY', 'GSK', 'JNJ', 'LLY', 'MRK', 'NVS', 'PFE')
+	utilities = ('D', 'DUK', 'ED', 'PCG', 'ETR')
+
+
+	leverage = ('SPY', 'SSO', 'SDS', 'TBT', 'QLD', 'QID', 'UYG', 'DIG', 'DDM', 'UYM', 'DUST', 'NUGT', \
+				'INDL', 'GDX', 'GDXJ', 'EZJ', 'EFO')
+
+	lists_to_use = (tech, banks, oil_majors, gold, developed, defense, drinks, health_insurance, drugs, leverage)
+	# lists_to_use = (health_insurance, defense)
 
 	paired_list = []
 	for item in lists_to_use:
