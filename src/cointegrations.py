@@ -22,9 +22,6 @@ def run_cointegrations():
 	sectors = ('basic_materials', 'conglomerates', 'consumer_goods', 'financial', 'healthcare', 'industrial_services', \
 			   'services', 'technology', 'utilities')
 
-	# location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/list_sp_500.csv'
-	# location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/sectors/technology.csv'
-	# location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/300B_1M.csv'
 	## location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/300B_1M_and_etfs_etns.csv'
 	
 
@@ -127,11 +124,8 @@ def do_cointegration_test(item, k, len_paired_list):
 	next_index = 0
 	# We go to twice the window size to allow one window size of time for post trade analysis
 	for x in xrange(0, end_data - (2 * window_size)):
-	# for x in xrange(0, 12000):
-		# end index represents when a trade in the trade log is finished. Can't consider re-entering until current
-		# trade is done
-		if x < next_index:
-			# print x, next_index, end_data - (2 * window_size)
+		# If we've been told we're still in a trade then we simply skip this day
+		if x <= next_index:
 			continue
 
 		# print "after test", x, next_index, end_data - (2 * window_size)
@@ -249,20 +243,20 @@ def create_synthetic_investment(stock_1_close, stock_2_close, start_index, end_i
 	sigma_synth_price = round(np.std(synthetic_prices), 5)
 	
 	sigma_price_pc = sigma_synth_price / mean_total_value
-	if sigma_price_pc < 0.03:
+	if sigma_price_pc < 0.01:
 		# print "SIGMA CUT: %.4f %.4f %.4f" % (sigma_synth_price, mean_total_value, sigma_price_pc)
 		return None, None, 0
 
 	# We first run a sanity check before even attempting a DF test - here, we verify that the r value of the synthetic
 	# investment is somewhat low - it should be, indicating that it is not particularly correlated to the time. 
-	if abs(rr_value) <= 0.5:
+	##if abs(rr_value) <= 0.5:
 		# print 'Synth inv: %i %.4f %.4f %.4f %.4f %.4f' % (start_index, rslope, rintercept, rr_value, rp_value, rstd_err)
-		df_result = do_df_test(synthetic_prices)
-	else:
+	df_result = do_df_test(synthetic_prices)
+	# else:
 		# print 'SKIPPED: ', start_index
-		return None, None, 0
+		# return None, None, 0
 
-	if df_result and df_result[0] <= df_result[4]['5%'] and df_result[1] < 0.1:
+	if df_result and df_result[0] <= df_result[4]['10%'] and df_result[1] < 0.1:
 		# print '%i %i %i %s %s %s %.3f %.3f %.4f %.3f %.4f' % (k, len_paired_list, start_index, \
 		# 							stock_1_trimmed[0]['Symbol'], stock_2_trimmed[0]['Symbol'], \
 		# 							stock_1_trimmed[start_index]['Date'], df_result[0], \
@@ -293,7 +287,7 @@ def create_synthetic_investment(stock_1_close, stock_2_close, start_index, end_i
 
 			result.price_correlation_coeff = r_value
 			result.df_test_statistic =df_result[0]
-			result.df_five_pc_crit_val = df_result[4]['5%']
+			result.df_five_pc_crit_val = df_result[4]['10%']
 			result.df_p_value = df_result[1]
 			result.df_decay_half_life = -(log(2,10) / result.df_test_statistic) * result.window_length
 			
@@ -335,12 +329,19 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 	entry_total_value = (slope * stock_1_close[start_index - 1]) + stock_2_close[start_index - 1]
 
 	trading_up = starting_synth_price < 0
+	trading_down = starting_synth_price >= 0
 
-	stop_loss = abs(starting_synth_price)
+	# stop_loss = abs(starting_synth_price)
 
 	in_trade_prices = []
 
 	rets = []
+
+	trading_up_stop_loss = (starting_synth_price - (1.6 * synth_sigma_loss))
+	trading_down_stop_loss = (starting_synth_price + (1.6 * synth_sigma_loss))
+	
+	trading_up_profit_target = (result.synthetic_mu - (0.5 * synth_sigma))
+	trading_down_profit_target = (result.synthetic_mu + (0.5 * synth_sigma))
 
 
 	for x in xrange(start_index, start_index + result.window_length):
@@ -359,10 +360,10 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 		# if current_price > result.synthetic_mu and starting_synth_price < result.synthetic_mu or \
 		#    current_price < result.synthetic_mu and starting_synth_price > result.synthetic_mu:
 
-		if trading_up and current_price > (result.synthetic_mu - (0.5 * synth_sigma)) or \
-		   trading_up == False and current_price < (result.synthetic_mu + (0.5 * synth_sigma)):
+		if trading_up and current_price > trading_up_profit_target or \
+		   trading_down and current_price < trading_down_profit_target:
 
-		   	print "Profit: ", current_price, starting_synth_price, ret, '\n'
+		   	print "Profit: ", starting_synth_price, current_price, ret, '\n'
 		   	result.trade_result = "Profit"
 			result.time_in_trade = x - (start_index - 1)
 			result.synth_price_start = starting_synth_price
@@ -373,10 +374,8 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 			return result
 
 
-		if trading_up and current_price < (starting_synth_price - (1.6 * synth_sigma_loss)) and \
-			(x - start_index) > 3:
-
-			print "Loss: ", current_price, starting_synth_price, ret, '\n'
+		if trading_up and current_price < trading_up_stop_loss:
+			print "Loss: ", starting_synth_price, current_price, ret, '\n'
 			result.trade_result = "Loss"
 			result.time_in_trade = x - (start_index - 1)
 			result.synth_price_start = starting_synth_price
@@ -387,10 +386,8 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 			return result
 
 
-		elif trading_up == False and current_price > (starting_synth_price + (1.6 * synth_sigma_loss)) and \
-			(x - start_index) > 3:
-
-			print "Loss: ", current_price, starting_synth_price, ret, '\n'
+		elif trading_down and current_price > trading_down_stop_loss:
+			print "Loss: ", starting_synth_price, current_price, ret, '\n'
 			result.trade_result = "Loss"
 			result.time_in_trade = x - (start_index - 1)
 			result.synth_price_start = starting_synth_price
@@ -402,7 +399,7 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 
 		# if x - (start_index - 1) > (0.1 * len_window):
 		if x - (start_index - 1) > 25:
-			print "Timeout: ", current_price, starting_synth_price, ret, '\n'
+			print "Timeout: ", starting_synth_price, current_price, ret, '\n'
 			result.trade_result = "Timeout"
 			result.time_in_trade = x - (start_index - 1)
 			result.synth_price_start = starting_synth_price
@@ -413,9 +410,21 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 			return result
 
 		#if (x - start_index) == 3 or (x - start_index) == 6 or (x - start_index) == 9:
-		if (x - start_index) == 10:
+		# if (x - start_index) == 10:
 			# synth_sigma_loss = synth_sigma_loss * (0.75)
-			synth_sigma = synth_sigma * 2
+			# synth_sigma = synth_sigma * 2
+
+		# if (x - start_index) == 15:
+		# 	synth_sigma = synth_sigma * 1.5
+
+		if trading_up and current_price < (starting_synth_price - (1.1 * synth_sigma_loss)) or \
+		   trading_down and current_price > (starting_synth_price + (1.1 * synth_sigma_loss)):
+			trading_up_profit_target = starting_synth_price
+			trading_down_profit_target = starting_synth_price
+
+		# if x - (start_index - 1) == 10:
+		# 	trading_up_profit_target = starting_synth_price
+		# 	trading_down_profit_target = starting_synth_price
 
 
 
