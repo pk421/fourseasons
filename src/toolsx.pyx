@@ -173,4 +173,62 @@ def simple_moving_average(price_data, s1):
     
 #     """
 #     return macd_line, signal_line
+
+#cpdef np.ndarray[np.float_t, ndim=1] rsi(
+#        np.ndarray[PriceSet, ndim=1] price_data,
+#        int r1):
+def rsi(price_data, r1):
+#    cdef np.ndarray[np.float_t, ndim=1] gain_loss, gains, losses, avg_gain, avg_loss, rsi
+#    cdef int i, x, len_data, warmup_factor
+
+    len_data = len(price_data)
+
+    #Warmup Factor was determined from David's tests and varies for each function
+    warmup_factor = (7 * r1) + 1
+
+    rsi = np.empty(len_data)
+    gain_loss = np.empty(len_data)
+    gains = np.empty(len_data)
+    losses = np.empty(len_data)
+    avg_gain = np.empty(len_data)
+    avg_loss = np.empty(len_data)
+
+    gain_loss[0] = 0
+    avg_gain[0] = 0
+    avg_loss[0] = 0
+
+
+    for x in xrange (1, len_data):
+
+        # gain_loss[x] = (price_data[x].close - price_data[x-1].close)
+        gain_loss[x] = (price_data[x] - price_data[x-1])
+
+        if gain_loss[x] > 0:
+            gains[x] = gain_loss[x]
+            losses[x] = 0
+        elif gain_loss[x] < 0:
+            gains[x] = 0
+            losses[x] = -gain_loss[x]   #the minus is used in this case because it is faster than abs()
+        elif gain_loss[x] == 0:
+            gains[x] = 0
+            losses[x] = 0
+
+        avg_gain[x] = ((avg_gain[x-1]*(r1-1))+gains[x])/r1
+        avg_loss[x] = ((avg_loss[x-1]*(r1-1))+losses[x])/r1
+
+
+        rsi[x] = 100 - (100 * avg_loss[x]/(avg_gain[x]+avg_loss[x]))
+
+
+    rsi[0:warmup_factor] = 0
+
+    """
+    for y in xrange(0, len_data):
+        current_date = data[y].date
+        #print "%i \t %s \t %0.2f \t %0.2f \t %0.2f \t %0.2f \t %0.2f" % (y, current_date, price_data[y].close, price_sum[y], price_square_sum[y], variance[y], sigma[y])
+        #print "%i \t %s \t %0.2f \t %0.4f \t %0.4f \t %0.4f \t %0.4f \t %0.4f" % (y, current_date, price_data[y].close, gain_loss[y], avg_gain[y], avg_loss[y], rs[y], rsi[y])
+        print "%i \t %s \t %0.2f \t %0.4f \t %0.4f \t %0.4f \t %0.4f" % (y, current_date, price_data[y].close, gain_loss[y], avg_gain[y], avg_loss[y], rsi[y])
+    """
+
+    return rsi
     

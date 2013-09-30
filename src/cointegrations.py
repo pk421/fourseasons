@@ -6,6 +6,8 @@ import time
 from math import log
 import statsmodels.tsa.stattools as stats
 
+import toolsx as tools
+
 from util.memoize import memoize, MemoizeMutable
 
 from data.redis import manage_redis
@@ -35,7 +37,7 @@ def run_cointegrations():
 		stock_list[k] = new_val
 	in_file.close()
 
-	# stock_list = ['MSFT', 'GOOG']
+	# stock_list = ['ESV', 'RDC']
 
 	paired_list = get_paired_stock_list(sorted(stock_list), fixed_stock=None)
 	# paired_list = get_bunches_of_pairs()
@@ -49,25 +51,6 @@ def run_cointegrations():
 	out_file = open('/home/wilmott/Desktop/fourseasons/fourseasons/cointegration_results_' + in_file_name + '_' + str(current_time) +'.csv', 'w')
 	# out_file_2 = open('/home/wilmott/Desktop/fourseasons/fourseasons/cointegration_results_synth_prices_' + str(current_time) + '.csv', 'w')
 
-	# for k, item in enumerate(paired_list):
-	# 	stock_1_data = manage_redis.parse_fast_data(item['stock_1'])
-	# 	stock_2_data = manage_redis.parse_fast_data(item['stock_2'])
-		
-	# 	# if stock_1_data is None:
-	# 	# 	print item['stock_1']
-	# 	# if stock_2_data is None:
-	# 	# 	print item['stock_2']
-		
-	# 	try:
-	# 		stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
-	# 	except:
-	# 		print item['stock_1'], item['stock_2']
-	# 		continue
-	# print "Test Passed"
-	# raise Exception
-
-
-
 	for k, item in enumerate(paired_list):
 		print k, len_pairs, item['stock_1'], item['stock_2']
 		output, trades = do_cointegration_test(item, k, len(paired_list))
@@ -75,24 +58,20 @@ def run_cointegrations():
 			trade_log.extend(trades)
 
 	############
-	if len(paired_list) == 1:
-		out_file_2.write(str(output))
-		out_file_2.close()
+	# if len(paired_list) == 1:
+	# 	out_file_2.write(str(output))
+	# 	out_file_2.close()
 	############
 
 	output_fields = ('stock_1', 'stock_2', 'entry_date', 'window_length', 'price_correlation_coeff', \
-					 'df_test_statistic', 'df_five_pc_crit_val', 'df_p_value', 'df_decay_half_life', 'synthetic_mu', \
-					 'synthetic_sigma', 'sigma_price_pc', 'trade_result', 'time_in_trade', 'synth_price_start', \
-					 'synth_price_end', 'ret', 'synth_chained_ret')
+					 'df_test_statistic', 'df_pc_crit_val', 'df_p_value', 'df_decay_half_life', 'synthetic_mu', \
+					 'synthetic_sigma', 'sigma_price_pc', 'rsi_most_extreme', 'entry_min_extreme_threshold_sigma', \
+					 'entry_actual_entry_sigma', 'trade_result', 'time_in_trade', 'synth_price_start', \
+					 'synth_price_end', 'ret', 'synth_chained_ret', )
 	output_string = ','.join(output_fields)
 	output_string += '\n'
 
 	for trade_item in trade_log:
-
-		for item in output_fields:
-			#output_string += str(getattr(trade_item, item))
-			#output_string += ','
-			pass
 
 		output_string += ','.join([str(getattr(trade_item, item)) for item in output_fields])
 		output_string += '\n'
@@ -113,6 +92,9 @@ def do_cointegration_test(item, k, len_paired_list):
 		stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
 	except:
 		return None, None
+
+	rsi_stock_1 = tools.rsi(stock_1_close, 5)
+	rsi_stock_2 = tools.rsi(stock_2_close, 5)
 
 	trade_log = []
 
@@ -141,9 +123,16 @@ def do_cointegration_test(item, k, len_paired_list):
 		# Here, we will only consider stocks where we can first see that a linreg of their prices can be done with
 		# a high r-value. If we can't even find a good correlation between the stocks' prices, we skip. This is like
 		# a sanity check - we should not be trying to trade 'MSFT' and 'XOM' as a pair trade!!!
-		if r_value >= 0.90:
+		
+		# print "Start: ", item['stock_1'], stock_1_trimmed[x]['Date'], stock_1_trimmed[x]['Close'], stock_1_close[x], rsi_stock_1[x]
+		one_rsi_at_extreme = rsi_stock_1[x] < 30 or rsi_stock_1[x] > 70 or rsi_stock_2[x] < 30 or rsi_stock_2[x] > 70
+		rsi_most_extreme = max(abs(rsi_stock_1[x] - 50), abs(rsi_stock_2[x] - 50))
+		# one_rsi_at_extreme = True
+		
+		if r_value >= 0.90 and one_rsi_at_extreme:
+			## print "Start: ", item['stock_1'], item['stock_2'], stock_1_trimmed[x]['Date'], stock_1_close[x], rsi_stock_1[x]
 			output, result, next_index = create_synthetic_investment(stock_1_close, stock_2_close, x, end_index, stock_1_trimmed, \
-												 stock_2_trimmed, lin_reg_results, k, len_paired_list)
+												 stock_2_trimmed, lin_reg_results, k, len_paired_list, rsi_most_extreme)
 
 
 			if result:
@@ -151,8 +140,8 @@ def do_cointegration_test(item, k, len_paired_list):
 			# print "Window of high correlation used for prev. ADF Test: ", x, end_index
 			if output is not None:
 				# print "\nFound a good window: "
-				# print "Start: ", stock_1_trimmed[x]['Date']
-				# print "End: ", stock_2_trimmed[end_index]['Date']
+				# print "Start: ", stock_1_trimmed[x]['Date'], stock_1_close[x], rsi_stock_1[x]
+				# print "End: ", stock_1_trimmed[end_index]['Date'], stock_1_close[x], rsi_stock_1[x]
 				# out_file.write(output)
 				# out_file.close
 				# return
@@ -168,7 +157,7 @@ def do_cointegration_test(item, k, len_paired_list):
 
 
 def create_synthetic_investment(stock_1_close, stock_2_close, start_index, end_index, stock_1_trimmed, \
-							    stock_2_trimmed, lin_reg_results, k, len_paired_list):
+							    stock_2_trimmed, lin_reg_results, k, len_paired_list, rsi_most_extreme):
 	"""
 	This uses the hedge ratio (slope) of the regression to create a synthetic investment and create a list of all the
 	residuals of that sythetic investment based on the hedge ratio. If the hedge ratio were perfect, the synthetic
@@ -268,10 +257,15 @@ def create_synthetic_investment(stock_1_close, stock_2_close, start_index, end_i
 		lower_bound = (-1.5 * sigma_synth_price) + mean_synth_price
 		upper_bound = (1.5 * sigma_synth_price) + mean_synth_price
 
+		second_lower_bound = (-1.5 * sigma_synth_price / 3) + mean_synth_price
+		second_upper_bound = (1.5 * sigma_synth_price / 3) + mean_synth_price
+
 		# if (today > lower_bound and yesterday < lower_bound) or (today < upper_bound and yesterday > upper_bound):
 		# print "Upper bound, today, yesterday: %.4f %.4f %.4f" % (upper_bound, today, yesterday)
 		## if (yesterday < lower_bound and yesterday < today) or (yesterday > upper_bound and yesterday > today):
-		if (yesterday < lower_bound and today > lower_bound) or (yesterday > upper_bound and today < upper_bound):
+		entry_min_extreme_threshold_sigma = 0
+		if ((yesterday < lower_bound and today > lower_bound) or (yesterday > upper_bound and today < upper_bound)) and \
+			((today > second_upper_bound) or (today < second_lower_bound)):
 		# if today < lower_bound or today > upper_bound:
 
 			#print "Synth investment stats: %.4f %.4f %.4f %.4f %.4f" % (mean_synth_price, sigma_price_pc, \
@@ -287,7 +281,7 @@ def create_synthetic_investment(stock_1_close, stock_2_close, start_index, end_i
 
 			result.price_correlation_coeff = r_value
 			result.df_test_statistic =df_result[0]
-			result.df_five_pc_crit_val = df_result[4]['10%']
+			result.df_pc_crit_val = df_result[4]['10%']
 			result.df_p_value = df_result[1]
 			result.df_decay_half_life = -(log(2,10) / result.df_test_statistic) * result.window_length
 			
@@ -298,6 +292,10 @@ def create_synthetic_investment(stock_1_close, stock_2_close, start_index, end_i
 			result.sigma_price_pc = sigma_synth_price / mean_total_value
 
 			result.synthetic_prices = synthetic_prices
+
+			result.rsi_most_extreme = rsi_most_extreme
+			result.entry_min_extreme_threshold_sigma = entry_min_extreme_threshold_sigma
+			result.entry_actual_entry_sigma = today / upper_bound
 
 			result = do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index, result)
 
@@ -417,18 +415,14 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 		# if (x - start_index) == 15:
 		# 	synth_sigma = synth_sigma * 1.5
 
-		if trading_up and current_price < (starting_synth_price - (1.1 * synth_sigma_loss)) or \
-		   trading_down and current_price > (starting_synth_price + (1.1 * synth_sigma_loss)):
+		if trading_up and current_price < (starting_synth_price - (1.0 * synth_sigma_loss)) or \
+		   trading_down and current_price > (starting_synth_price + (1.0 * synth_sigma_loss)):
 			trading_up_profit_target = starting_synth_price
 			trading_down_profit_target = starting_synth_price
 
 		# if x - (start_index - 1) == 10:
 		# 	trading_up_profit_target = starting_synth_price
 		# 	trading_down_profit_target = starting_synth_price
-
-
-
-
 
 	return result
 
@@ -448,7 +442,7 @@ class trade_result():
 		self.price_correlation_coeff = 0
 		
 		self.df_test_statistic = 0
-		self.df_five_pc_crit_val = 0
+		self.df_pc_crit_val = 0
 		self.df_p_value = 0
 		self.df_decay_half_life = 0
 
@@ -467,5 +461,10 @@ class trade_result():
 		self.synth_time_in_trade = 0
 		self.trade_result = '' # profit, loss, timeout
 
+		###
+		# Input parameters
+		self.rsi_most_extreme = 0
+		self.entry_min_extreme_threshold_sigma = 0
+		self.result_entry_actual_entry_sigma = 0
 
 
