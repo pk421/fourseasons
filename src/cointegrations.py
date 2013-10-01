@@ -254,11 +254,18 @@ def create_synthetic_investment(stock_1_close, stock_2_close, start_index, end_i
 
 		today = synthetic_prices[len_stock_1_window - 1]
 		yesterday = synthetic_prices[len_stock_1_window - 2]
-		lower_bound = (-1.5 * sigma_synth_price) + mean_synth_price
-		upper_bound = (1.5 * sigma_synth_price) + mean_synth_price
+		# lower_bound = (-1.5 * sigma_synth_price) + mean_synth_price
+		# upper_bound = (1.5 * sigma_synth_price) + mean_synth_price
 
-		second_lower_bound = (-1.5 * sigma_synth_price / 3) + mean_synth_price
-		second_upper_bound = (1.5 * sigma_synth_price / 3) + mean_synth_price
+		# second_lower_bound = (-1.5 * sigma_synth_price / 3) + mean_synth_price
+		# second_upper_bound = (1.5 * sigma_synth_price / 3) + mean_synth_price
+
+		lower_bound, upper_bound, second_lower_bound, second_upper_bound, \
+			junk_mean, junk_sigma  = get_new_entry_bounds(synthetic_prices, 1.5, 3)
+
+		# if (low_b, up_b, s_low_b, s_up_b, mean_price, sigma_price)  != (lower_bound, upper_bound, second_lower_bound, second_upper_bound, mean_synth_price, sigma_synth_price):
+		# 	print "bounds don't match"
+		# 	raise Exception
 
 		# if (today > lower_bound and yesterday < lower_bound) or (today < upper_bound and yesterday > upper_bound):
 		# print "Upper bound, today, yesterday: %.4f %.4f %.4f" % (upper_bound, today, yesterday)
@@ -323,6 +330,7 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 	synth_sigma = result.synthetic_sigma
 	synth_sigma_loss = synth_sigma
 
+	price_window = result.synthetic_prices
 	starting_synth_price = result.synthetic_prices[-1]
 	entry_total_value = (slope * stock_1_close[start_index - 1]) + stock_2_close[start_index - 1]
 
@@ -335,14 +343,16 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 
 	rets = []
 
-	trading_up_stop_loss = (starting_synth_price - (1.6 * synth_sigma_loss))
-	trading_down_stop_loss = (starting_synth_price + (1.6 * synth_sigma_loss))
+	# trading_up_stop_loss = (starting_synth_price - (1.6 * synth_sigma_loss))
+	# trading_down_stop_loss = (starting_synth_price + (1.6 * synth_sigma_loss))
 	
-	trading_up_profit_target = (result.synthetic_mu - (0.5 * synth_sigma))
-	trading_down_profit_target = (result.synthetic_mu + (0.5 * synth_sigma))
-
+	# trading_up_profit_target = (result.synthetic_mu - (0.5 * synth_sigma))
+	# trading_down_profit_target = (result.synthetic_mu + (0.5 * synth_sigma))
 
 	for x in xrange(start_index, start_index + result.window_length):
+
+		trading_up_stop_loss, trading_down_stop_loss, trading_up_profit_target, \
+			trading_down_profit_target, mu, sigma = get_new_exit_parms(price_window, starting_synth_price, 1.6, 0.5)
 
 		current_price = (slope * stock_1_close[x]) - stock_2_close[x] + intercept
 		price_change_pc = (current_price - starting_synth_price) / entry_total_value
@@ -357,6 +367,12 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 
 		# if current_price > result.synthetic_mu and starting_synth_price < result.synthetic_mu or \
 		#    current_price < result.synthetic_mu and starting_synth_price > result.synthetic_mu:
+
+		if trading_up and current_price < (starting_synth_price - (1.0 * sigma)) or \
+		   trading_down and current_price > (starting_synth_price + (1.0 * sigma)):
+			trading_up_profit_target = starting_synth_price
+			trading_down_profit_target = starting_synth_price
+			
 
 		if trading_up and current_price > trading_up_profit_target or \
 		   trading_down and current_price < trading_down_profit_target:
@@ -396,7 +412,7 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 			return result
 
 		# if x - (start_index - 1) > (0.1 * len_window):
-		if x - (start_index - 1) > 25:
+		if x - (start_index - 1) > 50:
 			print "Timeout: ", starting_synth_price, current_price, ret, '\n'
 			result.trade_result = "Timeout"
 			result.time_in_trade = x - (start_index - 1)
@@ -415,16 +431,39 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 		# if (x - start_index) == 15:
 		# 	synth_sigma = synth_sigma * 1.5
 
-		if trading_up and current_price < (starting_synth_price - (1.0 * synth_sigma_loss)) or \
-		   trading_down and current_price > (starting_synth_price + (1.0 * synth_sigma_loss)):
-			trading_up_profit_target = starting_synth_price
-			trading_down_profit_target = starting_synth_price
 
 		# if x - (start_index - 1) == 10:
 		# 	trading_up_profit_target = starting_synth_price
 		# 	trading_down_profit_target = starting_synth_price
 
+		#remove the oldest synth price and add the "current" synth price, this gets used to recalc targets
+		price_window.pop(0)
+		price_window.append(current_price)
+
 	return result
+		
+def get_new_entry_bounds(synthetic_prices, extreme_bound_multiple, min_extreme_multiple):
+	mean_price = round(np.mean(synthetic_prices), 5)
+	sigma_price = round(np.std(synthetic_prices), 5)
+
+	lower_bound = (-extreme_bound_multiple * sigma_price) + mean_price
+	upper_bound = (extreme_bound_multiple * sigma_price) + mean_price
+	second_lower_bound = (-extreme_bound_multiple * sigma_price / min_extreme_multiple) + mean_price
+	second_upper_bound = (extreme_bound_multiple * sigma_price / min_extreme_multiple) + mean_price
+
+	return lower_bound, upper_bound, second_lower_bound, second_upper_bound, mean_price, sigma_price
+
+def get_new_exit_parms(price_window, starting_synth_price, stop_loss, profit_target):
+	mean_price = round(np.mean(price_window), 5)
+	sigma_price = round(np.std(price_window), 5)
+
+	trading_up_stop_loss = (starting_synth_price - (stop_loss * sigma_price))
+	trading_down_stop_loss = (starting_synth_price + (stop_loss * sigma_price))
+	trading_up_profit_target = (mean_price - (profit_target * sigma_price))
+	trading_down_profit_target = (mean_price + (profit_target * sigma_price))
+
+	return trading_up_stop_loss, trading_down_stop_loss, trading_up_profit_target, trading_down_profit_target, \
+			mean_price, sigma_price
 
 
 class trade_result():
