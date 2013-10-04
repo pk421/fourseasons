@@ -37,7 +37,7 @@ def run_cointegrations():
 		stock_list[k] = new_val
 	in_file.close()
 
-	# stock_list = ['ESV', 'RDC']
+	# stock_list = ['F', 'GT']
 
 	paired_list = get_paired_stock_list(sorted(stock_list), fixed_stock=None)
 	# paired_list = get_bunches_of_pairs()
@@ -63,11 +63,13 @@ def run_cointegrations():
 	# 	out_file_2.close()
 	############
 
-	output_fields = ('stock_1', 'stock_2', 'entry_date', 'window_length', 'price_correlation_coeff', \
+	output_fields = ('stock_1', 'stock_2', 'entry_date', 'window_length', 'slope', 'intercept', \
+					 'price_correlation_coeff', \
 					 'df_test_statistic', 'df_pc_crit_val', 'df_p_value', 'df_decay_half_life', 'synthetic_mu', \
 					 'synthetic_sigma', 'sigma_price_pc', 'rsi_most_extreme', 'entry_min_extreme_threshold_sigma', \
-					 'entry_actual_entry_sigma', 'trade_result', 'time_in_trade', 'synth_price_start', \
-					 'synth_price_end', 'ret', 'synth_chained_ret', )
+					 'entry_actual_entry_sigma', 'trade_result', 'time_in_trade', 'synth_entry_total_value', \
+					 'synth_price_start', 'synth_price_end', 'ret', 'synth_chained_ret', )
+
 	output_string = ','.join(output_fields)
 	output_string += '\n'
 
@@ -232,7 +234,7 @@ def create_synthetic_investment(stock_1_close, stock_2_close, start_index, end_i
 	sigma_synth_price = round(np.std(synthetic_prices), 5)
 	
 	sigma_price_pc = sigma_synth_price / mean_total_value
-	if sigma_price_pc < 0.01:
+	if sigma_price_pc < 0.0368 and stock_1_close[end_index-1] >= 3 and stock_2_close[end_index-1] >= 3:
 		# print "SIGMA CUT: %.4f %.4f %.4f" % (sigma_synth_price, mean_total_value, sigma_price_pc)
 		return None, None, 0
 
@@ -282,7 +284,7 @@ def create_synthetic_investment(stock_1_close, stock_2_close, start_index, end_i
 			result.stock_1 = stock_1_trimmed[0]['Symbol']
 			result.stock_2 = stock_2_trimmed[0]['Symbol']
 			result.window_length = end_index - start_index
-			result.entry_date = stock_1_trimmed[start_index]['Date']
+			result.entry_date = stock_1_trimmed[end_index-1]['Date']
 			result.slope = slope
 			result.intercept = intercept
 
@@ -304,7 +306,7 @@ def create_synthetic_investment(stock_1_close, stock_2_close, start_index, end_i
 			result.entry_min_extreme_threshold_sigma = entry_min_extreme_threshold_sigma
 			result.entry_actual_entry_sigma = today / upper_bound
 
-			result = do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index, result)
+			result = do_post_trade_analysis(stock_1_close, stock_2_close, end_index, result)
 
 			return output_string, result, result.end_index
 
@@ -320,7 +322,7 @@ def do_df_test(prices):
 	result = stats.adfuller(prices)
 	return result
 
-def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index, result):
+def do_post_trade_analysis(stock_1_close, stock_2_close, end_index, result):
 
 	len_window = result.window_length
 	start_index = end_index # End index here represents the first day *after* the entry date of the extreme event
@@ -333,6 +335,7 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 	price_window = result.synthetic_prices
 	starting_synth_price = result.synthetic_prices[-1]
 	entry_total_value = (slope * stock_1_close[start_index - 1]) + stock_2_close[start_index - 1]
+	result.synth_entry_total_value = entry_total_value
 
 	trading_up = starting_synth_price < 0
 	trading_down = starting_synth_price >= 0
@@ -352,7 +355,7 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 	for x in xrange(start_index, start_index + result.window_length):
 
 		trading_up_stop_loss, trading_down_stop_loss, trading_up_profit_target, \
-			trading_down_profit_target, mu, sigma = get_new_exit_parms(price_window, starting_synth_price, 1.6, 0.5)
+			trading_down_profit_target, mu, sigma = get_new_exit_parms(price_window, starting_synth_price, 2.0, 0.5)
 
 		current_price = (slope * stock_1_close[x]) - stock_2_close[x] + intercept
 		price_change_pc = (current_price - starting_synth_price) / entry_total_value
@@ -372,7 +375,7 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 		   trading_down and current_price > (starting_synth_price + (1.0 * sigma)):
 			trading_up_profit_target = starting_synth_price
 			trading_down_profit_target = starting_synth_price
-			
+
 
 		if trading_up and current_price > trading_up_profit_target or \
 		   trading_down and current_price < trading_down_profit_target:
@@ -412,7 +415,7 @@ def do_post_trade_analysis(stock_1_close, stock_2_close, start_index, end_index,
 			return result
 
 		# if x - (start_index - 1) > (0.1 * len_window):
-		if x - (start_index - 1) > 50:
+		if x - (start_index - 1) > 100:
 			print "Timeout: ", starting_synth_price, current_price, ret, '\n'
 			result.trade_result = "Timeout"
 			result.time_in_trade = x - (start_index - 1)
@@ -495,6 +498,7 @@ class trade_result():
 
 		self.synth_price_start = 0
 		self.synth_price_end = 0
+		self.synth_entry_total_value = 0
 		self.synth_return = 0
 		self.synth_chained_ret = 0
 		self.synth_time_in_trade = 0
