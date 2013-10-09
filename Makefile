@@ -51,6 +51,12 @@ extract_symbols:
 harding_seasonality:
 	python test_run.py --harding_seasonality
 
+indicator_system:
+	python test_run.py --indicator_system
+
+live_monitor:
+	python test_run.py --live_monitor
+
 load_redis:
 	python test_run.py --load_redis
 

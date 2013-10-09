@@ -11,9 +11,12 @@ try:
     from src.data_retriever import *
     from src.poll_realtime_data import *
     from src.harding_seasonality import run_harding_seasonality
+    from src.indicator_system import run_indicator_system
     from src.returns_analyzer import run_returns_analyzer
     from src.stock_analyzer import run_stock_analyzer
     from src.vol_analyzer import run_vol_analyzer
+    
+    from src.live_monitor.live_monitor import run_live_monitor
 
 except:
     print "\n\nCould not make all imports"
@@ -43,6 +46,14 @@ parser.add_argument("--extract_symbols_with_historical_data",
 
 parser.add_argument("--harding_seasonality",
                     help="Analyze a seasonal system with simple technical indicators.",
+                    action="store_true")
+
+parser.add_argument("--indicator_system",
+                    help="Simulate a trade system similar to --cointegrations, but use more normal indicators.",
+                    action="store_true")
+
+parser.add_argument("--live_monitor",
+                    help="Run the live monitor and email system.",
                     action="store_true")
 
 parser.add_argument("--load_redis",
@@ -96,6 +107,12 @@ if args.extract_symbols_with_historical_data:
 
 if args.harding_seasonality:
     run_harding_seasonality()
+
+if args.indicator_system:
+    run_indicator_system()
+
+if args.live_monitor:
+    run_live_monitor()
 
 if args.load_redis:
     load_redis(stock_list='300B_1M_and_etfs_etns.csv', db_number=0, file_location='tmp/', dict_size=2)
