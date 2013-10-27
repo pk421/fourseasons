@@ -17,6 +17,7 @@ ETF/ETN list in csv format, frequently updated: http://masterdata.com/HelpFiles/
 def get_yahoo_data(queue, **kwargs):
     update_check = kwargs['update_check']
     logger = kwargs['log']
+    store_location = kwargs['store_location']
 
     start_year = '1950'
     start_month = '1'
@@ -28,7 +29,8 @@ def get_yahoo_data(queue, **kwargs):
     while True:
         s = queue.get()
         print s, "\t", queue.qsize()
-        file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/tmp/" + s + ".csv"
+        ### file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/tmp/" + s + ".csv"
+        file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/" + store_location + s + ".csv"
         #logger.debug(s + "\tbefore if" + str(os.path.exists(file_path)) + str(update_check))
         if (os.path.exists(file_path) == False) or update_check == False:
             query_url = 'http://table.finance.yahoo.com/table.csv?s=' + s + '&a=' + start_month + \
@@ -74,7 +76,7 @@ def get_yahoo_data(queue, **kwargs):
 #http://table.finance.yahoo.com/table.csv?a=1&b=1&c=1900&d=2&e=2&f=2020&s=AMMD&ignore=.csv
 
 def multithread_yahoo_download(list_to_download='large_universe.csv', thread_count=1, update_check=False,
-                               new_only=False):
+                               new_only=False, store_location = 'tmp/', use_list = None):
     queue = Queue.Queue()
     #kill off previous processes:
     #os.system('kill -9 $(lsof src.data_retriever.log*)')
@@ -102,6 +104,8 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
                 symbols_without_data.append(s)
         symbols = symbols_without_data
     
+    if use_list:
+        symbols = use_list
     #used to test a single symbol
     #symbols = ['A', 'AA', 'AAPL', 'F', 'X', 'GOOG', 'bogus_symbol']
     #symbols = ['MEE']
@@ -112,7 +116,8 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
     for d in range(thread_count):
         #logger.debug(str(symbols.index(s)) + ' if \t' + s + '\t' + str(len(threading.enumerate())))
         d = threading.Thread(name=('get_yahoo_data_' + str(d)), target=get_yahoo_data, \
-                             args=[queue], kwargs={'log':logger, 'update_check':update_check})
+                             args=[queue], kwargs={'log':logger, 'update_check':update_check, \
+                             'store_location':store_location})
         d.setDaemon(True)
         d.start()
 
@@ -145,7 +150,7 @@ def extract_symbols_with_historical_data(search_in='/home/wilmott/Desktop/fourse
     return symbols
 
 
-def load_redis(stock_list='do_all', db_number=15, file_location='tmp/', dict_size=10):
+def load_redis(stock_list='do_all', db_number=15, file_location='tmp/', dict_size=2, use_list=None):
     start_time = datetime.datetime.now()
 
     base_path = '/home/wilmott/Desktop/fourseasons/fourseasons/'
@@ -165,6 +170,9 @@ def load_redis(stock_list='do_all', db_number=15, file_location='tmp/', dict_siz
     else:
         symbols = open(list_path + stock_list, 'r').read().split()
         
+    if use_list:
+        symbols = use_list
+
     symbols.sort()
 
     # symbols = ['ABIO']
@@ -222,9 +230,9 @@ def load_redis(stock_list='do_all', db_number=15, file_location='tmp/', dict_siz
         print k, ' of ', len(symbols), '\t', current_time, '\t', symbol, '\tinto redis'
         #stock_db[symbol] = stock_price_set
 
-    fout = open(base_path + file_location + 'failed_validation_results.csv.info', 'w')
-    fout.write(validation_file)
-    fout.close()
+    # fout = open(base_path + file_location + 'failed_validation_results.csv.info', 'w')
+    # fout.write(validation_file)
+    # fout.close()
 
     end_time = datetime.datetime.now()
     time_required = end_time - start_time
