@@ -23,7 +23,7 @@ def run_indicator_system():
 			   'services', 'technology', 'utilities')
 
 	in_file_name = 'tda_free_etfs'
-	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/sectors/' + in_file_name + '.csv'
+	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
 
 	in_file = open(location, 'r')
 	stock_list = in_file.read().split('\n')
@@ -73,7 +73,7 @@ def run_indicator_system():
 
 	total_return = np.product(rets)
 	geom_return = math.pow(total_return, (1.0/len(trade_log)))
-	## sharpe_ratio = sharpe_ratio(trade_log)
+	sharpe_ratio = get_sharpe_ratio(trade_log)
 
 	print "\n\nTrades, Total, geom return", len(trade_log), total_return, geom_return
 	print '\nDays Analyzed', days_analyzed
@@ -92,10 +92,10 @@ def do_indicator_test(item, k, len_stocks):
 	
 	
 	# rsi_stock_1 = tools.rsi(stock_1_close, 4)
-	if len(stock_1_trimmed) < 401:
+	if len(stock_1_trimmed) < 201:
 		return None, None, None
 
-	days_analyzed = len(stock_1_trimmed) - 400
+	days_analyzed = len(stock_1_trimmed) - 200
 
 	rsi_stock_2 = tools.rsi(stock_2_close, 4)
 	sma_stock_2 = tools.simple_moving_average(stock_2_close, 200)
@@ -108,7 +108,7 @@ def do_indicator_test(item, k, len_stocks):
 	result = None
 	next_index = 0
 
-	for x in xrange(400, end_data):
+	for x in xrange(200, end_data):
 		# If we've been told we're still in a trade then we simply skip this day
 		if x <= next_index:
 			continue
@@ -139,15 +139,16 @@ def do_indicator_test(item, k, len_stocks):
 			if (rsi_1 < exit_bound and rsi_0 > exit_bound):
 				result = trade_result()
 				entry_signal = True
-			pass
 
 		# cancel entry if there is no volatility...
 		if entry_signal:
+			### Fixme: retest here...the indexing below is actually using 101 periods, not 100!!
 			mu_price = np.mean(stock_2_close[x-100:x+1])
 			sigma = np.std(stock_2_close[x-100:x+1])
 			# if sigma / mu_price < 0.09:
 			if sigma / p_0 < 0.085:
-			### if sigma / p_0 < 0.15:
+			##bull
+			# if sigma / p_0 < 0.15:
 				entry_signal = False
 				continue
 
@@ -158,7 +159,7 @@ def do_indicator_test(item, k, len_stocks):
 			result.entry_price = p_0
 			result.entry_rsi = rsi_0
 			result.entry_sma = sma_0
-			result.entry_mean_price = mu_price
+			result.entry_mean_price = mu_price	# No longer really used
 			result.entry_sigma = sigma
 			result.entry_sigma_over_p = sigma / p_0
 
@@ -185,6 +186,7 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 	entry_sigma = entry_sigma_over_p * result.entry_price 
 
 	stop_loss = 1.3
+	pc_stop_loss = -0.5
 
 	price_log = [stock_2_close[x]]
 
@@ -204,7 +206,8 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 			ret = -price_change_pc
 
 		# if trading_up and (rsi[x] > 55 or ret < -0.015):
-		if trading_up and (rsi[x] > 55 or current_price < (result.entry_price - (stop_loss * entry_sigma))):
+		if trading_up and (rsi[x] > 55 or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
+			ret <= pc_stop_loss):
 
 			if ret > 0:
 			   	# print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
@@ -231,7 +234,8 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 				return result, result.end_index
 
 		# elif trading_down and (rsi[x] < 45 or ret < -0.015):
-		elif trading_down and (rsi[x] < 45 or current_price > (result.entry_price + (stop_loss * entry_sigma))):
+		elif trading_down and (rsi[x] < 45 or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
+			ret <= pc_stop_loss):
 			
 			if ret > 0:
 			   	# print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
@@ -332,20 +336,28 @@ def backtest_trade_log(trade_log):
 
 	return small_log
 
-def sharpe_ratio(trade_log):
+def get_sharpe_ratio(trade_log):
 
-	sharpe_ratio = 0
+	# sharpe_ratio = 0
 
-	equity_list = [100]
-	start_day = trade_log[0].entry_date
-	start_day = datetime.datetime.strptime(exit_day, '%Y-%m-%d')
+	# equity_list = [100]
+	# start_day = trade_log[0].entry_date
+	# start_day = datetime.datetime.strptime(exit_day, '%Y-%m-%d')
 	
-	end_day = trade_log[-1].exit_date
-	exit_day = datetime.datetime.strptime(exit_day, '%Y-%m-%d')
+	# end_day = trade_log[-1].exit_date
+	# exit_day = datetime.datetime.strptime(exit_day, '%Y-%m-%d')
 
+	# for item in trade_log:
+
+	# 	equity_list.append(equity_list[-1])
+
+	ret_log = []
 	for item in trade_log:
+		ret_log.append(item.ret)
 
-		equity_list.append(equity_list[-1])
+	mean = np.mean(ret_log)
+	std = np.std(ret_log)
+	sharpe_ratio = mean / std
 
 
 	return sharpe_ratio

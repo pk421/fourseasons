@@ -169,7 +169,7 @@ def load_redis(stock_list='do_all', db_number=15, file_location='tmp/', dict_siz
             symbols.append(n[0])
     else:
         symbols = open(list_path + stock_list, 'r').read().split()
-        
+
     if use_list:
         symbols = use_list
 

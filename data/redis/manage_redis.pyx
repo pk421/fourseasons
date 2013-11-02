@@ -241,7 +241,7 @@ def fill_fast_redis(stock_price_set, db_number=15, dict_size=10):
 
 @MemoizeMutable
 # cdef list parse_data(str stock):
-def parse_fast_data(stock):
+def parse_fast_data(stock, db_to_use=0):
     """
     This should be used when a massive raw string of stock data was dumped into redis as a value. This will parse out
     the csv and return a list of dictionaries. Note carefully: it was designed to parse out the data of the type stored
@@ -252,7 +252,7 @@ def parse_fast_data(stock):
     # cdef list output_data, all_days, keys, values, k
     # cdef struct todays_dict
 
-    redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
+    redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_to_use)
     get_query = 'historical:fast:' + stock
     stock_data = redis_db.get(get_query)
 

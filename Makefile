@@ -1,9 +1,9 @@
 #!/bin/sh
 
 clean:
-	find /home/wilmott/Desktop/fourseasons/fourseasons/src -name *.pyc | xargs rm
 	find /home/wilmott/Desktop/fourseasons/fourseasons/src -name *.so | xargs rm
 	find /home/wilmott/Desktop/fourseasons/fourseasons/src -name *.c | xargs rm
+	find /home/wilmott/Desktop/fourseasons/fourseasons/src -name *.pyc | xargs rm
 
 cython:
 	python setup.py build_ext --inplace --pyrex-c-in-temp
