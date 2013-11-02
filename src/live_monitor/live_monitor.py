@@ -65,7 +65,7 @@ def download_historical_data():
 	return
 
 
-def search_for_trades():
+def search_for_trades(in_trade=['MBB']):
 
 	"""Algo: Try to do a batch request to get the latest quotes for all symbols from yahoo. Do a GET from redis for each
 	stock, append the latest price to the end of the list, then run thru MACD / RSI. See if stock meets criteria,
@@ -78,8 +78,8 @@ def search_for_trades():
 
 	try:
 		# query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1t1d1k1'
-		query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1d1t1k1'
-		data = requests.get(query_string).text
+		query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1d1t1k1a2'
+		data = requests.get(query_string, timeout=10).text
 	except:
 		return None
 
@@ -87,9 +87,10 @@ def search_for_trades():
 	current_date_dict = {}
 	current_trade_time_dict = {}
 	rt_time_dict = {}
+	average_volume_dict = {}
 
+	###
 	print data
-	return
 	prices = data.split('\r\n')
 
 	for p in prices:
@@ -100,6 +101,7 @@ def search_for_trades():
 			current_date_dict[s] = str(items[2]).strip('\"')
 			current_trade_time_dict[s] = str(items[3]).strip('\"')
 			rt_time_dict[s] = str(items[4]).strip('\"')
+			average_volume_dict[s] = str(items[5]).strip('\"')
 
 	output_data = []
 
@@ -108,31 +110,49 @@ def search_for_trades():
 	for symbol in symbols:
 		latest_price = current_price_dict[symbol]
 		latest_date = current_date_dict[symbol]
-		ret_code, result = get_parameters(symbol, latest_price, latest_date)
+		latest_time = current_trade_time_dict[symbol]
+		latest_rt = rt_time_dict[symbol]
+		volume = average_volume_dict[symbol]
+		ret_code, result = get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, volume, in_trade)
 
-		if ret_code:
+		if ret_code or (symbol in in_trade):
 			output_data.append(result)
 
-	# sorted_output = sorted(output_data, key=lambda item: abs(50-item[3]), reverse=True)
-	sorted_output = sorted(output_data, key=lambda item: abs(50-item[6]), reverse=True)
+	# use this item to sort on the RSI b/c of the 50-
+	#sorted_output = sorted(output_data, key=lambda item: abs(50-item[6]), reverse=True)
+	sorted_output = sorted(output_data, key=lambda item: abs(item[5]), reverse=True)
 
-	body = '\t'.join(['Symbol', 'Today Date', 'Price', 'SMA', 'RSI', 'Sigma', 'Sig/P', 'SL Offset']) + '\n\n'
+	at_top = []
 	for item in sorted_output:
-		new_item = [str(a) for a in item]
-		print new_item
-		data = '\t'.join(new_item)
+		if item[0] in in_trade:
+			at_top.append(item)
 
-		body += data + '\n'
+	sorted_output.insert(0, at_top)
+
+	# (symbol, latest_date, latest_time, latest_rt, volume, latest_price, sma_0, rsi_0, sigma_0, sigma_over_p_0, stop_loss_offset)
+	body = '\t'.join(['Symbol', 'Trade Date', 'Trade Time', 'Volume', 'Price', 'Sig/P','RSI', 'SMA', 'Sigma', 'SL Offset', 'Trade RT']) + '\n\n'
+	for item in sorted_output:
+		new_item = [str(a).rjust(11, ' ') for a in item]
+		### print new_item
+		data1 = ''.join(new_item[:5])
+		# cut out leading spaces before the symbol line
+		data1 = data1[7:]
+		# pad in leading spaces in the second chunk so everything lines up indented
+		data2 = '    ' + ''.join(new_item[5:])
+
+		body += data1 + '\n' + data2 + '\n\n'
 
 
 	print body
 	
-	send_email(body=body)
+	subject_to_use = 'TS Results: ' + str(len(sorted_output)) + '   ' + str(datetime.datetime.now().time())
+
+	send_email(subject=subject_to_use, body=body)
 
 	return
 
 
-def get_parameters(symbol, latest_price, latest_date):
+def get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, volume, in_trade=[]):
 	
 	stock_1_data = manage_redis.parse_fast_data('TLT', db_to_use=14)
 	stock_2_data = manage_redis.parse_fast_data(symbol, db_to_use=14)
@@ -167,22 +187,25 @@ def get_parameters(symbol, latest_price, latest_date):
 	sigma_over_p_0 = round(sigma_0 / float(latest_price), 4)
 
 	###
-	print "Symbol: ", symbol, merged_prices[-5:], rsi_0, rsi_1, sma_0, sigma_0, sigma_over_p_0
+	# print "Symbol: ", symbol, merged_prices[-5:], rsi_0, rsi_1, sma_0, sigma_0, sigma_over_p_0
 
 	entry_bound = 25
 	exit_bound = 100-entry_bound
 	minimum_vol = 0.0
 
+	if symbol in in_trade:
+		return True, (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, 0.0, latest_rt)
+
 	if sigma_over_p_0 >= minimum_vol:
 		if latest_price > sma_0:
 			if (rsi_1 > entry_bound and rsi_0 < entry_bound):
 				stop_loss_offset = round(1.3 * sigma_0, 4)
-				return True, (symbol, latest_date, latest_price, sma_0, rsi_0, sigma_0, sigma_over_p_0, stop_loss_offset)
+				return True, (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
 
 		else:
 			if (rsi_1 < exit_bound and rsi_0 > exit_bound):
 				stop_loss_offset = round(1.3 * sigma_0, 4)
-				return True, (symbol, latest_date, latest_price, sma_0, rsi_0, sigma_0, sigma_over_p_0, stop_loss_offset)
+				return True, (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
 
 
 
@@ -199,7 +222,7 @@ def send_email(subject='Trade Scan Results', body='Test Body'):
 	msg = "\r\n".join([
 		"From: fourseasonsnoreply@dontreply.com",
 		"To: mcpilat@gmail.com",
-		"Subject: Trade Scan Results",
+		"Subject: " + subject,
 		body
 		])
 
@@ -234,7 +257,7 @@ def run_live_monitor():
 	# scheduler.start()
 	# download_historical_data()
 	search_for_trades()
-	send_email()
+	# send_email()
 
 	# while(True):
 	# 	time.sleep(0.25)
