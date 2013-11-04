@@ -65,7 +65,7 @@ def download_historical_data():
 	return
 
 
-def search_for_trades(in_trade=['MBB']):
+def search_for_trades(in_trade=['EWQ']):
 
 	"""Algo: Try to do a batch request to get the latest quotes for all symbols from yahoo. Do a GET from redis for each
 	stock, append the latest price to the end of the list, then run thru MACD / RSI. See if stock meets criteria,
@@ -126,14 +126,13 @@ def search_for_trades(in_trade=['MBB']):
 	for item in sorted_output:
 		if item[0] in in_trade:
 			at_top.append(item)
+	at_top.extend(sorted_output)
+	sorted_output = at_top
 
-	sorted_output.insert(0, at_top)
-
-	# (symbol, latest_date, latest_time, latest_rt, volume, latest_price, sma_0, rsi_0, sigma_0, sigma_over_p_0, stop_loss_offset)
+	# (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
 	body = '\t'.join(['Symbol', 'Trade Date', 'Trade Time', 'Volume', 'Price', 'Sig/P','RSI', 'SMA', 'Sigma', 'SL Offset', 'Trade RT']) + '\n\n'
 	for item in sorted_output:
 		new_item = [str(a).rjust(11, ' ') for a in item]
-		### print new_item
 		data1 = ''.join(new_item[:5])
 		# cut out leading spaces before the symbol line
 		data1 = data1[7:]
@@ -191,10 +190,11 @@ def get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, vo
 
 	entry_bound = 25
 	exit_bound = 100-entry_bound
-	minimum_vol = 0.0
+	minimum_vol = 0.00
 
 	if symbol in in_trade:
-		return True, (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, 0.0, latest_rt)
+		stop_loss_offset = round(1.3 * sigma_0, 4)
+		return True, (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
 
 	if sigma_over_p_0 >= minimum_vol:
 		if latest_price > sma_0:
@@ -253,41 +253,42 @@ def run_live_monitor():
 	# 							[],
 	# 							{})
 
-	
 	# scheduler.start()
+
+
 	# download_historical_data()
-	search_for_trades()
-	# send_email()
+	### search_for_trades()
+	# return
 
-	# while(True):
-	# 	time.sleep(0.25)
-	# 	current_time = datetime.datetime.now()
-	# 	current_hour = current_time.hour
-	# 	current_minute = current_time.minute
-	# 	current_second = current_time.second
-	# 	print current_time
+	while(True):
+		time.sleep(0.25)
+		current_time = datetime.datetime.now()
+		current_hour = current_time.hour
+		current_minute = current_time.minute
+		current_second = current_time.second
+		print current_time
 
-	# 	if current_hour >= 0 and current_hour <= 6:
-	# 		if current_minute % 15 == 0:
-	# 			try:
-	# 				download_historical_data()
-	# 				time.sleep(600)
-	# 			except:
-	# 				print "Exception in the download process!!"
-	# 	elif (current_hour >= 9) and (current_hour <= 16) and not (current_hour == 15 and current_minute >= 45):
-	# 		if current_minute % 15 == 0:
-	# 			search_for_trades()
-	# 			time.sleep(600)
-	# 	elif (current_hour == 15 and current_minute > 45):
-	# 		search_for_trades()
-	# 		time.sleep(50)
+		if current_hour >= 0 and current_hour <= 6:
+			if current_minute % 15 == 0:
+				try:
+					download_historical_data()
+					time.sleep(600)
+				except:
+					print "Exception in the download process!!"
+		elif (current_hour >= 9) and (current_hour <= 16) and not (current_hour == 15 and current_minute >= 45):
+			if current_minute % 15 == 0:
+				search_for_trades()
+				time.sleep(600)
+		elif (current_hour == 15 and current_minute > 45):
+			search_for_trades()
+			time.sleep(40)
 
-	# 	# elif (current_hour == 19 and current_minute > 45):
-	# 	# 	search_for_trades()
-	# 	# 	time.sleep(50)
+		# elif (current_hour == 19 and current_minute > 45):
+		# 	search_for_trades()
+		# 	time.sleep(50)
 
 
-	# 	time.sleep(10)
+		time.sleep(10)
 
 
 

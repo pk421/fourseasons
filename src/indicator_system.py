@@ -147,8 +147,6 @@ def do_indicator_test(item, k, len_stocks):
 			sigma = np.std(stock_2_close[x-100:x+1])
 			# if sigma / mu_price < 0.09:
 			if sigma / p_0 < 0.085:
-			##bull
-			# if sigma / p_0 < 0.15:
 				entry_signal = False
 				continue
 
