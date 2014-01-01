@@ -65,7 +65,7 @@ def download_historical_data():
 	return
 
 
-def search_for_trades(in_trade=['EWQ']):
+def search_for_trades(in_trade=[]):
 
 	"""Algo: Try to do a batch request to get the latest quotes for all symbols from yahoo. Do a GET from redis for each
 	stock, append the latest price to the end of the list, then run thru MACD / RSI. See if stock meets criteria,
@@ -81,6 +81,7 @@ def search_for_trades(in_trade=['EWQ']):
 		query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1d1t1k1a2'
 		data = requests.get(query_string, timeout=10).text
 	except:
+		print "Web data query failed."
 		return None
 
 	current_price_dict = {}
@@ -118,9 +119,11 @@ def search_for_trades(in_trade=['EWQ']):
 		if ret_code or (symbol in in_trade):
 			output_data.append(result)
 
+	
+	###FIXME: This sorted_output line fails sometimes...why?
 	# use this item to sort on the RSI b/c of the 50-
 	#sorted_output = sorted(output_data, key=lambda item: abs(50-item[6]), reverse=True)
-	sorted_output = sorted(output_data, key=lambda item: abs(item[5]), reverse=True)
+	sorted_output = sorted(output_data, key=lambda item: abs(float(item[5])), reverse=True)
 
 	at_top = []
 	for item in sorted_output:
@@ -146,7 +149,10 @@ def search_for_trades(in_trade=['EWQ']):
 	
 	subject_to_use = 'TS Results: ' + str(len(sorted_output)) + '   ' + str(datetime.datetime.now().time())
 
-	send_email(subject=subject_to_use, body=body)
+	try:
+		send_email(subject=subject_to_use, body=body)
+	except:
+		pass
 
 	return
 
@@ -167,10 +173,10 @@ def get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, vo
 
 	### print symbol, current_date_normalized, historical_date_normalized
 
-	if not current_date_normalized > historical_date_normalized:
-		print 'current_date is not greater than historical_date for ' + symbol
-		return False, 'current_date is not greater than historical_date for ' + symbol
-		pass
+#	if not current_date_normalized > historical_date_normalized:
+#		print 'current_date is not greater than historical_date for ' + symbol
+#		return False, 'current_date is not greater than historical_date for ' + symbol
+#		pass
 
 	if len(stock_2_close) < 205:
 		return False, "not enough historical data for " + symbol
@@ -253,12 +259,11 @@ def run_live_monitor():
 	# 							[],
 	# 							{})
 
+	
 	# scheduler.start()
-
-
-	# download_historical_data()
+	download_historical_data()
 	### search_for_trades()
-	# return
+	# send_email()
 
 	while(True):
 		time.sleep(0.25)
@@ -269,14 +274,19 @@ def run_live_monitor():
 		print current_time
 
 		if current_hour >= 0 and current_hour <= 6:
-			if current_minute % 15 == 0:
+			if current_minute % 30 == 0:
 				try:
 					download_historical_data()
 					time.sleep(600)
 				except:
 					print "Exception in the download process!!"
+					time.sleep(60)
+					continue
+		elif (current_hour == 7 and current_minute < 30):
+			search_for_trades()
+			time.sleep(600)
 		elif (current_hour >= 9) and (current_hour <= 16) and not (current_hour == 15 and current_minute >= 45):
-			if current_minute % 15 == 0:
+			if current_minute % 30 == 0:
 				search_for_trades()
 				time.sleep(600)
 		elif (current_hour == 15 and current_minute > 45):
