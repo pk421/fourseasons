@@ -59,6 +59,8 @@ def run_indicator_system():
 	output_string = ','.join(output_fields)
 	output_string += '\n'
 
+	# The backtest_trade_log effectively shrinks the trade log into only those trades that would be 
+	# possibly in a chronologically traded system (i.e. one at a time)
 	trade_log = backtest_trade_log(trade_log)
 
 	rets = []
@@ -128,15 +130,15 @@ def do_indicator_test(item, k, len_stocks):
 
 
 		entry_signal = False
-		entry_bound = 25
-		exit_bound = 100-entry_bound
+		rsi_lower_bound = 25
+		rsi_upper_bound = 100-rsi_lower_bound
 		if p_0 > sma_0:
-			if (rsi_1 > entry_bound and rsi_0 < entry_bound):
+			if (rsi_1 > rsi_lower_bound and rsi_0 < rsi_lower_bound):
 				result = trade_result()
 				entry_signal = True
 
 		else:
-			if (rsi_1 < exit_bound and rsi_0 > exit_bound):
+			if (rsi_1 < rsi_upper_bound and rsi_0 > rsi_upper_bound):
 				result = trade_result()
 				entry_signal = True
 
@@ -161,8 +163,13 @@ def do_indicator_test(item, k, len_stocks):
 			result.entry_sigma = sigma
 			result.entry_sigma_over_p = sigma / p_0
 
+			if result.entry_rsi < rsi_lower_bound:
+				result.long_short = 'long'
+			elif result.entry_rsi > rsi_upper_bound:
+				result.long_short = 'short'
+
 			result, next_index = do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi_stock_2, sma_stock_2, \
-								 x, result, entry_bound, exit_bound)
+								 x, result, rsi_lower_bound, rsi_upper_bound)
 
 			if result:
 				trade_log.append(result)
@@ -171,18 +178,19 @@ def do_indicator_test(item, k, len_stocks):
 	return output, trade_log, days_analyzed
 
 
-def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, entry_bound, exit_bound):
+def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, rsi_lower_bound, rsi_upper_bound):
 
 	start_index = x+1
 	len_data = len(stock_2_close)
 
-	trading_up = result.entry_rsi < entry_bound
-	trading_down = result.entry_rsi > exit_bound
+	trading_up = True if result.long_short == 'long' else False
+	trading_down = True if result.long_short == 'short' else False
 
 	entry_sigma_over_p = result.entry_sigma_over_p
 	# entry_sigma = entry_sigma_over_p * result.entry_mean_price
 	entry_sigma = entry_sigma_over_p * result.entry_price 
 
+	# this stop loss is in terms of the # of sigma
 	stop_loss = 1.3
 	pc_stop_loss = -0.5
 
@@ -217,6 +225,7 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 				result.exit_date = date_today
 				result.exit_rsi = rsi[x]
 				result.end_index = x
+				result.price_log = price_log
 				return result, result.end_index
 
 			else:
@@ -229,6 +238,7 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 				result.exit_date = date_today
 				result.exit_rsi = rsi[x]
 				result.end_index = x
+				result.price_log = price_log
 				return result, result.end_index
 
 		# elif trading_down and (rsi[x] < 45 or ret < -0.015):
@@ -245,6 +255,7 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 				result.exit_date = date_today
 				result.exit_rsi = rsi[x]
 				result.end_index = x
+				result.price_log = price_log
 				return result, result.end_index
 
 			else:
@@ -257,6 +268,7 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 				result.exit_date = date_today
 				result.exit_rsi = rsi[x]
 				result.end_index = x
+				result.price_log = price_log
 				return result, result.end_index
 
 	return result, result.end_index
@@ -272,6 +284,7 @@ class trade_result():
 		self.exit_date = None
 		self.start_index = 0
 		self.end_index = 0
+		self.long_short = ''
 
 		self.entry_price = 0
 		self.exit_price = 0
@@ -319,10 +332,18 @@ def backtest_trade_log(trade_log):
 			last_exit = datetime.datetime.strptime(last_exit, '%Y-%m-%d')
 			todays_entry = datetime.datetime.strptime(todays_entry, '%Y-%m-%d')
 
+			# The continue here will cut out all other logic and move on to the next item in the
+			# master trade log. Basically, if we are already in a trade and have not exited yet,
+			# then nothing else matters, we must keep looking at other trades
 			if todays_entry <= last_exit:
 				x += 1
 				continue
 
+		# We are iterating over the entry date-sorted chrono trade log so we are guaranteed to 
+		# only encounter trades in chrono order. The filter here finds ALL trades starting on the
+		# day of the current trade, so that we can see all possibilities like in real life
+		# Then append the best trade opportunity and incrememt the chrono trade log counter by the
+		# number of trades that started today
 		start_today = filter(lambda y: y.entry_date == current_date, chrono_trade_log)
 		# print "start_today", current_date, len(start_today)
 		
@@ -349,15 +370,60 @@ def get_sharpe_ratio(trade_log):
 
 	# 	equity_list.append(equity_list[-1])
 
-	ret_log = []
-	for item in trade_log:
-		ret_log.append(item.ret)
+	### To properly determine the sharp ratio, we must compare the returns in the trade log with returns in
+	# SPY over the same period of time. Specifically, we must know the number of days that SPY traded within the
+	# time period of interest, then insert returns of zero in the trade log so that the length matches SPY
 
-	mean = np.mean(ret_log)
-	std = np.std(ret_log)
-	sharpe_ratio = mean / std
+	ref_price_data = manage_redis.parse_fast_data('SPY')
+
+	system_ret_log = []
+	print "*****************************SHARPE RATIO ANALYSIS"
+	for item in trade_log:
+		# print item.entry_date, item.exit_date, item.entry_price, item.exit_price, item.ret, item.time_in_trade, len(item.price_log), item.price_log
+		system_ret_log.extend(item.price_log)
+
+	# print '\n\n\n', system_ret_log[-20:0], len(system_ret_log)
+
+		
+	first_entry = trade_log[0].entry_date
+	last_exit = trade_log[-1].exit_date
+
+	first_entry = datetime.datetime.strptime(first_entry, '%Y-%m-%d')
+	last_exit = datetime.datetime.strptime(last_exit, '%Y-%m-%d')
+
+	ref_trimmed_price_data = []
+	for day in ref_price_data:
+		z = datetime.datetime.strptime(day['Date'], '%Y-%m-%d')
+		if z >= first_entry and z <= last_exit:
+			ref_trimmed_price_data.append(day['AdjClose'])
+
+
+	mean, std, sharpe_ratio = get_returns(ref_trimmed_price_data)
+	print "Reference Mu, Sigma, Sharpe, # Days: ", round(mean, 6), round(std, 6), round(sharpe_ratio, 6), len(ref_trimmed_price_data)
+
+	mean, std, sharpe_ratio = get_returns(system_ret_log)
+	print "\nSystem Mu, Sigma, Sharpe, #Days, Pct in Mkt", round(mean, 6), round(std, 6), round(sharpe_ratio, 6), len(system_ret_log), \
+														 round(float(len(system_ret_log)) / len(ref_trimmed_price_data), 4)
+
+
 
 
 	return sharpe_ratio
 
+
+def get_returns(price_list):
+
+	ret_list = []
+
+	for k, price in enumerate(price_list):
+		if k == 0:
+			continue
+		current_ret = price_list[k] / price_list[k-1]
+		ret_list.append(current_ret)
+
+	mean = np.mean(ret_list) - 1
+	std = np.std(ret_list)
+	sharpe_ratio = mean / std
+
+	return mean, std, sharpe_ratio
 
