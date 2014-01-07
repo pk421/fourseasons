@@ -33,13 +33,22 @@ def get_yahoo_data(queue, **kwargs):
         file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/" + store_location + s + ".csv"
         #logger.debug(s + "\tbefore if" + str(os.path.exists(file_path)) + str(update_check))
         if (os.path.exists(file_path) == False) or update_check == False:
-            query_url = 'http://table.finance.yahoo.com/table.csv?s=' + s + '&a=' + start_month + \
+            # query_url = 'http://table.finance.yahoo.com/table.csv?s=' + s + '&a=' + start_month + \
+            #                                                               '&b=' + start_day + \
+            #                                                               '&c=' + start_year + \
+            #                                                               '&d=' + current_month + \
+            #                                                               '&e=' + current_day + \
+            #                                                               '&f=' + current_year + \
+            #                                                               '&ignore=.csv'
+
+            query_url = 'http://ichart.finance.yahoo.com/table.csv?s=' + s + '&a=' + start_month + \
                                                                           '&b=' + start_day + \
                                                                           '&c=' + start_year + \
                                                                           '&d=' + current_month + \
                                                                           '&e=' + current_day + \
                                                                           '&f=' + current_year + \
                                                                           '&ignore=.csv'
+
             #logger.debug(s + "\tbefore request")
             test_file = '\texception in urlopen'
             try:
