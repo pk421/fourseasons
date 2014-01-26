@@ -22,6 +22,7 @@ def run_indicator_system():
 	sectors = ('basic_materials', 'conglomerates', 'consumer_goods', 'financial', 'healthcare', 'industrial_services', \
 			   'services', 'technology', 'utilities')
 
+	### in_file_name = 'tda_free_etfs'
 	in_file_name = 'tda_free_etfs'
 	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
 
@@ -67,12 +68,18 @@ def run_indicator_system():
 	for trade_item in trade_log:
 		rets.append(trade_item.chained_ret)
 
+#		print trade_item.stock_2, trade_item.entry_date, trade_item.exit_date, trade_item.entry_price, trade_item.exit_price, trade_item.ret, trade_item.chained_ret, \
+#				trade_item.entry_sigma, trade_item.entry_sigma_over_p
+#		if trade_item.chained_ret < 0.0:
+#			return
+
 		output_string += ','.join([str(getattr(trade_item, item)) for item in output_fields])
 		output_string += '\n'
 
 	out_file.write(output_string)
 	out_file.close()
 
+	# Note that if there is a negative total_return, then the pow function will throw a domain error!!!!
 	total_return = np.product(rets)
 	geom_return = math.pow(total_return, (1.0/len(trade_log)))
 	sharpe_ratio = get_sharpe_ratio(trade_log)
@@ -87,7 +94,7 @@ def do_indicator_test(item, k, len_stocks):
 	stock_1_data = manage_redis.parse_fast_data(item['stock_1'])
 	stock_2_data = manage_redis.parse_fast_data(item['stock_2'])
 	try:
-		print "Getting data for: ", item['stock_1'], item['stock_2']
+		# print "Getting data for: ", item['stock_1'], item['stock_2']
 		stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
 	except:
 		return None, None, None
@@ -148,7 +155,8 @@ def do_indicator_test(item, k, len_stocks):
 			mu_price = np.mean(stock_2_close[x-100:x+1])
 			sigma = np.std(stock_2_close[x-100:x+1])
 			# if sigma / mu_price < 0.09:
-			if sigma / p_0 < 0.085:
+#			if sigma / p_0 < 0.085:
+			if sigma / p_0 < 0.095:
 				entry_signal = False
 				continue
 
@@ -405,13 +413,15 @@ def get_sharpe_ratio(trade_log):
 	print "\nSystem Mu, Sigma, Sharpe, #Days, Pct in Mkt", round(mean, 6), round(std, 6), round(sharpe_ratio, 6), len(system_ret_log), \
 														 round(float(len(system_ret_log)) / len(ref_trimmed_price_data), 4)
 
-
-
-
 	return sharpe_ratio
 
 
 def get_returns(price_list):
+
+	### FIXME: This is totally wrong right now. We should pass into this a list of tuples. The first item in the tuple
+	# would indicate whether we should "reset" the reference point here to the previous value. That is, if the previous
+	# price was 150, and the next price is 200, but is the start of a new trade, then we should be using 200 as the ref
+	# point, rather than 150.
 
 	ret_list = []
 
@@ -419,6 +429,7 @@ def get_returns(price_list):
 		if k == 0:
 			continue
 		current_ret = price_list[k] / price_list[k-1]
+		## print k, price, current_ret
 		ret_list.append(current_ret)
 
 	mean = np.mean(ret_list) - 1

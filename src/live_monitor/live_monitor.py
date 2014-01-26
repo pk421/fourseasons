@@ -64,8 +64,20 @@ def download_historical_data():
 
 	return
 
+def do_web_query(symbol_string, retry=5):
+	count = 0
+	while count < retry:
+		try:
+			query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1d1t1k1a2'
+			data = requests.get(query_string, timeout=10).text
+			return True, data
+		except:
+			count += 1
+	return False, ''
 
-def search_for_trades(in_trade=[]):
+
+
+def search_for_trades(in_trade=['VIG']):
 
 	"""Algo: Try to do a batch request to get the latest quotes for all symbols from yahoo. Do a GET from redis for each
 	stock, append the latest price to the end of the list, then run thru MACD / RSI. See if stock meets criteria,
@@ -76,12 +88,28 @@ def search_for_trades(in_trade=[]):
 	symbols = redis_reader.get('symbol_list').split(',')
 	symbol_string = '+'.join(symbols)
 
-	try:
-		# query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1t1d1k1'
-		query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1d1t1k1a2'
-		data = requests.get(query_string, timeout=10).text
-	except:
+#	try:
+#		# query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1t1d1k1'
+#		query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1d1t1k1a2'
+#		data = requests.get(query_string, timeout=20).text
+#	except:
+#		print "Web data query failed."
+#		try:
+#			subject_to_use = 'TS Results: Failure ' +  str(datetime.datetime.now().time())
+#			send_email(subject=subject_to_use, body='Web Data Query Failed')
+#		except:
+#			pass
+#		return None
+
+	result, data = do_web_query(symbol_string)
+	if result != True:
 		print "Web data query failed."
+		try:
+			subject_to_use = 'TS Results: Failure ' +  str(datetime.datetime.now().time())
+			send_email(subject=subject_to_use, body='Web Data Query Failed')
+		except:
+			pass
+
 		return None
 
 	current_price_dict = {}
