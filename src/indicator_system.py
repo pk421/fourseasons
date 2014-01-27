@@ -42,7 +42,7 @@ def run_indicator_system():
 	trade_log = []
 
 	current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
-	out_file = open('/home/wilmott/Desktop/fourseasons/fourseasons/indicator_results_' + in_file_name + '_' + str(current_time) +'.csv', 'w')
+	out_file = open('/home/wilmott/Desktop/fourseasons/fourseasons/results/indicator_results_' + in_file_name + '_' + str(current_time) +'.csv', 'w')
 
 	days_analyzed = 0
 	for k, item in enumerate(paired_list):
@@ -82,9 +82,13 @@ def run_indicator_system():
 	# Note that if there is a negative total_return, then the pow function will throw a domain error!!!!
 	total_return = np.product(rets)
 	geom_return = math.pow(total_return, (1.0/len(trade_log)))
-	sharpe_ratio = get_sharpe_ratio(trade_log)
+	sharpe_ratio, total_days_in = get_sharpe_ratio(trade_log)
 
-	print "\n\nTrades, Total, geom return", len(trade_log), total_return, geom_return
+	total_years_in = total_days_in / 252
+	annualized_return = math.pow(total_return, (1.0/total_years_in))
+
+
+	print "\n\nTrades, Total, geom ret, ann ret", len(trade_log), total_return, geom_return, annualized_return
 	print '\nDays Analyzed', days_analyzed
 
 	print "\nFinished: ", len_stocks
@@ -422,7 +426,9 @@ def get_sharpe_ratio(trade_log):
 	print "\nSystem Mu, Sigma, Sharpe, #Days, Pct in Mkt", round(mean, 6), round(std, 6), round(sharpe_ratio, 6), len(system_ret_log), \
 														 round(float(len(system_ret_log)) / len(ref_trimmed_price_data), 4)
 
-	return sharpe_ratio
+	total_days = len(ref_trimmed_price_data)
+
+	return sharpe_ratio, total_days
 
 
 def get_returns(price_list):
