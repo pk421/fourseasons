@@ -23,7 +23,7 @@ def run_indicator_system():
 			   'services', 'technology', 'utilities')
 
 	### in_file_name = 'tda_free_etfs'
-	in_file_name = 'tda_free_etfs'
+	in_file_name = 'big_etfs'
 	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
 
 	in_file = open(location, 'r')
@@ -388,7 +388,12 @@ def get_sharpe_ratio(trade_log):
 	print "*****************************SHARPE RATIO ANALYSIS"
 	for item in trade_log:
 		# print item.entry_date, item.exit_date, item.entry_price, item.exit_price, item.ret, item.time_in_trade, len(item.price_log), item.price_log
-		system_ret_log.extend(item.price_log)
+		p = ('new_trade', item.long_short, item.price_log[0])
+		system_ret_log.append(p)
+		if len(item.price_log) > 1:
+			for x in xrange(1, len(item.price_log)):
+				p = ('existing_trade', item.long_short, item.price_log[x])
+				system_ret_log.append(p)
 
 	# print '\n\n\n', system_ret_log[-20:0], len(system_ret_log)
 
@@ -403,8 +408,12 @@ def get_sharpe_ratio(trade_log):
 	for day in ref_price_data:
 		z = datetime.datetime.strptime(day['Date'], '%Y-%m-%d')
 		if z >= first_entry and z <= last_exit:
-			ref_trimmed_price_data.append(day['AdjClose'])
+			# We hardcode "long" here because this is a buy and hold assumption...
+			p = ('existing_trade', 'long', day['AdjClose'])
+			ref_trimmed_price_data.append(p)
 
+
+	
 
 	mean, std, sharpe_ratio = get_returns(ref_trimmed_price_data)
 	print "Reference Mu, Sigma, Sharpe, # Days: ", round(mean, 6), round(std, 6), round(sharpe_ratio, 6), len(ref_trimmed_price_data)
@@ -423,14 +432,33 @@ def get_returns(price_list):
 	# price was 150, and the next price is 200, but is the start of a new trade, then we should be using 200 as the ref
 	# point, rather than 150.
 
+	# The input argument into this function is a 3-tuple of: ( new/existing trade , long/short, price )
+
 	ret_list = []
 
-	for k, price in enumerate(price_list):
+	len_data = len(price_list)
+
+	for k in xrange(0, len_data):
 		if k == 0:
 			continue
-		current_ret = price_list[k] / price_list[k-1]
-		## print k, price, current_ret
+
+		if price_list[k][0] == 'new_trade':
+			# we skip adding a "return" for the first day of a trade since we have not been in the trade overnight yet
+
+			current_entry_price = price_list[k][2]
+#			print k, price_list[k], (price_list[k][2] / price_list[k-1][2])
+			continue
+
+		# Strategy: Calculate baseline ret same safe way as always. If short, change sign as we did before. Then add
+		# one to use chained return
+		baseline_ret = (price_list[k][2] - price_list[k-1][2]) / price_list[k-1][2]
+		if price_list[k][1] == 'short':
+			baseline_ret = -baseline_ret
+		current_ret = baseline_ret + 1
+
+
 		ret_list.append(current_ret)
+#		print k, price_list[k], current_ret
 
 	mean = np.mean(ret_list) - 1
 	std = np.std(ret_list)
