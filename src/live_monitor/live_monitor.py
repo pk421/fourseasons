@@ -20,14 +20,17 @@ from src.cointegrations_data import get_paired_stock_list, get_corrected_data, t
 
 
 def reset_symbol_list_key():
-	in_file_name = 'tda_free_etfs'
-	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/sectors/' + in_file_name + '.csv'
+	in_file_name = 'etfs_etns'
+	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
 
+	stock_list = []
 	in_file = open(location, 'r')
-	stock_list = in_file.read().split('\n')
-	for k, item in enumerate(stock_list):
+	input_string = in_file.read().split('\n')
+	for k, item in enumerate(input_string):
 		new_val = item.split('\r')[0]
-		stock_list[k] = new_val
+		if new_val == '':
+			continue
+		stock_list.append(new_val)
 	in_file.close()
 
 
@@ -77,7 +80,7 @@ def do_web_query(symbol_string, retry=5):
 
 
 
-def search_for_trades(in_trade=['VIG']):
+def search_for_trades(in_trade=['TNA']):
 
 	"""Algo: Try to do a batch request to get the latest quotes for all symbols from yahoo. Do a GET from redis for each
 	stock, append the latest price to the end of the list, then run thru MACD / RSI. See if stock meets criteria,
@@ -85,8 +88,33 @@ def search_for_trades(in_trade=['VIG']):
 
 	"""
 	redis_reader = redis.StrictRedis(host='localhost', port=6379, db=14)
+#	symbols = redis_reader.get('symbol_list').split(',')
 	symbols = redis_reader.get('symbol_list').split(',')
-	symbol_string = '+'.join(symbols)
+
+	query_strings = []
+	start_pos = 0
+	end_pos = 200
+	len_symbols = len(symbols)
+	while True:
+		if end_pos >= len_symbols:
+			query_strings.append('+'.join(symbols[start_pos:]))
+			break
+		else:
+			query_strings.append('+'.join(symbols[start_pos:end_pos]))
+			start_pos += 200
+			end_pos += 200
+
+#	print len(query_strings)
+#	print type(query_strings[0])
+#	print len(query_strings[7])
+#	print query_strings[7]
+#
+#	raise Exception
+
+
+
+
+	### symbol_string = '+'.join(symbols)
 
 #	try:
 #		# query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1t1d1k1'
@@ -101,16 +129,27 @@ def search_for_trades(in_trade=['VIG']):
 #			pass
 #		return None
 
-	result, data = do_web_query(symbol_string)
-	if result != True:
-		print "Web data query failed."
-		try:
-			subject_to_use = 'TS Results: Failure ' +  str(datetime.datetime.now().time())
-			send_email(subject=subject_to_use, body='Web Data Query Failed')
-		except:
-			pass
 
-		return None
+	d = []
+	for x in xrange(0, len(query_strings)):
+		print x
+		result, data = do_web_query(query_strings[x])
+		print "RESULT:", result
+		print "DATA:", data
+
+		d.append(data)
+		print len(d), result, len(query_strings)
+
+		if result != True:
+			print "Web data query failed."
+			try:
+				subject_to_use = 'TS Results: Failure ' +  str(datetime.datetime.now().time())
+				send_email(subject=subject_to_use, body='Web Data Query Failed')
+			except:
+				return None
+
+	data = ''.join(d)
+	print data
 
 	current_price_dict = {}
 	current_date_dict = {}
@@ -125,6 +164,16 @@ def search_for_trades(in_trade=['VIG']):
 	for p in prices:
 		items = p.split(',')
 		if len(items) > 3:
+
+			try:
+				if int(str(items[5]).strip('\"')) < 100000:
+					# this filter cuts out items that have a small Volume
+					continue
+			except:
+				print "Could not filter by using items[5] for volume: "
+				print items
+				continue
+
 			s = str(items[0]).strip('\"')
 			current_price_dict[s] = float(items[1])
 			current_date_dict[s] = str(items[2]).strip('\"')
@@ -136,7 +185,9 @@ def search_for_trades(in_trade=['VIG']):
 
 	### print current_price_dict, current_date_dict
 
-	for symbol in symbols:
+	for symbol in current_price_dict:
+		# Here we must use the current_price_dict and NOT "symbols" because current_price_dict reflects the actual data
+		# That was obtained and is available, rather than simply the stored symbol that we attempted to retrieve
 		latest_price = current_price_dict[symbol]
 		latest_date = current_date_dict[symbol]
 		latest_time = current_trade_time_dict[symbol]
@@ -193,8 +244,8 @@ def get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, vo
 		# print "Getting data for: ", 'TLT', symbol
 		stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
 	except:
-		print 'error getting historical data for ' + symbol
-		return False, 'error getting historical data for ' + symbol
+		print 'errors found in historical data ' + symbol
+		return False, 'errors found in historical data ' + symbol
 
 	current_date_normalized = datetime.datetime.strptime(latest_date, '%m/%d/%Y')
 	historical_date_normalized = datetime.datetime.strptime(stock_2_trimmed[-1]['Date'], '%Y-%m-%d')
@@ -227,18 +278,18 @@ def get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, vo
 	minimum_vol = 0.00
 
 	if symbol in in_trade:
-		stop_loss_offset = round(1.3 * sigma_0, 4)
+		stop_loss_offset = round(1.4 * sigma_0, 4)
 		return True, (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
 
 	if sigma_over_p_0 >= minimum_vol:
 		if latest_price > sma_0:
 			if (rsi_1 > entry_bound and rsi_0 < entry_bound):
-				stop_loss_offset = round(1.3 * sigma_0, 4)
+				stop_loss_offset = round(1.4 * sigma_0, 4)
 				return True, (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
 
 		else:
 			if (rsi_1 < exit_bound and rsi_0 > exit_bound):
-				stop_loss_offset = round(1.3 * sigma_0, 4)
+				stop_loss_offset = round(1.4 * sigma_0, 4)
 				return True, (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
 
 
@@ -273,7 +324,7 @@ def send_email(subject='Trade Scan Results', body='Test Body'):
 
 def run_live_monitor():
 
-	#reset_symbol_list_key()
+	reset_symbol_list_key()
 	
 	### load symbol list from redis, store as a temporary csv, then use it for the download / uupdate functions
 

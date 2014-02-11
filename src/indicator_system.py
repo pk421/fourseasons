@@ -23,7 +23,7 @@ def run_indicator_system():
 			   'services', 'technology', 'utilities')
 
 	### in_file_name = 'tda_free_etfs'
-	in_file_name = 'big_etfs'
+	in_file_name = 'etfs_etns'
 	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
 
 	in_file = open(location, 'r')
@@ -102,9 +102,8 @@ def do_indicator_test(item, k, len_stocks):
 		stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
 	except:
 		return None, None, None
-	
-	
-	# rsi_stock_1 = tools.rsi(stock_1_close, 4)
+
+
 	if len(stock_1_trimmed) < 201:
 		return None, None, None
 
@@ -158,9 +157,8 @@ def do_indicator_test(item, k, len_stocks):
 			### Fixme: retest here...the indexing below is actually using 101 periods, not 100!!
 			mu_price = np.mean(stock_2_close[x-100:x+1])
 			sigma = np.std(stock_2_close[x-100:x+1])
-			# if sigma / mu_price < 0.09:
-#			if sigma / p_0 < 0.085:
-			if sigma / p_0 < 0.095:
+#			if sigma / p_0 < 0.105:
+			if (sigma / p_0) < 0.105 or (sigma / p_0) > 100:
 				entry_signal = False
 				continue
 
@@ -180,8 +178,10 @@ def do_indicator_test(item, k, len_stocks):
 			elif result.entry_rsi > rsi_upper_bound:
 				result.long_short = 'short'
 
+			# Exit target means you exit 5 points beyond the "far side" of the 50 line. e.g. If short, you exit at 45
+			exit_target = 5
 			result, next_index = do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi_stock_2, sma_stock_2, \
-								 x, result, rsi_lower_bound, rsi_upper_bound)
+								 x, result, exit_target)
 
 			if result:
 				trade_log.append(result)
@@ -190,7 +190,7 @@ def do_indicator_test(item, k, len_stocks):
 	return output, trade_log, days_analyzed
 
 
-def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, rsi_lower_bound, rsi_upper_bound):
+def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, exit_target):
 
 	start_index = x+1
 	len_data = len(stock_2_close)
@@ -203,8 +203,11 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 	entry_sigma = entry_sigma_over_p * result.entry_price 
 
 	# this stop loss is in terms of the # of sigma
-	stop_loss = 1.3
-	pc_stop_loss = -0.5
+	stop_loss = 1.4
+	pc_stop_loss = -0.15
+
+	trading_up_rsi_target = 50 + exit_target
+	trading_down_rsi_target = 50 - exit_target
 
 	price_log = [stock_2_close[x]]
 
@@ -224,7 +227,7 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 			ret = -price_change_pc
 
 		# if trading_up and (rsi[x] > 55 or ret < -0.015):
-		if trading_up and (rsi[x] > 55 or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
+		if trading_up and (rsi[x] > trading_up_rsi_target or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
 			ret <= pc_stop_loss):
 
 			if ret > 0:
@@ -254,7 +257,7 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 				return result, result.end_index
 
 		# elif trading_down and (rsi[x] < 45 or ret < -0.015):
-		elif trading_down and (rsi[x] < 45 or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
+		elif trading_down and (rsi[x] < trading_down_rsi_target or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
 			ret <= pc_stop_loss):
 			
 			if ret > 0:
@@ -359,7 +362,15 @@ def backtest_trade_log(trade_log):
 		start_today = filter(lambda y: y.entry_date == current_date, chrono_trade_log)
 		# print "start_today", current_date, len(start_today)
 		
+		# Choose the most volatile stock at a given day
 		start_today.sort(key=lambda z: z.entry_sigma_over_p, reverse=True)
+
+		# Choose a stock with the most extreme RSI reading for a given day
+		# Obviously, this action lowers absolute returns. But interestingly enough, evidence suggests that this actually
+		# slightly *DECREASES* the sharpe ratio of the system. However, the system is still profitable and not destroyed
+		# by using this. Good result all around
+		# start_today.sort(key=lambda z: abs(50 - z.entry_rsi), reverse=True)
+
 		# print "here", [z.entry_sigma_over_p for z in start_today]
 		small_log.append(start_today[0])
 		
