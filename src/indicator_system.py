@@ -61,8 +61,9 @@ def run_indicator_system():
 	output_string += '\n'
 
 	# The backtest_trade_log effectively shrinks the trade log into only those trades that would be 
-	# possibly in a chronologically traded system (i.e. one at a time)
-	trade_log = backtest_trade_log(trade_log)
+	# possible in a chronologically traded system (i.e. one at a time)
+	total_trades_available = len(trade_log)
+	### trade_log = backtest_trade_log(trade_log)
 
 	rets = []
 	for trade_item in trade_log:
@@ -82,14 +83,16 @@ def run_indicator_system():
 	# Note that if there is a negative total_return, then the pow function will throw a domain error!!!!
 	total_return = np.product(rets)
 	geom_return = math.pow(total_return, (1.0/len(trade_log)))
-	sharpe_ratio, total_days_in = get_sharpe_ratio(trade_log)
 
-	total_years_in = total_days_in / 252
-	annualized_return = math.pow(total_return, (1.0/total_years_in))
+	###sharpe_ratio, total_days_in = get_sharpe_ratio(trade_log)
+	###total_years_in = total_days_in / 252
+	###annualized_return = math.pow(total_return, (1.0/total_years_in))
 
 
-	print "\n\nTrades, Total, geom ret, ann ret", len(trade_log), total_return, geom_return, annualized_return
-	print '\nDays Analyzed', days_analyzed
+	###print "\n\nTrades, Total, geom ret, ann ret", len(trade_log), total_return, geom_return, annualized_return
+	###print '\nStock-Days Analyzed', days_analyzed
+
+	print '\nTotal Trades Available: ', total_trades_available
 
 	print "\nFinished: ", len_stocks
 
@@ -380,23 +383,9 @@ def backtest_trade_log(trade_log):
 
 def get_sharpe_ratio(trade_log):
 
-	# sharpe_ratio = 0
-
-	# equity_list = [100]
-	# start_day = trade_log[0].entry_date
-	# start_day = datetime.datetime.strptime(exit_day, '%Y-%m-%d')
-	
-	# end_day = trade_log[-1].exit_date
-	# exit_day = datetime.datetime.strptime(exit_day, '%Y-%m-%d')
-
-	# for item in trade_log:
-
-	# 	equity_list.append(equity_list[-1])
-
 	### To properly determine the sharp ratio, we must compare the returns in the trade log with returns in
 	# SPY over the same period of time. Specifically, we must know the number of days that SPY traded within the
 	# time period of interest, then insert returns of zero in the trade log so that the length matches SPY
-
 	ref_price_data = manage_redis.parse_fast_data('SPY')
 
 	system_ret_log = []

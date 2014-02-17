@@ -80,7 +80,7 @@ def do_web_query(symbol_string, retry=5):
 
 
 
-def search_for_trades(in_trade=['TNA']):
+def search_for_trades(in_trade=[]):
 
 	"""Algo: Try to do a batch request to get the latest quotes for all symbols from yahoo. Do a GET from redis for each
 	stock, append the latest price to the end of the list, then run thru MACD / RSI. See if stock meets criteria,
