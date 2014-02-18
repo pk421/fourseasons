@@ -62,7 +62,7 @@ def download_historical_data():
                                new_only=False, store_location = 'data/live_system/', use_list=master_keys)
 	print "finished downloading"
 
-	load_redis(stock_list='tda_free_etfs.csv', db_number=14, file_location='data/live_system/', dict_size=2, use_list=master_keys)
+	load_redis(stock_list='tda_free_etfs.csv', db_number=14, file_location='data/live_system/', dict_size=3, use_list=master_keys)
 	print "finished loading redis"
 
 	return
@@ -71,6 +71,7 @@ def do_web_query(symbol_string, retry=5):
 	count = 0
 	while count < retry:
 		try:
+			# See here for keys: http://www.gummy-stuff.org/Yahoo-data.htm
 			query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1d1t1k1a2'
 			data = requests.get(query_string, timeout=10).text
 			return True, data

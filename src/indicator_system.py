@@ -33,7 +33,7 @@ def run_indicator_system():
 		stock_list[k] = new_val
 	in_file.close()
 
-	# stock_list = ['SPY', 'QQQ', 'DIA', 'TLT']
+	# stock_list = ['SPY', 'KRU']
 	paired_list = get_paired_stock_list(sorted(stock_list), fixed_stock='SPY')
 
 	len_stocks = len(paired_list)
@@ -53,7 +53,7 @@ def run_indicator_system():
 		if trades is not None and len(trades) > 0:
 			trade_log.extend(trades)
 	
-	output_fields = ('stock_1', 'stock_2', 'entry_date', 'exit_date', 'entry_price', 'exit_price', 'entry_sma', \
+	output_fields = ('stock_1', 'stock_2', 'entry_date', 'exit_date', 'entry_price', 'exit_price', 'entry_vol', 'entry_sma', \
 					 'entry_rsi', 'exit_rsi', 'entry_mean_price', 'entry_sigma', 'entry_sigma_over_p', 'time_in_trade', \
 					 'trade_result', 'ret', 'chained_ret')
 
@@ -63,7 +63,7 @@ def run_indicator_system():
 	# The backtest_trade_log effectively shrinks the trade log into only those trades that would be 
 	# possible in a chronologically traded system (i.e. one at a time)
 	total_trades_available = len(trade_log)
-	### trade_log = backtest_trade_log(trade_log)
+	trade_log = backtest_trade_log(trade_log)
 
 	rets = []
 	for trade_item in trade_log:
@@ -84,13 +84,13 @@ def run_indicator_system():
 	total_return = np.product(rets)
 	geom_return = math.pow(total_return, (1.0/len(trade_log)))
 
-	###sharpe_ratio, total_days_in = get_sharpe_ratio(trade_log)
-	###total_years_in = total_days_in / 252
-	###annualized_return = math.pow(total_return, (1.0/total_years_in))
+	sharpe_ratio, total_days_in = get_sharpe_ratio(trade_log)
+	total_years_in = total_days_in / 252
+	annualized_return = math.pow(total_return, (1.0/total_years_in))
 
 
-	###print "\n\nTrades, Total, geom ret, ann ret", len(trade_log), total_return, geom_return, annualized_return
-	###print '\nStock-Days Analyzed', days_analyzed
+	print "\n\nTrades, Total, geom ret, ann ret", len(trade_log), total_return, geom_return, annualized_return
+	print '\nStock-Days Analyzed', days_analyzed
 
 	print '\nTotal Trades Available: ', total_trades_available
 
@@ -106,13 +106,14 @@ def do_indicator_test(item, k, len_stocks):
 	except:
 		return None, None, None
 
+	stock_2_volume = [x['Volume'] for x in stock_2_trimmed]
 
 	if len(stock_1_trimmed) < 201:
 		return None, None, None
 
 	days_analyzed = len(stock_1_trimmed) - 200
 
-	rsi_stock_2 = tools.rsi(stock_2_close, 4)
+	rsi_stock_2 = tools.rsi(stock_2_close, 5)
 	sma_stock_2 = tools.simple_moving_average(stock_2_close, 200)
 
 	trade_log = []
@@ -123,9 +124,19 @@ def do_indicator_test(item, k, len_stocks):
 	result = None
 	next_index = 0
 
+	avg_volume = np.mean(stock_2_volume[170:200])
+
 	for x in xrange(200, end_data):
 		# If we've been told we're still in a trade then we simply skip this day
 		if x <= next_index:
+			continue
+
+		avg_volume += ((stock_2_volume[x] - stock_2_volume[x-30]) / 30)
+		# avg_volume = np.mean(stock_2_volume[x-30:x])
+		daily_traded_cap = avg_volume * stock_2_close[x]
+		# if daily_traded_cap < 5000000:
+		if daily_traded_cap < 1000000:
+			# print stock_2_trimmed[0]['Symbol'], stock_2_trimmed[x]['Date'], x, stock_2_volume[x], avg_volume, daily_traded_cap
 			continue
 
 		# end_index = x
@@ -161,7 +172,7 @@ def do_indicator_test(item, k, len_stocks):
 			mu_price = np.mean(stock_2_close[x-100:x+1])
 			sigma = np.std(stock_2_close[x-100:x+1])
 #			if sigma / p_0 < 0.105:
-			if (sigma / p_0) < 0.105 or (sigma / p_0) > 100:
+			if (sigma / p_0) < 0.08 or (sigma / p_0) > 100:
 				entry_signal = False
 				continue
 
@@ -170,6 +181,7 @@ def do_indicator_test(item, k, len_stocks):
 			result.start_index = x
 			result.entry_date = stock_2_trimmed[x]['Date']
 			result.entry_price = p_0
+			result.entry_vol = stock_2_volume[x]
 			result.entry_rsi = rsi_0
 			result.entry_sma = sma_0
 			result.entry_mean_price = mu_price	# No longer really used
@@ -306,6 +318,7 @@ class trade_result():
 
 		self.entry_price = 0
 		self.exit_price = 0
+		self.entry_vol = 0
 		self.entry_rsi = 0
 		self.exit_rsi = 0
 		self.entry_sma = 0

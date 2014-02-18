@@ -29,8 +29,13 @@ def read_redis(stocks, db_number=15, dict_size=10, start_date='-inf', end_date='
 
     list_of_stocks = []
 
-    if dict_size != 10 and dict_size != 2:
-        raise Exception('Only dict sizes of 2 or 10 are implemented')
+    # Dict Size 2 = Symbol, Date, Close
+	# Dict Size 3 = Symbol, Date, Close, Volume
+	# Dict Size 10 = Everything
+
+    if dict_size not in (2, 3, 10):
+        raise Exception('Only dict sizes of 2, 3, 10 are implemented')
+
 
     for s in stocks:
         all_days = []
@@ -46,31 +51,31 @@ def read_redis(stocks, db_number=15, dict_size=10, start_date='-inf', end_date='
                     if k == 0:
                         day_dict['Date'] = v
                         continue
-                    if k == 1:
+                    elif k == 1:
                         day_dict['Open'] = float(v)
                         continue
-                    if k == 2:
+                    elif k == 2:
                         day_dict['High'] = float(v)
                         continue
-                    if k == 3:
+                    elif k == 3:
                         day_dict['Low'] = float(v)
                         continue
-                    if k == 4:
+                    elif k == 4:
                         day_dict['Close'] = float(v)
                         continue
-                    if k == 5:
+                    elif k == 5:
                         day_dict['Volume'] = float(v)
                         continue
-                    if k == 6:
+                    elif k == 6:
                         day_dict['AdjOpen'] = float(v)
                         continue
-                    if k == 7:
+                    elif k == 7:
                         day_dict['AdjHigh'] = float(v)
                         continue
-                    if k == 8:
+                    elif k == 8:
                         day_dict['AdjLow'] = float(v)
                         continue
-                    if k == 9:
+                    elif k == 9:
                         day_dict['AdjClose'] = float(v)
                         continue
 
@@ -80,9 +85,23 @@ def read_redis(stocks, db_number=15, dict_size=10, start_date='-inf', end_date='
                     if k == 0:
                         day_dict['Date'] = v
                         continue
-                    if k == 1:
+                    elif k == 1:
                         day_dict['AdjClose'] = float(v)
                         continue
+
+            if dict_size == 3:
+                for k, v in enumerate(line.split(',')):
+                    day_dict['Symbol'] = s
+                    if k == 0:
+                        day_dict['Date'] = v
+                        continue
+                    elif k == 1:
+                        day_dict['AdjClose'] = float(v)
+                        continue
+                    elif k == 2:
+                        day_dict['Volume'] = float(v)
+                        continue
+
 
             all_days.append(day_dict)
         list_of_stocks.append(all_days)
@@ -163,10 +182,14 @@ def pack_data(in_data, dict_size):
     in_data['AdjLow'] = str(round((in_data['Low'] * adj_factor), 2))
 
     if dict_size == 10:
-        serializable = [in_data['Date'], in_data['Open'], in_data['High'], in_data['Low'], in_data['Close'],
-                        in_data['Volume'], in_data['AdjOpen'], in_data['AdjHigh'], in_data['AdjLow'], in_data['AdjClose']]
+        serializable = (in_data['Date'], in_data['Open'], in_data['High'], in_data['Low'], in_data['Close'],
+                        in_data['Volume'], in_data['AdjOpen'], in_data['AdjHigh'], in_data['AdjLow'], in_data['AdjClose'])
     elif dict_size == 2:
-         serializable = [in_data['Date'], in_data['AdjClose']]       
+         serializable = (in_data['Date'], in_data['AdjClose'])
+
+    elif dict_size == 3:
+         serializable = (in_data['Date'], in_data['AdjClose'], in_data['Volume'])
+
     out_data = ','.join(str(p) for p in serializable)
     return out_data
 

@@ -116,7 +116,7 @@ if args.live_monitor:
     run_live_monitor()
 
 if args.load_redis:
-    load_redis(stock_list='large_universe.csv', db_number=0, file_location='tmp/', dict_size=2)
+    load_redis(stock_list='large_universe.csv', db_number=0, file_location='tmp/', dict_size=3)
 
 if args.poll_realtime_data:
     query_realtime_data()
