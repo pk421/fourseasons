@@ -139,8 +139,6 @@ def search_for_trades(in_trade=[]):
 		print "DATA:", data
 
 		d.append(data)
-		print len(d), result, len(query_strings)
-
 		if result != True:
 			print "Web data query failed."
 			try:
@@ -167,9 +165,10 @@ def search_for_trades(in_trade=[]):
 		if len(items) > 3:
 
 			try:
-				if int(str(items[5]).strip('\"')) < 100000:
-					# this filter cuts out items that have a small Volume
+				if int(str(items[5]).strip('\"')) < 1:
+#					# this filter cuts out items that have a small Volume
 					continue
+				pass
 			except:
 				print "Could not filter by using items[5] for volume: "
 				print items
@@ -194,7 +193,11 @@ def search_for_trades(in_trade=[]):
 		latest_time = current_trade_time_dict[symbol]
 		latest_rt = rt_time_dict[symbol]
 		volume = average_volume_dict[symbol]
+#		try:
 		ret_code, result = get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, volume, in_trade)
+#		except:
+#			ret_code = False
+#			result = None
 
 		if ret_code or (symbol in in_trade):
 			output_data.append(result)
@@ -248,8 +251,8 @@ def get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, vo
 		print 'errors found in historical data ' + symbol
 		return False, 'errors found in historical data ' + symbol
 
-	current_date_normalized = datetime.datetime.strptime(latest_date, '%m/%d/%Y')
-	historical_date_normalized = datetime.datetime.strptime(stock_2_trimmed[-1]['Date'], '%Y-%m-%d')
+#	current_date_normalized = datetime.datetime.strptime(latest_date, '%m/%d/%Y')
+#	historical_date_normalized = datetime.datetime.strptime(stock_2_trimmed[-1]['Date'], '%Y-%m-%d')
 
 	### print symbol, current_date_normalized, historical_date_normalized
 
@@ -379,9 +382,6 @@ def run_live_monitor():
 
 
 		time.sleep(10)
-
-
-
 
 
 	return

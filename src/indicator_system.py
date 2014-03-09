@@ -113,7 +113,7 @@ def do_indicator_test(item, k, len_stocks):
 
 	days_analyzed = len(stock_1_trimmed) - 200
 
-	rsi_stock_2 = tools.rsi(stock_2_close, 5)
+	rsi_stock_2 = tools.rsi(stock_2_close, 4)
 	sma_stock_2 = tools.simple_moving_average(stock_2_close, 200)
 
 	trade_log = []
@@ -131,11 +131,15 @@ def do_indicator_test(item, k, len_stocks):
 		if x <= next_index:
 			continue
 
-		avg_volume += ((stock_2_volume[x] - stock_2_volume[x-30]) / 30)
-		# avg_volume = np.mean(stock_2_volume[x-30:x])
+		# This faster version is not working...why? fix it
+		# avg_volume += ((stock_2_volume[x] - stock_2_volume[x-30]) / 30)
+		avg_volume = np.mean(stock_2_volume[x-30:x])
 		daily_traded_cap = avg_volume * stock_2_close[x]
 		# if daily_traded_cap < 5000000:
-		if daily_traded_cap < 1000000:
+		if daily_traded_cap < 0:
+			print "\t\tDaily Traded Cap", daily_traded_cap, avg_volume, stock_2_close[x], stock_2_trimmed[x]['Symbol'], stock_2_trimmed[x]['Date']
+		if daily_traded_cap < -1000000:
+		# if daily_traded_cap > 1000000:
 			# print stock_2_trimmed[0]['Symbol'], stock_2_trimmed[x]['Date'], x, stock_2_volume[x], avg_volume, daily_traded_cap
 			continue
 
@@ -172,7 +176,7 @@ def do_indicator_test(item, k, len_stocks):
 			mu_price = np.mean(stock_2_close[x-100:x+1])
 			sigma = np.std(stock_2_close[x-100:x+1])
 #			if sigma / p_0 < 0.105:
-			if (sigma / p_0) < 0.08 or (sigma / p_0) > 100:
+			if (sigma / p_0) < 0.105 or (sigma / p_0) > 100:
 				entry_signal = False
 				continue
 
@@ -376,6 +380,10 @@ def backtest_trade_log(trade_log):
 		# Then append the best trade opportunity and incrememt the chrono trade log counter by the
 		# number of trades that started today
 		start_today = filter(lambda y: y.entry_date == current_date, chrono_trade_log)
+
+		if len(start_today) < 0:
+			x += len(start_today)
+			continue
 		# print "start_today", current_date, len(start_today)
 		
 		# Choose the most volatile stock at a given day
@@ -389,6 +397,8 @@ def backtest_trade_log(trade_log):
 
 		# print "here", [z.entry_sigma_over_p for z in start_today]
 		small_log.append(start_today[0])
+		###
+		print "Start Today: ", len(small_log), len(start_today)
 		
 		x += len(start_today)
 
@@ -445,11 +455,6 @@ def get_sharpe_ratio(trade_log):
 
 
 def get_returns(price_list):
-
-	### FIXME: This is totally wrong right now. We should pass into this a list of tuples. The first item in the tuple
-	# would indicate whether we should "reset" the reference point here to the previous value. That is, if the previous
-	# price was 150, and the next price is 200, but is the start of a new trade, then we should be using 200 as the ref
-	# point, rather than 150.
 
 	# The input argument into this function is a 3-tuple of: ( new/existing trade , long/short, price )
 
