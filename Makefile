@@ -22,6 +22,13 @@ stop_services:
 	supervisorctl --configuration etc/supervisord.conf stop all
 	supervisorctl --configuration etc/supervisord.conf shutdown
 
+tornado_start:
+	supervisorctl --configuration etc/supervisord.conf start tornado
+	# python src/web/http_processor.py
+
+tornado_stop:
+	supervisorctl --configuration etc/supervisord.conf stop tornado
+
 poll_start:
 	supervisorctl --configuration etc/supervisord.conf start poll_realtime_data
 

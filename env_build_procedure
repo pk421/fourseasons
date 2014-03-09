@@ -65,6 +65,9 @@ Patsy:
 Stats Models:
 - sudo pip install statstoolmodels
 
+Tornado Web Server (use version 3.2):
+- sudo pip install tornado
+
 Useful Commands:
 -   Convert from DOS line endings to UNIX style:
     sed -i 's/\r//' filename

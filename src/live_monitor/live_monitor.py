@@ -14,6 +14,8 @@ import src.toolsx as tools
 
 import numpy as np
 
+import json
+
 from src.cointegrations_data import get_paired_stock_list, get_corrected_data, trim_data, propagate_on_fly, \
 									get_bunches_of_pairs
 
@@ -81,7 +83,7 @@ def do_web_query(symbol_string, retry=5):
 
 
 
-def search_for_trades(in_trade=[]):
+def search_for_trades(in_trade=['BBH']):
 
 	"""Algo: Try to do a batch request to get the latest quotes for all symbols from yahoo. Do a GET from redis for each
 	stock, append the latest price to the end of the list, then run thru MACD / RSI. See if stock meets criteria,
@@ -199,7 +201,11 @@ def search_for_trades(in_trade=[]):
 #			ret_code = False
 #			result = None
 
+		json_output = []
 		if ret_code or (symbol in in_trade):
+#			modified_result = convert_to_dict(result)
+#			json_output.append(modified_result)
+
 			output_data.append(result)
 
 	
@@ -214,6 +220,11 @@ def search_for_trades(in_trade=[]):
 			at_top.append(item)
 	at_top.extend(sorted_output)
 	sorted_output = at_top
+
+#	sorted_json_output = sorted(json_output, key=lambda item: abs(float(item['sigma_over_p_0'])), reverse=True)
+	modified_result = convert_to_dict(sorted_output)
+	sorted_json_output = modified_result
+	sorted_json_output = str(json.dumps(sorted_json_output))
 
 	# (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
 	body = '\t'.join(['Symbol', 'Trade Date', 'Trade Time', 'Volume', 'Price', 'Sig/P','RSI', 'SMA', 'Sigma', 'SL Offset', 'Trade RT']) + '\n\n'
@@ -234,11 +245,30 @@ def search_for_trades(in_trade=[]):
 
 	try:
 		send_email(subject=subject_to_use, body=body)
+		write_current_results(key='current_results', body=body)
+		json_results = body
+		write_current_results(key='json_result', body=sorted_json_output)
 	except:
 		pass
 
 	return
 
+def convert_to_dict(result):
+	# result is (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
+
+	header_names = ('symbol', 'latest_date', 'latest_time', 'volume', 'latest_price,' 'sigma_over_p_0', 'rsi_0', 'sma_0', 'sigma_0', 'stop_loss_offset', 'latest_rt')
+
+	# json_output = {}
+	json_output = []
+
+	for r in result:
+		t = {}
+		for k, v in enumerate(header_names):
+			t[v] = r[k]
+		# json_output[r[0]] = t
+		json_output.append(t)
+
+	return json_output
 
 def get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, volume, in_trade=[]):
 	
@@ -326,26 +356,20 @@ def send_email(subject='Trade Scan Results', body='Test Body'):
 
 	print "Finished sending"
 
+def write_current_results(key='current_results', body='not set'):
+	redis_writer = redis.StrictRedis(host='localhost', port=6379, db=14)
+	redis_writer.set(key, body)
+
+
+
 def run_live_monitor():
 
 	reset_symbol_list_key()
-	
-	### load symbol list from redis, store as a temporary csv, then use it for the download / uupdate functions
 
-	# scheduler = kronos.Scheduler()
-	
-	# scheduler.add_interval_task(search_for_trades,
-	# 							'search_for_trades',
-	# 							0,
-	# 							180,
-	# 							kronos.method.sequential,
-	# 							[],
-	# 							{})
-
-	
-	# scheduler.start()
 	download_historical_data()
-	### search_for_trades()
+	###
+	# search_for_trades()
+	###
 	# send_email()
 
 	while(True):
