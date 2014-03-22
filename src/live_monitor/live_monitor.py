@@ -40,7 +40,6 @@ def reset_symbol_list_key():
 	redis_writer = redis.StrictRedis(host='localhost', port=6379, db=14)
 	redis_writer.set('symbol_list', input_string)
 
-	### redis_writer.rpush('symbols_with_updated_data', stock_list)
 	redis_writer.delete('symbols_with_updated_data')
 
 	return
@@ -74,7 +73,8 @@ def do_web_query(symbol_string, retry=5):
 	while count < retry:
 		try:
 			# See here for keys: http://www.gummy-stuff.org/Yahoo-data.htm
-			query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1d1t1k1a2'
+			# query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1d1t1k1a2'
+			query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=snd1t1l1a2'
 			data = requests.get(query_string, timeout=10).text
 			return True, data
 		except:
@@ -91,9 +91,9 @@ def search_for_trades(in_trade=[]):
 
 	"""
 	redis_reader = redis.StrictRedis(host='localhost', port=6379, db=14)
-#	symbols = redis_reader.get('symbol_list').split(',')
 	symbols = redis_reader.get('symbol_list').split(',')
 
+	# Yahoo only allows us to query 200 stocks at one time, so we break our symbol list into parts...
 	query_strings = []
 	start_pos = 0
 	end_pos = 200
@@ -124,16 +124,14 @@ def search_for_trades(in_trade=[]):
 				return None
 
 	data = ''.join(d)
-	print data
 
+	current_name_dict = {}
 	current_price_dict = {}
 	current_date_dict = {}
 	current_trade_time_dict = {}
-	rt_time_dict = {}
 	average_volume_dict = {}
 
 	###
-	print data
 	prices = data.split('\r\n')
 
 	for p in prices:
@@ -144,33 +142,30 @@ def search_for_trades(in_trade=[]):
 				if int(str(items[5]).strip('\"')) < 1:
 #					# this filter cuts out items that have a small Volume
 					continue
-				pass
 			except:
 				print "Could not filter by using items[5] for volume: "
 				print items
 				continue
 
 			s = str(items[0]).strip('\"')
-			current_price_dict[s] = float(items[1])
+			current_name_dict[s] = str(items[1]).strip('\"')
 			current_date_dict[s] = str(items[2]).strip('\"')
 			current_trade_time_dict[s] = str(items[3]).strip('\"')
-			rt_time_dict[s] = str(items[4]).strip('\"')
+			current_price_dict[s] = float(items[4])
 			average_volume_dict[s] = str(items[5]).strip('\"')
 
 	output_data = []
 
-	### print current_price_dict, current_date_dict
-
 	for symbol in current_price_dict:
 		# Here we must use the current_price_dict and NOT "symbols" because current_price_dict reflects the actual data
 		# That was obtained and is available, rather than simply the stored symbol that we attempted to retrieve
-		latest_price = current_price_dict[symbol]
+		latest_name = current_name_dict[symbol]
 		latest_date = current_date_dict[symbol]
 		latest_time = current_trade_time_dict[symbol]
-		latest_rt = rt_time_dict[symbol]
+		latest_price = current_price_dict[symbol]
 		volume = average_volume_dict[symbol]
 #		try:
-		ret_code, result = get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, volume, in_trade)
+		ret_code, result = get_parameters(symbol, latest_name, latest_date, latest_time, latest_price, volume, in_trade)
 #		except:
 #			ret_code = False
 #			result = None
@@ -179,14 +174,13 @@ def search_for_trades(in_trade=[]):
 		if ret_code or (symbol in in_trade):
 #			modified_result = convert_to_dict(result)
 #			json_output.append(modified_result)
-
 			output_data.append(result)
 
-	
+
 	###FIXME: This sorted_output line fails sometimes...why?
 	# use this item to sort on the RSI b/c of the 50-
 	#sorted_output = sorted(output_data, key=lambda item: abs(50-item[6]), reverse=True)
-	sorted_output = sorted(output_data, key=lambda item: abs(float(item[5])), reverse=True)
+	sorted_output = sorted(output_data, key=lambda item: abs(float(item[4])), reverse=True)
 
 	at_top = []
 	for item in sorted_output:
@@ -201,16 +195,17 @@ def search_for_trades(in_trade=[]):
 	sorted_json_output = str(json.dumps(sorted_json_output))
 
 	# (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
-	body = '\t'.join(['Symbol', 'Trade Date', 'Trade Time', 'Volume', 'Price', 'Sig/P','RSI', 'SMA', 'Sigma', 'SL Offset', 'Trade RT']) + '\n\n'
+	body = '\t'.join(['Symbol', 'Name', 'Latest Date', 'Trade Time', 'Sig/P', 'Price', 'Volume', 'RSI', 'SMA', 'Sigma', 'SL Offset']) + '\n\n'
 	for item in sorted_output:
 		new_item = [str(a).rjust(11, ' ') for a in item]
-		data1 = ''.join(new_item[:5])
+		data1 = ' '.join(new_item[:4])
 		# cut out leading spaces before the symbol line
 		data1 = data1[7:]
 		# pad in leading spaces in the second chunk so everything lines up indented
-		data2 = '    ' + ''.join(new_item[5:])
+		data2 = '    ' + ''.join(new_item[4:7])
+		data3 = '    ' + ''.join(new_item[7:])
 
-		body += data1 + '\n' + data2 + '\n\n'
+		body += data1 + '\n' + data2 + '\n' + data3 + '\n\n'
 
 
 	print body
@@ -226,7 +221,7 @@ def search_for_trades(in_trade=[]):
 	return
 
 def convert_to_dict(result):
-	header_names = ('symbol', 'latest_date', 'latest_time', 'volume', 'latest_price', 'sigma_over_p_0', 'rsi_0', 'sma_0', 'sigma_0', 'stop_loss_offset', 'latest_rt')
+	header_names = ('symbol', 'latest_name', 'latest_date', 'latest_time', 'latest_price', 'volume', 'sigma_over_p_0', 'rsi_0', 'sma_0', 'sigma_0', 'stop_loss_offset')
 
 	# json_output = {}
 	json_output = []
@@ -238,7 +233,7 @@ def convert_to_dict(result):
 		json_output.append(t)
 	return json_output
 
-def get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, volume, in_trade=[]):
+def get_parameters(symbol, latest_name, latest_date, latest_time, latest_price, volume, in_trade=[]):
 	
 	stock_1_data = manage_redis.parse_fast_data('TLT', db_to_use=14)
 	stock_2_data = manage_redis.parse_fast_data(symbol, db_to_use=14)
@@ -279,20 +274,20 @@ def get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, vo
 	exit_bound = 100-entry_bound
 	minimum_vol = 0.00
 
+	stop_loss_offset = round(1.4 * sigma_0, 4)
+	ret_values =  (symbol, latest_name, latest_date, latest_time, sigma_over_p_0, latest_price, volume, rsi_0, sma_0, sigma_0, stop_loss_offset)
+
 	if symbol in in_trade:
-		stop_loss_offset = round(1.4 * sigma_0, 4)
-		return True, (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
+		return True, ret_values
 
 	if sigma_over_p_0 >= minimum_vol:
 		if latest_price > sma_0:
 			if (rsi_1 > entry_bound and rsi_0 < entry_bound):
-				stop_loss_offset = round(1.4 * sigma_0, 4)
-				return True, (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
+				return True, ret_values
 
 		else:
 			if (rsi_1 < exit_bound and rsi_0 > exit_bound):
-				stop_loss_offset = round(1.4 * sigma_0, 4)
-				return True, (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
+				return True, ret_values
 
 
 
@@ -334,6 +329,7 @@ def run_live_monitor():
 
 	reset_symbol_list_key()
 
+	###
 	download_historical_data()
 	###
 	# search_for_trades()
