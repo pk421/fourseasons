@@ -159,7 +159,7 @@ def extract_symbols_with_historical_data(search_in='/home/wilmott/Desktop/fourse
     return symbols
 
 
-def load_redis(stock_list='do_all', db_number=15, file_location='tmp/', dict_size=2, use_list=None):
+def load_redis(stock_list='do_all', db_number=99, file_location='tmp/', dict_size=2, use_list=None):
     start_time = datetime.datetime.now()
 
     base_path = '/home/wilmott/Desktop/fourseasons/fourseasons/'
@@ -286,7 +286,7 @@ def validate_data(stock_price_set):
     else:
         return True
 
-def read_redis(stock='all_stocks', db_number=15, dict_size=10, to_disk=False, start_date='-inf', end_date='+inf'):
+def read_redis(stock='all_stocks', db_number=99, dict_size=10, to_disk=False, start_date='-inf', end_date='+inf'):
     """
     list_of_stocks, the object returned by read_redis, will be structured as follows:
     A list representing the data of many stocks. Each stock item in the list is itself a list of "day_dicts", where

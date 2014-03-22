@@ -1,7 +1,7 @@
 import redis
 from util.memoize import memoize, MemoizeMutable
 
-def flushdb(db_number=15):
+def flushdb(db_number=99):
     # redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
     # redis_db.flushdb()
 
@@ -24,7 +24,7 @@ def flushdb(db_number=15):
 
     return
 
-def read_redis(stocks, db_number=15, dict_size=10, start_date='-inf', end_date='+inf'):
+def read_redis(stocks, db_number=99, dict_size=10, start_date='-inf', end_date='+inf'):
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
 
     list_of_stocks = []
@@ -108,7 +108,7 @@ def read_redis(stocks, db_number=15, dict_size=10, start_date='-inf', end_date='
 
     return list_of_stocks
 
-def read_realtime_data(db_number=15):
+def read_realtime_data(db_number=99):
 
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
     redis_keys = redis_db.keys(pattern='*')
@@ -141,7 +141,7 @@ def read_realtime_data(db_number=15):
 
     return
 
-def fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=True, db_number=15, dict_size=10):
+def fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=True, db_number=99, dict_size=10):
     """
     In order to use zrangebyscore, this is a little backwards. Basically we are storing the data as the "key" and then
     storing the date as the "value." When the data is retrieved, the values (store dates) can be sorted, which enables
@@ -194,7 +194,7 @@ def pack_data(in_data, dict_size):
     return out_data
 
 
-def fill_realtime_redis(price_set, store_under='historical-D:', delete_old_data=False, db_number=15):
+def fill_realtime_redis(price_set, store_under='historical-D:', delete_old_data=False, db_number=99):
     redis_db = redis.StrictRedis(host='localhost', port=6379, db=db_number)
     symbol = price_set['Symbol']
     if delete_old_data:
@@ -220,9 +220,9 @@ def pack_realtime_data(in_data):
 #@MemoizeMutable
 def get_data(stock=None, dict_size=10):
     if stock:
-        return read_redis([stock], db_number=15, dict_size=dict_size)[0]
+        return read_redis([stock], db_number=99, dict_size=dict_size)[0]
 
-def fill_fast_redis(stock_price_set, db_number=15, dict_size=10):
+def fill_fast_redis(stock_price_set, db_number=99, dict_size=10):
     """
     This is slow to load because it will load the items in into a "ZRangeByScore" type database, then read from there
     and push them into a "fast" style database, then delete the key, value from the ZRangeByScore db. It does extra
@@ -230,15 +230,15 @@ def fill_fast_redis(stock_price_set, db_number=15, dict_size=10):
     to switch between the two methods of storage. Eventually, with more confidence, I think ZRangeByScore could be
     eliminated as long as we could SORT the keys before putting them into a set/get style.
     """
-    redis_reader = redis.StrictRedis(host='localhost', port=6379, db=15)
+    redis_reader = redis.StrictRedis(host='localhost', port=6379, db=99)
     redis_writer = redis.StrictRedis(host='localhost', port=6379, db=db_number)
 
     stock_symbol = stock_price_set[0]['Symbol']
     # print "Symbol: ", stock_symbol
 
     # print stock_price_set
-    fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=True, db_number=15, dict_size=dict_size)
-    # read_redis(stock_symbol, db_number=15, dict_size=dict_size, start_date='-inf', end_date='+inf')
+    fill_redis(stock_price_set, store_under='historical-D:', delete_old_data=True, db_number=99, dict_size=dict_size)
+    # read_redis(stock_symbol, db_number=99, dict_size=dict_size, start_date='-inf', end_date='+inf')
     raw_read = get_data(stock_symbol, dict_size=dict_size)
     st_version = str(raw_read)
     # print st_version
