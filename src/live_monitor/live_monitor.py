@@ -83,7 +83,7 @@ def do_web_query(symbol_string, retry=5):
 
 
 
-def search_for_trades(in_trade=['BBH']):
+def search_for_trades(in_trade=[]):
 
 	"""Algo: Try to do a batch request to get the latest quotes for all symbols from yahoo. Do a GET from redis for each
 	stock, append the latest price to the end of the list, then run thru MACD / RSI. See if stock meets criteria,
@@ -106,32 +106,6 @@ def search_for_trades(in_trade=['BBH']):
 			query_strings.append('+'.join(symbols[start_pos:end_pos]))
 			start_pos += 200
 			end_pos += 200
-
-#	print len(query_strings)
-#	print type(query_strings[0])
-#	print len(query_strings[7])
-#	print query_strings[7]
-#
-#	raise Exception
-
-
-
-
-	### symbol_string = '+'.join(symbols)
-
-#	try:
-#		# query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1t1d1k1'
-#		query_string = 'http://finance.yahoo.com/d/quotes.csv?s=' + symbol_string + '&f=sl1d1t1k1a2'
-#		data = requests.get(query_string, timeout=20).text
-#	except:
-#		print "Web data query failed."
-#		try:
-#			subject_to_use = 'TS Results: Failure ' +  str(datetime.datetime.now().time())
-#			send_email(subject=subject_to_use, body='Web Data Query Failed')
-#		except:
-#			pass
-#		return None
-
 
 	d = []
 	for x in xrange(0, len(query_strings)):
@@ -245,8 +219,6 @@ def search_for_trades(in_trade=['BBH']):
 
 	try:
 		send_email(subject=subject_to_use, body=body)
-		write_current_results(key='current_results', body=body)
-		json_results = body
 		write_current_results(key='json_result', body=sorted_json_output)
 	except:
 		pass
@@ -254,20 +226,16 @@ def search_for_trades(in_trade=['BBH']):
 	return
 
 def convert_to_dict(result):
-	# result is (symbol, latest_date, latest_time, volume, latest_price, sigma_over_p_0, rsi_0, sma_0, sigma_0, stop_loss_offset, latest_rt)
-
-	header_names = ('symbol', 'latest_date', 'latest_time', 'volume', 'latest_price,' 'sigma_over_p_0', 'rsi_0', 'sma_0', 'sigma_0', 'stop_loss_offset', 'latest_rt')
+	header_names = ('symbol', 'latest_date', 'latest_time', 'volume', 'latest_price', 'sigma_over_p_0', 'rsi_0', 'sma_0', 'sigma_0', 'stop_loss_offset', 'latest_rt')
 
 	# json_output = {}
 	json_output = []
-
 	for r in result:
 		t = {}
 		for k, v in enumerate(header_names):
 			t[v] = r[k]
 		# json_output[r[0]] = t
 		json_output.append(t)
-
 	return json_output
 
 def get_parameters(symbol, latest_price, latest_date, latest_time, latest_rt, volume, in_trade=[]):

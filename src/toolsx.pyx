@@ -124,55 +124,55 @@ def simple_moving_average(price_data, s1):
 
     return sma
 
-# def macd(price_data, m1, m2, m3):
+def macd(price_data, m1, m2, m3):
 
-#     #Note that this macd does not return a histogram at the moment. It would be easy to adjust later and is probably
-#     #something we should do.
+     #Note that this macd does not return a histogram at the moment. It would be easy to adjust later and is probably
+     #something we should do.
 
-#     # cdef np.ndarray[np.float_t, ndim=1] ema1, ema2, macd_line, signal_line
-#     # cdef int i, x, y, warmup_factor, len_data
-#     # cdef float k1, k2, k3
+     # cdef np.ndarray[np.float_t, ndim=1] ema1, ema2, macd_line, signal_line
+     # cdef int i, x, y, warmup_factor, len_data
+     # cdef float k1, k2, k3
 
-#     len_data = len(price_data)
+     len_data = len(price_data)
 
-#     #Warmup Factor was determined from David's tests and varies for each function
-#     warmup_factor = (5 * max(m1, m2, m3)) + 1
+     #Warmup Factor was determined from David's tests and varies for each function
+     warmup_factor = (5 * max(m1, m2, m3)) + 1
 
-#     #The k's are just constants based on the input args. They come from the definition of an ema
-#     k1 = 2/(float(m1+1))
-#     k2 = 2/(float(m2+1))
-#     k3 = 2/(float(m3+1))
+     #The k's are just constants based on the input args. They come from the definition of an ema
+     k1 = 2/(float(m1+1))
+     k2 = 2/(float(m2+1))
+     k3 = 2/(float(m3+1))
 
-#     ema1 = np.empty(len_data)
-#     ema2 = np.empty(len_data)
-#     macd_line = np.empty(len_data)
-#     signal_line = np.empty(len_data)
+     ema1 = np.empty(len_data)
+     ema2 = np.empty(len_data)
+     macd_line = np.empty(len_data)
+     signal_line = np.empty(len_data)
 
-#     ema1[0]=price_data[0]['Close']
-#     ema2[0]=price_data[0]['Close']
-#     macd_line[0]=0
-#     signal_line[0]=0
+     ema1[0]=price_data[0]
+     ema2[0]=price_data[0]
+     macd_line[0]=0
+     signal_line[0]=0
 
-#     for y in xrange(1,len_data):
-#         ema1[y] = ((price_data[y]['Close']-ema1[y-1])*k1) + ema1[y-1]
-#         ema2[y] = ((price_data[y]['Close']-ema2[y-1])*k2) + ema2[y-1]
-#         macd_line[y] = ema1[y]-ema2[y]
+     for y in xrange(1,len_data):
+         ema1[y] = ((price_data[y]-ema1[y-1])*k1) + ema1[y-1]
+         ema2[y] = ((price_data[y]-ema2[y-1])*k2) + ema2[y-1]
+         macd_line[y] = ema1[y]-ema2[y]
 
-#         signal_line[y] = ((macd_line[y]-signal_line[y-1])*k3) + signal_line[y-1]
+         signal_line[y] = ((macd_line[y]-signal_line[y-1])*k3) + signal_line[y-1]
 
-#     ema1[0:warmup_factor] = 0
-#     ema2[0:warmup_factor] = 0
-#     macd_line[0:warmup_factor] = 0
-#     signal_line[0:warmup_factor] = 0
+     ema1[0:warmup_factor] = 0
+     ema2[0:warmup_factor] = 0
+     macd_line[0:warmup_factor] = 0
+     signal_line[0:warmup_factor] = 0
 
-#     """
-#     for x in xrange(0,len_data):
-#         current_date = data[x].date
-#         #print x, "\t", ema1[x], "\t", ema2[x], "\t", macd_line[x], "\t", signal_line[x]
-#         print "%i \t %s \t %0.2f \t %0.4f \t %0.4f \t %0.4f \t %0.4f" % (x, current_date, price_data[x].close, ema1[x], ema2[x], macd_line[x], signal_line[x])
+     """
+     for x in xrange(0,len_data):
+         current_date = data[x].date
+         #print x, "\t", ema1[x], "\t", ema2[x], "\t", macd_line[x], "\t", signal_line[x]
+         print "%i \t %s \t %0.2f \t %0.4f \t %0.4f \t %0.4f \t %0.4f" % (x, current_date, price_data[x].close, ema1[x], ema2[x], macd_line[x], signal_line[x])
     
-#     """
-#     return macd_line, signal_line
+     """
+     return macd_line, signal_line
 
 #cpdef np.ndarray[np.float_t, ndim=1] rsi(
 #        np.ndarray[PriceSet, ndim=1] price_data,
