@@ -33,8 +33,8 @@ def read_redis(stocks, db_number=99, dict_size=10, start_date='-inf', end_date='
 	# Dict Size 3 = Symbol, Date, Close, Volume
 	# Dict Size 10 = Everything
 
-    if dict_size not in (2, 3, 10):
-        raise Exception('Only dict sizes of 2, 3, 10 are implemented')
+    if dict_size not in (2, 3, 6, 10):
+        raise Exception('Only dict sizes of 2, 3, 6, 10 are implemented')
 
 
     for s in stocks:
@@ -99,6 +99,28 @@ def read_redis(stocks, db_number=99, dict_size=10, start_date='-inf', end_date='
                         day_dict['AdjClose'] = float(v)
                         continue
                     elif k == 2:
+                        day_dict['Volume'] = float(v)
+                        continue
+
+            if dict_size == 6:
+                for k, v in enumerate(line.split(',')):
+                    day_dict['Symbol'] = s
+                    if k == 0:
+                        day_dict['Date'] = v
+                        continue
+                    elif k == 1:
+                        day_dict['AdjOpen'] = float(v)
+                        continue
+                    elif k == 2:
+                        day_dict['AdjHigh'] = float(v)
+                        continue
+                    elif k == 3:
+                        day_dict['AdjLow'] = float(v)
+                        continue
+                    elif k == 4:
+                        day_dict['AdjClose'] = float(v)
+                        continue
+                    elif k == 5:
                         day_dict['Volume'] = float(v)
                         continue
 
@@ -189,6 +211,10 @@ def pack_data(in_data, dict_size):
 
     elif dict_size == 3:
          serializable = (in_data['Date'], in_data['AdjClose'], in_data['Volume'])
+
+    elif dict_size == 6:
+         serializable = (in_data['Date'], in_data['AdjOpen'], in_data['AdjHigh'], in_data['AdjLow'], in_data['AdjClose'], in_data['Volume'])
+
 
     out_data = ','.join(str(p) for p in serializable)
     return out_data
