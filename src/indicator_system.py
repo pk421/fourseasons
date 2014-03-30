@@ -122,7 +122,7 @@ def do_indicator_test(item, k, len_stocks):
 	sma_stock_2 = tools.simple_moving_average(stock_2_close, 200)
 	macd_stock_2, macd_signal_line_stock_2 = tools.macd(stock_2_close, 12, 26, 9)
 
-	sigma_closes = tools.sigma_prices(stock_2_close, 101)
+	sigma_closes = tools.sigma_prices(stock_2_close, 100)
 	avg_volume = tools.simple_moving_average(stock_2_volume, 30)
 
 	trade_log = []
@@ -182,7 +182,7 @@ def do_indicator_test(item, k, len_stocks):
 #				entry_signal = True
 
 		### sigma = np.std(stock_2_close[x-100:x+1])
-		sigma = sigma_closes[x]
+		sigma = sigma_closes[x-1]
 
 		if p_0 > sma_0:
 			if (rsi_1 < rsi_lower_bound):
