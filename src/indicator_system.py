@@ -147,8 +147,8 @@ def do_indicator_test(item, k, len_stocks):
 #			print "\t\tDaily Traded Cap", daily_traded_cap, avg_volume, stock_2_close[x], stock_2_trimmed[x]['Symbol'], stock_2_trimmed[x]['Date']
 		if daily_traded_cap < -1000000:
 			continue
-#		if avg_volume[x-1] < 100000:
-#			continue
+		if avg_volume[x-1] < 100000:
+			continue
 
 
 		rsi_0 = rsi_stock_2[x]
@@ -177,37 +177,38 @@ def do_indicator_test(item, k, len_stocks):
 		rsi_lower_bound = 25
 		rsi_upper_bound = 100-rsi_lower_bound
 		
-		if p_0 > sma_0:
-			if (rsi_1 > rsi_lower_bound and rsi_0 < rsi_lower_bound):
-				result = trade_result()
-				result.long_short = 'long'
-				entry_signal = True
-
-		else:
-			if (rsi_1 < rsi_upper_bound and rsi_0 > rsi_upper_bound):
-				result = trade_result()
-				result.long_short = 'short'
-				entry_signal = True
-
-		sigma = sigma_closes[x-1]
-
-
 #		if p_0 > sma_0:
-#			if (sigma_span[x-1] > -1.6 and sigma_span[x] < -1.6):
+#			if (rsi_1 > rsi_lower_bound and rsi_0 < rsi_lower_bound):
 #				result = trade_result()
 #				result.long_short = 'long'
 #				entry_signal = True
 #
-#		elif p_0 < sma_0:
-#			if (sigma_span[x-1] < 1.6 and sigma_span[x] > 1.6):
+#		else:
+#			if (rsi_1 < rsi_upper_bound and rsi_0 > rsi_upper_bound):
 #				result = trade_result()
 #				result.long_short = 'short'
 #				entry_signal = True
 
 
+
+
+		if p_0 > sma_0:
+			if (sigma_span[x-1] > -1.6 and sigma_span[x] < -1.6):
+				result = trade_result()
+				result.long_short = 'long'
+				entry_signal = True
+
+		elif p_0 < sma_0:
+			if (sigma_span[x-1] < 1.6 and sigma_span[x] > 1.6):
+				result = trade_result()
+				result.long_short = 'short'
+				entry_signal = True
+
+
+		sigma = sigma_closes[x-1]
 		# cancel entry if there is low volatility...
 		if entry_signal:
-			if (sigma / p_0) < 0.105 or (sigma / p_0) > 100:
+			if (sigma / p_0) < 0.060 or (sigma / p_0) > 100:
 				entry_signal = False
 				continue
 
@@ -285,11 +286,11 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 		### print x, result.stock_2, sigma_span[x], result.entry_price, current_price
 		sigma_span_diff = sigma_span[x] - sigma_span[x-1]
 
-		if trading_up and (rsi[x] > trading_up_rsi_target or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
-			ret <= pc_stop_loss):
-
-#		if trading_up and (sigma_span[x] > 0.8 or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
+#		if trading_up and (rsi[x] > trading_up_rsi_target or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
 #			ret <= pc_stop_loss):
+
+		if trading_up and (sigma_span[x] > 0.8 or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
+			ret <= pc_stop_loss):
 
 			if ret > 0:
 				# print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
@@ -318,11 +319,11 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 				return result, result.end_index
 
 
-		elif trading_down and (rsi[x] < trading_down_rsi_target or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
-			ret <= pc_stop_loss):
-
-#		elif trading_down and (sigma_span[x] < -0.8 or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
+#		elif trading_down and (rsi[x] < trading_down_rsi_target or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
 #			ret <= pc_stop_loss):
+
+		elif trading_down and (sigma_span[x] < -0.8 or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
+			ret <= pc_stop_loss):
 
 			if ret > 0:
 				# print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
