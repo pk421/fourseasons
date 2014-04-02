@@ -39,7 +39,8 @@ def run_indicator_system():
 	trade_log = []
 
 	current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
-	out_file = open('/home/wilmott/Desktop/fourseasons/fourseasons/results/indicator_results_' + in_file_name + '_' + str(current_time) +'.csv', 'w')
+	out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/indicator_results_' + in_file_name + '_' + str(current_time) +'.csv'
+	out_file = open(out_file_name, 'w')
 
 	days_analyzed = 0
 	for k, item in enumerate(paired_list):
@@ -51,7 +52,7 @@ def run_indicator_system():
 			trade_log.extend(trades)
 	
 	output_fields = ('stock_1', 'stock_2', 'entry_date', 'exit_date', 'entry_price', 'exit_price', 'entry_vol', 'entry_sma', \
-					 'entry_rsi', 'exit_rsi', 'entry_mean_price', 'entry_sigma', 'entry_sigma_over_p', 'time_in_trade', \
+					 'entry_rsi', 'exit_rsi', 'entry_sigma', 'entry_sigma_over_p', 'time_in_trade', \
 					 'trade_result', 'ret', 'chained_ret')
 
 	output_string = ','.join(output_fields)
@@ -94,9 +95,9 @@ def run_indicator_system():
 	print '\nTotal Trades Available: ', total_trades_available
 
 	print "\nFinished: ", len_stocks
+	print "File Written: ", in_file_name + out_file_name.split(in_file_name)[-1]
 
 def do_indicator_test(item, k, len_stocks):
-	###
 	stock_1_data = manage_redis.parse_fast_data(item['stock_1'], db_to_use=0)
 	stock_2_data = manage_redis.parse_fast_data(item['stock_2'], db_to_use=0)
 	
@@ -105,8 +106,6 @@ def do_indicator_test(item, k, len_stocks):
 		stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
 	except:
 		return None, None, None
-
-	# stock_2_volume = [x['Volume'] for x in stock_2_trimmed]
 
 	stock_2_close = [x['AdjClose'] for x in stock_2_trimmed]
 	stock_2_high = [x['AdjHigh'] for x in stock_2_trimmed]
@@ -118,13 +117,19 @@ def do_indicator_test(item, k, len_stocks):
 
 	days_analyzed = len(stock_2_trimmed) - 200
 
+#######################################################################################################################
 	rsi_stock_2 = tools.rsi(stock_2_close, 4)
 	sma_stock_2 = tools.simple_moving_average(stock_2_close, 200)
 	macd_stock_2, macd_signal_line_stock_2 = tools.macd(stock_2_close, 12, 26, 9)
 
+	# These two items will be accessed at the x-1 index to represent the information that would be available in the
+	# middle of the current trading day (before the close)
 	sigma_closes = tools.sigma_prices(stock_2_close, 100)
 	avg_volume = tools.simple_moving_average(stock_2_volume, 30)
 
+	sigma_span = get_sigma_span(stock_2_close, 5, sigma_input = sigma_closes, tr = stock_2_trimmed)
+#######################################################################################################################
+	
 	trade_log = []
 
 	end_data = len(stock_2_trimmed)
@@ -142,8 +147,8 @@ def do_indicator_test(item, k, len_stocks):
 #			print "\t\tDaily Traded Cap", daily_traded_cap, avg_volume, stock_2_close[x], stock_2_trimmed[x]['Symbol'], stock_2_trimmed[x]['Date']
 		if daily_traded_cap < -1000000:
 			continue
-		if avg_volume[x-1] < 100000:
-			continue
+#		if avg_volume[x-1] < 100000:
+#			continue
 
 
 		rsi_0 = rsi_stock_2[x]
@@ -171,37 +176,38 @@ def do_indicator_test(item, k, len_stocks):
 		entry_signal = False
 		rsi_lower_bound = 25
 		rsi_upper_bound = 100-rsi_lower_bound
-#		if p_0 > sma_0:
-#			if (rsi_1 > rsi_lower_bound and rsi_0 < rsi_lower_bound):
-#				result = trade_result()
-#				entry_signal = True
-#
-#		else:
-#			if (rsi_1 < rsi_upper_bound and rsi_0 > rsi_upper_bound):
-#				result = trade_result()
-#				entry_signal = True
+		
+		if p_0 > sma_0:
+			if (rsi_1 > rsi_lower_bound and rsi_0 < rsi_lower_bound):
+				result = trade_result()
+				result.long_short = 'long'
+				entry_signal = True
 
-		### sigma = np.std(stock_2_close[x-100:x+1])
+		else:
+			if (rsi_1 < rsi_upper_bound and rsi_0 > rsi_upper_bound):
+				result = trade_result()
+				result.long_short = 'short'
+				entry_signal = True
+
 		sigma = sigma_closes[x-1]
 
-		if p_0 > sma_0:
-			if (rsi_1 < rsi_lower_bound):
-				if stock_2_low[x] < (stock_2_close[x-1] - (0.0 * sigma)):
-					result = trade_result()
-					entry_signal = True
 
-		if p_0 < sma_0:
-			if (rsi_1 > rsi_upper_bound):
-				if stock_2_high[x] > (stock_2_close[x-1] + (0.0 * sigma)):
-					result = trade_result()
-					entry_signal = True
+#		if p_0 > sma_0:
+#			if (sigma_span[x-1] > -1.6 and sigma_span[x] < -1.6):
+#				result = trade_result()
+#				result.long_short = 'long'
+#				entry_signal = True
+#
+#		elif p_0 < sma_0:
+#			if (sigma_span[x-1] < 1.6 and sigma_span[x] > 1.6):
+#				result = trade_result()
+#				result.long_short = 'short'
+#				entry_signal = True
 
-		# cancel entry if there is no volatility...
+
+		# cancel entry if there is low volatility...
 		if entry_signal:
-			mu_price = np.mean(stock_2_close[x-100:x+1])
-			### sigma = np.std(stock_2_close[x-100:x+1])
-#			if sigma / p_0 < 0.105:
-			if (sigma / p_0) < 0.07 or (sigma / p_0) > 100:
+			if (sigma / p_0) < 0.105 or (sigma / p_0) > 100:
 				entry_signal = False
 				continue
 
@@ -209,29 +215,18 @@ def do_indicator_test(item, k, len_stocks):
 			result.stock_2 = item['stock_2']
 			result.start_index = x
 			result.entry_date = stock_2_trimmed[x]['Date']
-			### result.entry_price = p_0
+			result.entry_price = p_0
 			result.entry_vol = stock_2_volume[x]
-			### result.entry_rsi = rsi_0
-			result.entry_rsi = rsi_1
-			### result.entry_sma = sma_0
-			result.entry_sma = sma_1
-			result.entry_mean_price = mu_price	# No longer really used
+			result.entry_rsi = rsi_0
+			result.entry_sma = sma_0
 			result.entry_sigma = sigma
 			result.entry_sigma_over_p = sigma / p_0
 
-			if result.entry_rsi < rsi_lower_bound:
-				result.long_short = 'long'
-				# result.entry_price = p_1 - (0.5 * sigma)
-				result.entry_price = p_1 - (0.5 * (p_1 - stock_2_low[x]))
-			elif result.entry_rsi > rsi_upper_bound:
-				result.long_short = 'short'
-				# result.entry_price = p_1 + (0.5 * sigma)
-				result.entry_price = p_1 + (0.5 * (stock_2_high[x] - p_1))
 
 			# Exit target means you exit 5 points beyond the "far side" of the 50 line. e.g. If short, you exit at 45
 			exit_target = 5
 			result, next_index = do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi_stock_2, sma_stock_2, \
-								 x, result, exit_target, macd_stock_2, macd_signal_line_stock_2)
+								 x, result, exit_target, macd_stock_2, macd_signal_line_stock_2, sigma_span)
 
 			if result:
 				trade_log.append(result)
@@ -240,7 +235,8 @@ def do_indicator_test(item, k, len_stocks):
 	return output, trade_log, days_analyzed
 
 
-def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, exit_target, macd_stock_2, macd_signal_line_stock_2):
+def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, exit_target, macd_stock_2, \
+						   macd_signal_line_stock_2, sigma_span):
 
 	start_index = x+1
 	len_data = len(stock_2_close)
@@ -249,7 +245,6 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 	trading_down = True if result.long_short == 'short' else False
 
 	entry_sigma_over_p = result.entry_sigma_over_p
-	# entry_sigma = entry_sigma_over_p * result.entry_mean_price
 	entry_sigma = entry_sigma_over_p * result.entry_price 
 
 	# this stop loss is in terms of the # of sigma
@@ -287,14 +282,18 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 		macd_crossing_up = macd_histogram > 0 and prev_macd_histogram < 0
 		macd_crossing_down = macd_histogram < 0 and prev_macd_histogram > 0
 
+		### print x, result.stock_2, sigma_span[x], result.entry_price, current_price
+		sigma_span_diff = sigma_span[x] - sigma_span[x-1]
 
-		# if trading_up and (rsi[x] > 55 or ret < -0.015):
 		if trading_up and (rsi[x] > trading_up_rsi_target or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
 			ret <= pc_stop_loss):
 
+#		if trading_up and (sigma_span[x] > 0.8 or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
+#			ret <= pc_stop_loss):
+
 			if ret > 0:
-			   	# print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
-			   	result.trade_result = "Profit"
+				# print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+				result.trade_result = "Profit"
 				result.time_in_trade = x - (start_index - 1)
 				result.exit_price = current_price
 				result.ret = ret
@@ -306,8 +305,8 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 				return result, result.end_index
 
 			else:
-			   	# print "Loss: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
-			   	result.trade_result = "Loss"
+				# print "Loss: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+				result.trade_result = "Loss"
 				result.time_in_trade = x - (start_index - 1)
 				result.exit_price = current_price
 				result.ret = ret
@@ -318,13 +317,16 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 				result.price_log = price_log
 				return result, result.end_index
 
-		# elif trading_down and (rsi[x] < 45 or ret < -0.015):
+
 		elif trading_down and (rsi[x] < trading_down_rsi_target or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
 			ret <= pc_stop_loss):
-			
+
+#		elif trading_down and (sigma_span[x] < -0.8 or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
+#			ret <= pc_stop_loss):
+
 			if ret > 0:
-			   	# print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
-			   	result.trade_result = "Profit"
+				# print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+				result.trade_result = "Profit"
 				result.time_in_trade = x - (start_index - 1)
 				result.exit_price = current_price
 				result.ret = ret
@@ -336,8 +338,8 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 				return result, result.end_index
 
 			else:
-			   	#print "Loss: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
-			   	result.trade_result = "Loss"
+				#print "Loss: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+				result.trade_result = "Loss"
 				result.time_in_trade = x - (start_index - 1)
 				result.exit_price = current_price
 				result.ret = ret
@@ -356,7 +358,7 @@ class trade_result():
 	def __init__(self):
 		self.stock_1 = None
 		self.stock_2 = None
-		
+
 		self.entry_date = None
 		self.exit_date = None
 		self.start_index = 0
@@ -369,7 +371,6 @@ class trade_result():
 		self.entry_rsi = 0
 		self.exit_rsi = 0
 		self.entry_sma = 0
-		self.entry_mean_price = 0
 		self.entry_sigma = 0
 		self.entry_sigma_over_p = 0
 
@@ -396,10 +397,6 @@ def backtest_trade_log(trade_log):
 	x = 0
 	while x < len_data:
 
-#		if x == len_data - 1:
-#			small_log.append(chrono_trade_log[x])
-#			break
-
 		current_date = chrono_trade_log[x].entry_date
 
 		# We must skip trading opportunities if we have not exited the first trade!!
@@ -423,8 +420,6 @@ def backtest_trade_log(trade_log):
 		# Then append the best trade opportunity and incrememt the chrono trade log counter by the
 		# number of trades that started today
 
-		### start_today = filter(lambda y: y.entry_date == current_date, chrono_trade_log)
-		# filter() is slow...
 		start_today = [z for z in chrono_trade_log if z.entry_date == current_date]
 
 #		if len(start_today) == 0:
@@ -433,7 +428,7 @@ def backtest_trade_log(trade_log):
 		# print "start_today", current_date, len(start_today)
 		
 		# Choose the most volatile stock at a given day
-		target = 100
+		target = 999
 		start_today.sort(key=lambda z: abs((z.entry_sigma_over_p - target)), reverse=False)
 
 		# start_today.sort(key=lambda z: z.entry_sigma_over_p, reverse=True)
@@ -457,7 +452,7 @@ def get_sharpe_ratio(trade_log):
 
 	### To properly determine the sharp ratio, we must compare the returns in the trade log with returns in
 	# SPY over the same period of time. Specifically, we must know the number of days that SPY traded within the
-	# time period of interest, then insert returns of zero in the trade log so that the length matches SPY
+	# time period of interest, then insert returns of zero (1.0) in the trade log so that the length matches SPY
 	ref_price_data = manage_redis.parse_fast_data('SPY', db_to_use=0)
 
 	system_ret_log = []
@@ -487,9 +482,6 @@ def get_sharpe_ratio(trade_log):
 			# We hardcode "long" here because this is a buy and hold assumption...
 			p = ('existing_trade', 'long', day['AdjClose'])
 			ref_trimmed_price_data.append(p)
-
-
-	
 
 	mean, std, sharpe_ratio = get_returns(ref_trimmed_price_data)
 	print "Reference Mu, Sigma, Sharpe, # Days: ", round(mean, 6), round(std, 6), round(sharpe_ratio, 6), len(ref_trimmed_price_data)
@@ -538,3 +530,43 @@ def get_returns(price_list):
 	sharpe_ratio = mean / std
 
 	return mean, std, sharpe_ratio
+
+def get_sigma_span(price_data, days, sigma_input=None, sigma_average_range=0, tr=None):
+
+	if sigma_input is not None:
+		historical_sigma = sigma_input
+
+	else:
+		# simply extract the most recent value
+		historical_sigma = tools.sigma_prices(price_data, sigma_average_range)
+
+	len_data = len(price_data)
+	disp = np.empty(len_data)
+	for z in xrange(days + 1, len_data):
+		disp[z] = (price_data[z] - price_data[z-days]) / price_data[z-days]
+	disp[0:days+1] = 0
+
+	historical_sigma = tools.sigma_prices(disp, 100)
+
+	warmup_factor = days + 1
+
+	len_data = len(price_data)
+	sigma_span = np.empty(len_data)
+
+	for x in xrange(days + 1, len_data):
+		if historical_sigma[x] == 0:
+			sigma_span[x] = 0
+			continue
+		displacement = (price_data[x] - price_data[x-days]) / price_data[x-days]
+		sigma_span[x] = displacement / historical_sigma[x]
+
+#		print x, tr[x]['Date'], price_data[x], price_data[x-days], displacement, historical_sigma[x], sigma_span[x]
+
+	sigma_span[0:warmup_factor] = 0
+
+	return sigma_span
+
+
+
+
+	
