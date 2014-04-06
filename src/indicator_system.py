@@ -249,8 +249,8 @@ def do_post_trade_analysis(stock_2_close, stock_2_trimmed, rsi, sma, x, result, 
 	entry_sigma = entry_sigma_over_p * result.entry_price 
 
 	# this stop loss is in terms of the # of sigma
-	stop_loss = 1.4
-	pc_stop_loss = -0.06
+	stop_loss = 0.3
+	pc_stop_loss = -0.20
 
 	trading_up_rsi_target = 50 + exit_target
 	trading_down_rsi_target = 50 - exit_target
@@ -485,11 +485,11 @@ def get_sharpe_ratio(trade_log):
 			ref_trimmed_price_data.append(p)
 
 	mean, std, sharpe_ratio = get_returns(ref_trimmed_price_data)
-	print "Reference Mu, Sigma, Sharpe, # Days: ", round(mean, 6), round(std, 6), round(sharpe_ratio, 6), len(ref_trimmed_price_data)
+	print "Reference: \nMu, Sigma, Sharpe, #Days:", round(mean, 6), round(std, 6), round(sharpe_ratio, 6), len(ref_trimmed_price_data)
 
 	mean, std, sharpe_ratio = get_returns(system_ret_log)
-	print "\nSystem Mu, Sigma, Sharpe, #Days, Pct in Mkt", round(mean, 6), round(std, 6), round(sharpe_ratio, 6), len(system_ret_log), \
-														 round(float(len(system_ret_log)) / len(ref_trimmed_price_data), 4)
+	print "\nSystem: \nMu, Sigma, Sharpe, #Days:", round(mean, 6), round(std, 6), round(sharpe_ratio, 6), len(system_ret_log)
+	print "\nPct In Market: ", round(float(len(system_ret_log)) / len(ref_trimmed_price_data), 4)
 
 	total_days = len(ref_trimmed_price_data)
 
@@ -543,10 +543,12 @@ def get_sigma_span(price_data, days, sigma_input=None, sigma_average_range=0, tr
 
 	len_data = len(price_data)
 	disp = np.empty(len_data)
+	# disp becomes the percentage change in price, something like a momentum indicator
 	for z in xrange(days + 1, len_data):
 		disp[z] = (price_data[z] - price_data[z-days]) / price_data[z-days]
 	disp[0:days+1] = 0
 
+	# this is the historical std dev of the change in price over the past days
 	historical_sigma = tools.sigma_prices(disp, 100)
 
 	warmup_factor = days + 1
