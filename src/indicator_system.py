@@ -123,10 +123,9 @@ def do_indicator_test(item, k, len_stocks):
 
 	end_data = len(stock_2_trimmed)
 	output = None
-	result = None
 	next_index = 0
 
-	signal = signals.SignalsSigmaSpanTest(stock_2_close, stock_2_volume, stock_2_trimmed, item)
+	signal = signals.SignalsRSISystem(stock_2_close, stock_2_volume, stock_2_trimmed, item)
 
 	for x in xrange(200, end_data):
 		# If we've been told we're still in a trade then we simply skip this day
