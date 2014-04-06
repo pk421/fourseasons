@@ -108,7 +108,7 @@ def simple_moving_average(price_data, s1):
     m = 0.0 # Mean
     for x in xrange(s1):
         m += price_data[x]
-    m = m / s1    
+    m = m / s1
     sma[s1 - 1] = m
 
     for x in xrange(s1, len_data):
@@ -289,3 +289,40 @@ def sigma_prices(price_data, v1):
     """
 
     return sigma
+
+def sigma_span(price_data, days, sigma_input=None, sigma_average_range=0, tr=None):
+
+    if sigma_input is not None:
+        historical_sigma = sigma_input
+
+    else:
+        # simply extract the most recent value
+        historical_sigma = sigma_prices(price_data, sigma_average_range)
+
+    len_data = len(price_data)
+    disp = np.empty(len_data)
+    # disp becomes the percentage change in price, something like a momentum indicator
+    for z in xrange(days + 1, len_data):
+        disp[z] = (price_data[z] - price_data[z-days]) / price_data[z-days]
+    disp[0:days+1] = 0
+
+    # this is the historical std dev of the change in price over the past days
+    historical_sigma = sigma_prices(disp, 100)
+
+    warmup_factor = days + 1
+
+    len_data = len(price_data)
+    sigma_span = np.empty(len_data)
+
+    for x in xrange(days + 1, len_data):
+        if historical_sigma[x] == 0:
+            sigma_span[x] = 0
+            continue
+        displacement = (price_data[x] - price_data[x-days]) / price_data[x-days]
+        sigma_span[x] = displacement / historical_sigma[x]
+
+#		print x, tr[x]['Date'], price_data[x], price_data[x-days], displacement, historical_sigma[x], sigma_span[x]
+
+    sigma_span[0:warmup_factor] = 0
+
+    return sigma_span
