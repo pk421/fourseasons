@@ -83,7 +83,7 @@ def do_web_query(symbol_string, retry=5):
 
 
 
-def search_for_trades(in_trade=[]):
+def search_for_trades(in_trade=['XBI']):
 
 	"""Algo: Try to do a batch request to get the latest quotes for all symbols from yahoo. Do a GET from redis for each
 	stock, append the latest price to the end of the list, then run thru MACD / RSI. See if stock meets criteria,
@@ -327,6 +327,9 @@ def write_current_results(key='current_results', body='not set'):
 
 def run_live_monitor():
 
+#	import src.live_monitor.live_monitor_2 as live_monitor_2
+#	live_monitor_2.run_live_monitor()
+
 	reset_symbol_list_key()
 
 	###
@@ -363,10 +366,6 @@ def run_live_monitor():
 		elif (current_hour == 15 and current_minute > 45):
 			search_for_trades()
 			time.sleep(40)
-
-		# elif (current_hour == 19 and current_minute > 45):
-		# 	search_for_trades()
-		# 	time.sleep(50)
 
 
 		time.sleep(10)

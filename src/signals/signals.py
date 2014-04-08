@@ -196,18 +196,18 @@ class SignalsSigmaSpanTest(SignalsSigmaSpan):
 
 		super(SignalsSigmaSpan, self).__init__(closes, volume, stock_2_trimmed, item)
 
-		self.k = {'sma_length': 200,
+		self.k = {'sma_length': 175,
 				  'sigma_closes_length': 100,
 				  'avg_volume_length': 30,
 				  'sigma_span_length': 5,
 
 				  'entry_sigma_span': 1.6,
 				  'stop_loss_sigma_loss': 0.3,
-				  'stop_loss_abs_pct_loss': 0.20,
+				  'stop_loss_abs_pct_loss': 0.06,
 				  'target_sigma_span': 0.8,
 
 				  'liquidity_min_avg_volume': 100000,
-				  'liquidity_min_avg_cap': -1000000,
+				  'liquidity_min_avg_cap': 2500000,
 				  'volatility_min_required': 0.060,
 				  'volatility_max_allowed': 100
 				 }
@@ -231,7 +231,6 @@ class SignalsRSISystem(SignalsBase):
 				  'stop_loss_abs_pct_loss': 0.06,
 				  'target_rsi_long': 55,
 				  'target_rsi_short': 45,
-#				  'target_sigma_span': 0.8,
 
 				  'liquidity_min_avg_volume': 0,
 				  'liquidity_min_avg_cap': -1000000,
@@ -372,6 +371,32 @@ class SignalsRSISystem(SignalsBase):
 					result.trade_result = "Loss"
 
 				return result, result.end_index
+
+class SignalsRSISystemTest(SignalsRSISystem):
+
+	def __init__(self, closes, volume, stock_2_trimmed, item):
+
+		super(SignalsRSISystem, self).__init__(closes, volume, stock_2_trimmed, item)
+
+		self.k = {'sma_length': 200,
+				  'sigma_closes_length': 100,
+				  'avg_volume_length': 30,
+				  'rsi_length': 4,
+
+				  'entry_rsi_lower_bound': 25,
+				  'entry_rsi_upper_bound': 75,
+				  'stop_loss_sigma_loss': 1.4,
+				  'stop_loss_abs_pct_loss': 0.06,
+				  'target_rsi_long': 55,
+				  'target_rsi_short': 45,
+
+				  'liquidity_min_avg_volume': 0,
+				  'liquidity_min_avg_cap': -1000000,
+				  'volatility_min_required': 0.105,
+				  'volatility_max_allowed': 100
+				 }
+
+		self.initialize_indicators()
 
 
 class trade_result():

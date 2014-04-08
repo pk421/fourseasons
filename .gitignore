@@ -36,7 +36,11 @@ include
 data/*.csv
 data/daily_price_data
 data/from_redis
+data/live_system
 data/test
+projectFilesBackup
+results
+*.rar
 *.so
 *.c
 *.png
