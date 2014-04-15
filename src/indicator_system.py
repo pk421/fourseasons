@@ -45,9 +45,11 @@ def run_indicator_system():
 	out_file = open(out_file_name, 'w')
 
 	days_analyzed = 0
+	base_stock = paired_list[0]['stock_1']
+	stock_1_data = manage_redis.parse_fast_data(base_stock, db_to_use=0)
 	for k, item in enumerate(paired_list):
 		print k, len_stocks, item['stock_1'], item['stock_2']
-		output, trades, x = do_indicator_test(item, k, len(paired_list))
+		output, trades, x = do_indicator_test(item, k, len(paired_list), stock_1_data)
 		if x:
 			days_analyzed += x
 		if trades is not None and len(trades) > 0:
@@ -99,8 +101,8 @@ def run_indicator_system():
 	print "\nFinished: ", len_stocks
 	print "File Written: ", in_file_name + out_file_name.split(in_file_name)[-1]
 
-def do_indicator_test(item, k, len_stocks):
-	stock_1_data = manage_redis.parse_fast_data(item['stock_1'], db_to_use=0)
+def do_indicator_test(item, k, len_stocks, stock_1_data):
+#	stock_1_data = manage_redis.parse_fast_data(item['stock_1'], db_to_use=0)
 	stock_2_data = manage_redis.parse_fast_data(item['stock_2'], db_to_use=0)
 	
 	try:
@@ -125,7 +127,7 @@ def do_indicator_test(item, k, len_stocks):
 	output = None
 	next_index = 0
 
-	signal = signals.SignalsSigmaSpanTest(stock_2_close, stock_2_volume, stock_2_trimmed, item)
+	signal = signals.SignalsSigmaSpanVolatilityTestNew(stock_2_close, stock_2_volume, stock_2_trimmed, item)
 
 	for x in xrange(200, end_data):
 		# If we've been told we're still in a trade then we simply skip this day
@@ -197,6 +199,8 @@ def backtest_trade_log(trade_log):
 		# Choose the most volatile stock at a given day
 		target = 999
 		start_today.sort(key=lambda z: abs((z.entry_sigma_over_p - target)), reverse=False)
+
+#		start_today.sort(key=lambda z: abs((z.sigma_span - z.sigma_span_long)), reverse=True)
 
 		# start_today.sort(key=lambda z: z.entry_sigma_over_p, reverse=True)
 
