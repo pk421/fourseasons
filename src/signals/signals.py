@@ -3,6 +3,8 @@ import src.toolsx as tools
 import math
 import numpy as np
 
+from scipy import stats
+
 class SignalsBase(object):
 
     def __init__(self, closes, volume, stock_2_trimmed, item):
@@ -29,6 +31,15 @@ class SignalsBase(object):
         if (sigma / self.closes[x]) < self.k['volatility_min_required'] or (sigma / self.closes[x]) > self.k['volatility_max_allowed']:
             return False
         return True
+
+#        sigma = self.volatility[x-1]
+#        if (sigma) < self.k['volatility_min_required'] or (sigma) > self.k['volatility_max_allowed']:
+#            return False
+#        return True
+
+    def ret_fields(self):
+        ## ret_fields = ('symbol', 'latest_name', 'latest_date', 'latest_time', 'latest_price', 'volume', 'sigma_over_p_0', 'rsi_0', 'sma_0', 'sigma_0', 'stop_loss_offset', 'volatility_percentile')
+        ret_fields = ('sigma_over_p_0', 'rsi_0', 'sma_0', 'sigma_0', 'stop_loss_offset', 'volatility_percentile')
 
 
 class SignalsSigmaSpan(SignalsBase):
@@ -265,7 +276,7 @@ class SignalsSigmaSpanTest(SignalsSigmaSpan):
 
         return False
 
-class SignalsSigmaSpanVolatilityTestNew(SignalsSigmaSpan):
+class SignalsSigmaSpanVolatilityTest(SignalsSigmaSpan):
 
     def __init__(self, closes, volume, stock_2_trimmed, item):
 
@@ -275,6 +286,7 @@ class SignalsSigmaSpanVolatilityTestNew(SignalsSigmaSpan):
                   'sigma_closes_length': 100,
                   'avg_volume_length': 30,
                   'sigma_span_length': 5,
+                  'sigma_span_historical_lookback': 100,
 
                   'entry_sigma_span': 1.6,
                   'stop_loss_sigma_loss': 0.3,
@@ -283,6 +295,7 @@ class SignalsSigmaSpanVolatilityTestNew(SignalsSigmaSpan):
 
                   'liquidity_min_avg_volume': 100000,
                   'liquidity_min_avg_cap': 2500000,
+                  # 'volatility_min_required': 0.25,
                   'volatility_min_required': 0.060,
                   'volatility_max_allowed': 100
                  }
@@ -293,12 +306,12 @@ class SignalsSigmaSpanVolatilityTestNew(SignalsSigmaSpan):
         self.sma = tools.simple_moving_average(self.closes, self.k['sma_length'])
 
         self.volatility = tools.volatility_bs_annualized(self.closes, 30, returns_period_length=5)
-        self.mean_vol = np.median(self.volatility)
+        self.mean_vol = stats.scoreatpercentile(self.volatility[-1008:], 80)
 
         self.sigma_closes = tools.sigma_prices(self.closes, self.k['sigma_closes_length'])
         self.avg_volume = tools.simple_moving_average(self.volume, self.k['avg_volume_length'])
 
-        self.sigma_span = tools.sigma_span(self.closes, self.k['sigma_span_length'], sigma_input = self.sigma_closes, tr = None)
+        self.sigma_span, self.historical_sigma = tools.sigma_span(self.closes, self.k['sigma_span_length'], self.k['sigma_span_historical_lookback'], sigma_input = self.sigma_closes)
 
     def get_entry_signal(self, x):
 
@@ -320,154 +333,113 @@ class SignalsSigmaSpanVolatilityTestNew(SignalsSigmaSpan):
         if self.volatility[x] < ref_vol:
             return False
 
-
         if p_0 > sma_0:
             if (self.sigma_span[x-1] > -self.k['entry_sigma_span'] and self.sigma_span[x] < -self.k['entry_sigma_span']):
                 trade_result = self.get_entry_trade_result(x)
                 trade_result.long_short = 'long'
+                trade_result.target = 1.2 * (1 + self.historical_sigma[x]) * trade_result.entry_price
                 return trade_result
 
         elif p_0 < sma_0:
             if (self.sigma_span[x-1] < self.k['entry_sigma_span'] and self.sigma_span[x] > self.k['entry_sigma_span']):
                 trade_result = self.get_entry_trade_result(x)
                 trade_result.long_short = 'short'
+                trade_result.target = 1.2 * (1 - self.historical_sigma[x]) * trade_result.entry_price
                 return trade_result
 
         return False
 
+    def get_exit(self, x, result):
+        start_index = x+1
+        len_data = len(self.closes)
 
-class SignalsSigmaSpanMACDTest(SignalsSigmaSpan):
+        trading_up = True if result.long_short == 'long' else False
+        trading_down = True if result.long_short == 'short' else False
 
-    def __init__(self, closes, volume, stock_2_trimmed, item):
+        entry_sigma_over_p = result.entry_sigma_over_p
+        entry_sigma = entry_sigma_over_p * result.entry_price
 
-        super(SignalsSigmaSpan, self).__init__(closes, volume, stock_2_trimmed, item)
+        # this stop loss is in terms of the # of sigma
+        stop_loss = self.k['stop_loss_sigma_loss']
+        pc_stop_loss = -self.k['stop_loss_abs_pct_loss']
 
-        self.k = {'sma_length': 175,
-                  'sigma_closes_length': 100,
-                  'avg_volume_length': 30,
-                  'sigma_span_length': 5,
+        price_log = [self.closes[x]]
 
-                  'sigma_span_long_length': 15,
+        for x in xrange(start_index, 9999999):
+            if x == len_data:
+                return None, None
 
-                  'entry_sigma_span': 1.3,
-                  'stop_loss_sigma_loss': 0.2,
-                  'stop_loss_abs_pct_loss': 0.06,
-                  'target_sigma_span': 1.0,
+            date_today = self.stock_2_trimmed[x]['Date']
+            current_price = self.closes[x]
+            price_log.append(current_price)
+            price_change_pc = (current_price - result.entry_price) / result.entry_price
 
-                  'liquidity_min_avg_volume': 100000,
-                  'liquidity_min_avg_cap': 2500000,
-                  'volatility_min_required': 0.040,
-                  'volatility_max_allowed': 100
-                 }
+            if trading_up:
+                ret = price_change_pc
+            else:
+                ret = -price_change_pc
 
-        self.initialize_indicators()
+            time_in = x - (start_index - 1)
+            exit_time = 4
+            exit_after_loss = 999
 
-    def initialize_indicators(self):
-        self.sigma_closes = tools.sigma_prices(self.closes, self.k['sigma_closes_length'])
-        self.avg_volume = tools.simple_moving_average(self.volume, self.k['avg_volume_length'])
+            ### print x, result.stock_2, sigma_span[x], result.entry_price, current_price
+            sigma_span_diff = self.sigma_span[x] - self.sigma_span[x-1]
 
-#		self.rsi = tools.rsi(self.closes, 4)
-        self.macd_line, self.macd_signal_line  = tools.macd(self.closes, 12, 26, 9)
-        self.sma = tools.simple_moving_average(self.closes, self.k['sma_length'])
-        self.sigma_span = tools.sigma_span(self.closes, self.k['sigma_span_length'], sigma_input = self.sigma_closes, tr = None)
+#            if trading_up and (self.sigma_span[x] > self.k['target_sigma_span'] or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
+#                ret <= pc_stop_loss):
 
+            if trading_up and (time_in == exit_time or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
+                ret <= pc_stop_loss or (ret < 0 and time_in > exit_after_loss)):
 
+#            if trading_up and (self.closes[x] > result.target or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
+#                ret <= pc_stop_loss):
 
-    def get_entry_signal(self, x):
+                result.time_in_trade = x - (start_index - 1)
+                result.exit_price = current_price
+                result.ret = ret
+                result.chained_ret = 1 + ret
+                result.exit_date = date_today
+                result.exit_rsi = None
+                result.end_index = x
+                result.price_log = price_log
 
-        ### Order really matters here!! In order for this to behave like the existing system we want to skip over all
-        # the effort if the most obvious things prevent an entry. So we try to put the most common, simplest items
-        # first, so we don't waste effort calculating the others unless we need to
+                if ret > 0:
+                    # print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+                    result.trade_result = "Profit"
+                else:
+                    # print "Loss: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+                    result.trade_result = "Loss"
 
-        if not self.check_liquidity(x):
-            return False
+                return result, result.end_index
 
-        if not self.check_volatility(x):
-            return False
+#            elif trading_down and (self.sigma_span[x] < -self.k['target_sigma_span'] or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
+#                ret <= pc_stop_loss):
 
-        sma_0 = self.sma[x]
-        p_0 = self.closes[x]
+            elif trading_down and (time_in == exit_time or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
+                ret <= pc_stop_loss or (ret < 0 and time_in > exit_after_loss)):
 
-        if p_0 > sma_0:
-            if (self.sigma_span[x-1] > -self.k['entry_sigma_span'] and self.sigma_span[x] < -self.k['entry_sigma_span']):
-                trade_result = self.get_entry_trade_result(x)
-                trade_result.long_short = 'long'
-                return trade_result
+#            elif trading_down and (self.closes[x] < result.target or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
+#                ret <= pc_stop_loss):
 
-#		elif p_0 < sma_0:
-#			if (self.sigma_span[x-1] < self.k['entry_sigma_span'] and self.sigma_span[x] > self.k['entry_sigma_span']):
-#				trade_result = self.get_entry_trade_result(x)
-#				trade_result.long_short = 'short'
-#				return trade_result
+                result.time_in_trade = x - (start_index - 1)
+                result.exit_price = current_price
+                result.ret = ret
+                result.chained_ret = 1 + ret
+                result.exit_date = date_today
+                result.exit_rsi = None
+                result.end_index = x
+                result.price_log = price_log
 
-        return False
+                if ret > 0:
+                    # print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+                    result.trade_result = "Profit"
 
+                else:
+                    #print "Loss: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+                    result.trade_result = "Loss"
 
-class SignalsSigmaSpanTest_2(SignalsSigmaSpan):
-
-    def __init__(self, closes, volume, stock_2_trimmed, item):
-
-        super(SignalsSigmaSpan, self).__init__(closes, volume, stock_2_trimmed, item)
-
-        self.k = {'sma_length': 175,
-                  'sigma_closes_length': 100,
-                  'avg_volume_length': 30,
-                  'sigma_span_length': 5,
-
-                  'sigma_span_long_length': 15,
-
-                  'entry_sigma_span': 1.6,
-                  'stop_loss_sigma_loss': 0.3,
-                  'stop_loss_abs_pct_loss': 0.06,
-                  'target_sigma_span': 0.8,
-
-                  'liquidity_min_avg_volume': 100000,
-                  'liquidity_min_avg_cap': 2500000,
-                  'volatility_min_required': 0.060,
-                  'volatility_max_allowed': 100
-                 }
-
-        self.initialize_indicators()
-
-    def initialize_indicators(self):
-        self.sma = tools.simple_moving_average(self.closes, self.k['sma_length'])
-
-        self.sigma_closes = tools.sigma_prices(self.closes, self.k['sigma_closes_length'])
-        self.avg_volume = tools.simple_moving_average(self.volume, self.k['avg_volume_length'])
-
-        self.sigma_span = tools.sigma_span(self.closes, self.k['sigma_span_length'], sigma_input = self.sigma_closes, tr = None)
-        self.sigma_span_long = tools.sigma_span(self.closes, self.k['sigma_span_long_length'], sigma_input = self.sigma_closes, tr = None)
-
-    def get_entry_signal(self, x):
-
-        ### Order really matters here!! In order for this to behave like the existing system we want to skip over all
-        # the effort if the most obvious things prevent an entry. So we try to put the most common, simplest items
-        # first, so we don't waste effort calculating the others unless we need to
-
-        if not self.check_liquidity(x):
-            return False
-
-        if not self.check_volatility(x):
-            return False
-
-        sma_0 = self.sma[x]
-        p_0 = self.closes[x]
-
-        sigma_diff = self.sigma_span[x] - self.sigma_span_long[x]
-
-        if p_0 > sma_0:
-            if (self.sigma_span[x-1] > -self.k['entry_sigma_span'] and self.sigma_span[x] < -self.k['entry_sigma_span']) and abs(sigma_diff) < 2.5:
-                trade_result = self.get_entry_trade_result(x)
-                trade_result.long_short = 'long'
-                return trade_result
-
-        elif p_0 < sma_0:
-            if (self.sigma_span[x-1] < self.k['entry_sigma_span'] and self.sigma_span[x] > self.k['entry_sigma_span']) and abs(sigma_diff) < 2.5:
-                trade_result = self.get_entry_trade_result(x)
-                trade_result.long_short = 'short'
-                return trade_result
-
-        return False
+                return result, result.end_index
 
     def get_entry_trade_result(self, x):
         result = trade_result()
@@ -484,9 +456,202 @@ class SignalsSigmaSpanTest_2(SignalsSigmaSpan):
         result.entry_sigma = self.sigma_closes[x-1]
         result.entry_sigma_over_p = result.entry_sigma / result.entry_price
 
-        ### EXTRA
-        result.sigma_span = self.sigma_span[x]
-        result.sigma_span_long = self.sigma_span_long[x]
+        result.entry_sigma_percentile = stats.percentileofscore(self.volatility, self.volatility[x])
+        result.entry_volatility = self.volatility[x]
+
+        return result
+
+class MomentumVolatilityTest(SignalsBase):
+
+    def __init__(self, closes, volume, stock_2_trimmed, item):
+
+        super(MomentumVolatilityTest, self).__init__(closes, volume, stock_2_trimmed, item)
+
+        self.k = {'sma_length': 200,
+                  'sigma_closes_length': 100,
+                  'avg_volume_length': 30,
+                  # 'sigma_span_length': 5,
+                  # 'sigma_span_historical_lookback': 100,
+
+                  # 'entry_sigma_span': 1.6,
+                  'stop_loss_sigma_loss': 1.0,
+                  'stop_loss_abs_pct_loss': 0.05,
+                  # 'target_sigma_span': 0.8,
+
+                  'liquidity_min_avg_volume': 100000,
+                  'liquidity_min_avg_cap': 2500000,
+                  'volatility_min_required': 0.060,
+                  'volatility_max_allowed': 100
+                 }
+
+        self.initialize_indicators()
+
+    def initialize_indicators(self):
+        self.sma = tools.simple_moving_average(self.closes, self.k['sma_length'])
+
+        self.sma_2 = tools.simple_moving_average(self.closes, 2)
+        s3 = tools.simple_moving_average(self.closes, 3)
+        s3_shifted = np.empty(len(s3))
+        for x in range(3, len(s3)):
+            s3_shifted[x] = s3[x-3]
+        self.sma_3 = s3_shifted
+
+        self.volatility = tools.volatility_bs_annualized(self.closes, 30, returns_period_length=5)
+        self.mean_vol = stats.scoreatpercentile(self.volatility[-1008:], 40)
+
+        self.sigma_closes = tools.sigma_prices(self.closes, self.k['sigma_closes_length'])
+        self.avg_volume = tools.simple_moving_average(self.volume, self.k['avg_volume_length'])
+
+        self.macd_line, self.macd_signal_line  = tools.macd(self.closes, 12, 26, 9)
+        # self.sigma_span = tools.sigma_span(self.closes, self.k['sigma_span_length'], self.k['sigma_span_historical_lookback'], sigma_input = self.sigma_closes)
+
+    def get_entry_signal(self, x):
+
+        ### Order really matters here!! In order for this to behave like the existing system we want to skip over all
+        # the effort if the most obvious things prevent an entry. So we try to put the most common, simplest items
+        # first, so we don't waste effort calculating the others unless we need to
+
+        if not self.check_liquidity(x):
+            return False
+
+        if not self.check_volatility(x):
+            return False
+
+        sma_0 = self.sma[x]
+        p_0 = self.closes[x]
+
+        ref_vol = 1.0 * self.mean_vol
+
+        if self.volatility[x] > ref_vol:
+            return False
+
+        p0_macd_histogram = self.macd_line[x] - self.macd_signal_line[x]
+        p1_macd_histogram = self.macd_line[x-1] - self.macd_signal_line[x-1]
+
+        crossing_up = p0_macd_histogram > 0 and p1_macd_histogram < 0
+        crossing_down = p0_macd_histogram < 0 and p1_macd_histogram > 0
+
+        xmas_up = self.sma_2[x] > self.sma_3[x] and self.sma_2[x-1] < self.sma_3[x-1]
+        xmas_down = self.sma_2[x] > self.sma_3[x] and self.sma_2[x-1] < self.sma_3[x-1]
+        
+
+        if p_0 > sma_0:
+#            if (self.sigma_span[x-1] > -self.k['entry_sigma_span'] and self.sigma_span[x] < -self.k['entry_sigma_span']):
+            if crossing_up:
+                trade_result = self.get_entry_trade_result(x)
+                trade_result.long_short = 'long'
+                return trade_result
+
+        elif p_0 < sma_0:
+#            if (self.sigma_span[x-1] < self.k['entry_sigma_span'] and self.sigma_span[x] > self.k['entry_sigma_span']):
+            if crossing_down:
+                trade_result = self.get_entry_trade_result(x)
+                trade_result.long_short = 'short'
+                return trade_result
+
+        return False
+
+    def get_exit(self, x, result):
+        start_index = x+1
+        len_data = len(self.closes)
+
+        trading_up = True if result.long_short == 'long' else False
+        trading_down = True if result.long_short == 'short' else False
+
+        entry_sigma_over_p = result.entry_sigma_over_p
+        entry_sigma = entry_sigma_over_p * result.entry_price
+
+        # this stop loss is in terms of the # of sigma
+        stop_loss = self.k['stop_loss_sigma_loss']
+        pc_stop_loss = -self.k['stop_loss_abs_pct_loss']
+
+        price_log = [self.closes[x]]
+
+        for x in xrange(start_index, 9999999):
+            if x == len_data:
+                return None, None
+
+            date_today = self.stock_2_trimmed[x]['Date']
+            current_price = self.closes[x]
+            price_log.append(current_price)
+            price_change_pc = (current_price - result.entry_price) / result.entry_price
+
+            if trading_up:
+                ret = price_change_pc
+            else:
+                ret = -price_change_pc
+
+            ### print x, result.stock_2, sigma_span[x], result.entry_price, current_price
+            # sigma_span_diff = self.sigma_span[x] - self.sigma_span[x-1]
+
+            p0_macd_histogram = self.macd_line[x] - self.macd_signal_line[x]
+            p1_macd_histogram = self.macd_line[x-1] - self.macd_signal_line[x-1]
+
+            crossing_up = p0_macd_histogram > 0 and p1_macd_histogram < 0
+            crossing_down = p0_macd_histogram < 0 and p1_macd_histogram > 0
+
+            xmas_up = self.sma_2[x] > self.sma_3[x] and self.sma_2[x-1] < self.sma_3[x-1]
+            xmas_down = self.sma_2[x] > self.sma_3[x] and self.sma_2[x-1] < self.sma_3[x-1]
+
+            if trading_up and (xmas_down or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
+                ret <= pc_stop_loss):
+
+                result.time_in_trade = x - (start_index - 1)
+                result.exit_price = current_price
+                result.ret = ret
+                result.chained_ret = 1 + ret
+                result.exit_date = date_today
+                result.exit_rsi = None
+                result.end_index = x
+                result.price_log = price_log
+
+                if ret > 0:
+                    # print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+                    result.trade_result = "Profit"
+                else:
+                    # print "Loss: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+                    result.trade_result = "Loss"
+
+                return result, result.end_index
+
+            elif trading_down and (xmas_up or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
+                ret <= pc_stop_loss):
+
+                result.time_in_trade = x - (start_index - 1)
+                result.exit_price = current_price
+                result.ret = ret
+                result.chained_ret = 1 + ret
+                result.exit_date = date_today
+                result.exit_rsi = None
+                result.end_index = x
+                result.price_log = price_log
+
+                if ret > 0:
+                    # print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+                    result.trade_result = "Profit"
+
+                else:
+                    #print "Loss: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+                    result.trade_result = "Loss"
+
+                return result, result.end_index
+
+    def get_entry_trade_result(self, x):
+        result = trade_result()
+
+        result.stock_2 = self.item['stock_2']
+        result.start_index = x
+        result.entry_date = self.stock_2_trimmed[x]['Date']
+        result.entry_price = self.closes[x]
+        result.entry_vol = self.volume[x]
+        result.entry_rsi = None
+        result.entry_sma = self.sma[x]
+
+        #Must use x-1 as the index here b/c this is the sigma that would have been available at entry time
+        result.entry_sigma = self.sigma_closes[x-1]
+        result.entry_sigma_over_p = result.entry_sigma / result.entry_price
+
+        result.entry_sigma_percentile = stats.percentileofscore(self.volatility, self.volatility[x])
 
         return result
 
@@ -681,7 +846,7 @@ class SignalsRSISystemVolatilityTest(SignalsRSISystem):
 
         super(SignalsRSISystem, self).__init__(closes, volume, stock_2_trimmed, item)
 
-        self.k = {'sma_length': 200,
+        self.k = {'sma_length': 175,
                   'sigma_closes_length': 100,
                   'avg_volume_length': 30,
                   'rsi_length': 4,
@@ -694,23 +859,25 @@ class SignalsRSISystemVolatilityTest(SignalsRSISystem):
                   'target_rsi_short': 45,
 
                   'liquidity_min_avg_volume': 0,
-                  'liquidity_min_avg_cap': -1000000,
-                  'volatility_min_required': 0.105,
+                  'liquidity_min_avg_cap': -1,
+                  'volatility_min_required': 0.08,
                   'volatility_max_allowed': 100
                  }
 
         self.initialize_indicators()
 
+
     def initialize_indicators(self):
-        self.rsi = tools.rsi(self.closes, 4)
+        self.rsi = tools.rsi(self.closes, self.k['rsi_length'])
 #		self.macd_line, self.macd_signal_line  = tools.macd(self.closes, 12, 26, 9)
         self.sma = tools.simple_moving_average(self.closes, self.k['sma_length'])
-        self.volatility = tools.volatility_bs_annualized(self.closes, 30, returns_period_length=5)
+
+        self.volatility = tools.volatility_bs_annualized(self.closes, 30, returns_period_length=4)
+        ### self.mean_vol = np.median(self.volatility)
+        self.mean_vol = stats.scoreatpercentile(self.volatility, 50)
 
         self.sigma_closes = tools.sigma_prices(self.closes, self.k['sigma_closes_length'])
         self.avg_volume = tools.simple_moving_average(self.volume, self.k['avg_volume_length'])
-
-#		self.sigma_span = tools.sigma_span(self.closes, self.k['sigma_span_length'], sigma_input = self.sigma_closes, tr = None)
 
     def get_entry_signal(self, x):
 
@@ -727,7 +894,9 @@ class SignalsRSISystemVolatilityTest(SignalsRSISystem):
         sma_0 = self.sma[x]
         p_0 = self.closes[x]
 
-        if self.volatility[x] > 1.0 or self.volatility[x] < 0.50:
+        ref_vol = 1.0 * self.mean_vol
+
+        if self.volatility[x] < ref_vol:
             return False
 
         if p_0 > sma_0:
@@ -744,76 +913,25 @@ class SignalsRSISystemVolatilityTest(SignalsRSISystem):
 
         return False
 
+    
+    def get_entry_trade_result(self, x):
+        result = trade_result()
 
-class SignalsRSISystemTest_2(SignalsRSISystem):
+        result.stock_2 = self.item['stock_2']
+        result.start_index = x
+        result.entry_date = self.stock_2_trimmed[x]['Date']
+        result.entry_price = self.closes[x]
+        result.entry_vol = self.volume[x]
+        result.entry_rsi = None
+        result.entry_sma = self.sma[x]
 
-    def __init__(self, closes, volume, stock_2_trimmed, item):
+        #Must use x-1 as the index here b/c this is the sigma that would have been available at entry time
+        result.entry_sigma = self.sigma_closes[x-1]
+        result.entry_sigma_over_p = result.entry_sigma / result.entry_price
 
-        super(SignalsRSISystem, self).__init__(closes, volume, stock_2_trimmed, item)
+        result.entry_sigma_percentile = stats.percentileofscore(self.volatility, self.volatility[x])
 
-        self.k = {'sma_length': 200,
-                  'sigma_closes_length': 100,
-                  'avg_volume_length': 30,
-                  'rsi_length': 4,
-
-                  'entry_rsi_lower_bound': 25,
-                  'entry_rsi_upper_bound': 75,
-                  'stop_loss_sigma_loss': 1.4,
-                  'stop_loss_abs_pct_loss': 0.06,
-                  'target_rsi_long': 55,
-                  'target_rsi_short': 45,
-
-                  'liquidity_min_avg_volume': 100000,
-                  'liquidity_min_avg_cap': 1000000,
-                  'volatility_min_required': 0.105,
-                  'volatility_max_allowed': 100
-                 }
-
-        self.initialize_indicators()
-
-    def initialize_indicators(self):
-        self.rsi = tools.rsi(self.closes, 4)
-        self.macd_line, self.macd_signal_line  = tools.macd(self.closes, 12, 26, 9)
-        self.sma = tools.simple_moving_average(self.closes, self.k['sma_length'])
-
-        self.sigma_closes = tools.sigma_prices(self.closes, self.k['sigma_closes_length'])
-        self.avg_volume = tools.simple_moving_average(self.volume, self.k['avg_volume_length'])
-
-#		self.sigma_span = tools.sigma_span(self.closes, self.k['sigma_span_length'], sigma_input = self.sigma_closes, tr = None)
-
-    def get_entry_signal(self, x):
-
-        ### Order really matters here!! In order for this to behave like the existing system we want to skip over all
-        # the effort if the most obvious things prevent an entry. So we try to put the most common, simplest items
-        # first, so we don't waste effort calculating the others unless we need to
-
-        if not self.check_liquidity(x):
-            return False
-
-        if not self.check_volatility(x):
-            return False
-
-        sma_0 = self.sma[x]
-        p_0 = self.closes[x]
-
-        recently_low = [l for l in self.rsi[x-4:x] if l < self.k['entry_rsi_lower_bound']]
-        recently_high = [l for l in self.rsi[x-4:x] if l > self.k['entry_rsi_upper_bound']]
-
-        if p_0 > sma_0: # and self.macd_line[x] > 0 and self.macd_signal_line[x] > 0:
-            if (self.rsi[x-1] > self.k['entry_rsi_lower_bound'] and self.rsi[x] < self.k['entry_rsi_lower_bound']) and not recently_low:
-                trade_result = self.get_entry_trade_result(x)
-                trade_result.long_short = 'long'
-                return trade_result
-
-        elif p_0 < sma_0: # and self.macd_line[x] < 0 and self.macd_signal_line[x] < 0:
-            if (self.rsi[x-1] < self.k['entry_rsi_upper_bound'] and self.rsi[x] > self.k['entry_rsi_upper_bound']) and not recently_high:
-                trade_result = self.get_entry_trade_result(x)
-                trade_result.long_short = 'short'
-                return trade_result
-
-
-
-
+        return result
 
 
 
@@ -848,6 +966,8 @@ class trade_result():
         self.entry_sma = 0
         self.entry_sigma = 0
         self.entry_sigma_over_p = 0
+
+        self.entry_sigma_percentile = 0
 
         self.price_log = []
 

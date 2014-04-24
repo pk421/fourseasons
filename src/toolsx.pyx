@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import stats
 
 def volatility_bs_annualized(price_data, v1, returns_period_length=1):
 
@@ -20,6 +21,7 @@ def volatility_bs_annualized(price_data, v1, returns_period_length=1):
      v_sum = v1 + returns_period_length - 1
 
      root_252 = np.sqrt(252)
+     annualization_factor = root_252 / np.sqrt(returns_period_length)
 
      ln_daily_returns = np.empty(len_data)
      ma_returns = np.empty(len_data)
@@ -80,7 +82,7 @@ def volatility_bs_annualized(price_data, v1, returns_period_length=1):
 
          sigma[x] = np.sqrt(variance[x] / v1)
 
-         volatility[x] = sigma[x] * root_252
+         volatility[x] = sigma[x] * annualization_factor
 
 
 
@@ -296,14 +298,14 @@ def sigma_prices(price_data, v1):
 
     return sigma
 
-def sigma_span(price_data, days, sigma_input=None, sigma_average_range=0, tr=None):
+def sigma_span(price_data, days, historical_sigma_lookback, sigma_input=None, sigma_average_range=0):
 
-    if sigma_input is not None:
-        historical_sigma = sigma_input
+#    if sigma_input is not None:
+#        historical_sigma = sigma_input
 
-    else:
-        # simply extract the most recent value
-        historical_sigma = sigma_prices(price_data, sigma_average_range)
+#    else:
+#        # simply extract the most recent value
+#        historical_sigma = sigma_prices(price_data, sigma_average_range)
 
     len_data = len(price_data)
     disp = np.empty(len_data)
@@ -313,7 +315,7 @@ def sigma_span(price_data, days, sigma_input=None, sigma_average_range=0, tr=Non
     disp[0:days+1] = 0
 
     # this is the historical std dev of the change in price over the past days
-    historical_sigma = sigma_prices(disp, 100)
+    historical_sigma = sigma_prices(disp, historical_sigma_lookback)
 
     warmup_factor = days + 1
 
@@ -326,9 +328,10 @@ def sigma_span(price_data, days, sigma_input=None, sigma_average_range=0, tr=Non
             continue
         displacement = (price_data[x] - price_data[x-days]) / price_data[x-days]
         sigma_span[x] = displacement / historical_sigma[x]
+        # sigma_span[x] = stats.percentileofscore(historical_sigma, displacement) - 50
 
 #		print x, tr[x]['Date'], price_data[x], price_data[x-days], displacement, historical_sigma[x], sigma_span[x]
 
     sigma_span[0:warmup_factor] = 0
 
-    return sigma_span
+    return sigma_span, historical_sigma

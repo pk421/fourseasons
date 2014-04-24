@@ -13,292 +13,302 @@ from util.memoize import memoize, MemoizeMutable
 from data.redis import manage_redis
 # from src import math_tools
 from src.cointegrations_data import get_paired_stock_list, get_corrected_data, trim_data, propagate_on_fly, \
-									get_bunches_of_pairs
+                                    get_bunches_of_pairs
 
 import src.signals.signals as signals
 
 
 def run_indicator_system():
-	sectors = ('basic_materials', 'conglomerates', 'consumer_goods', 'financial', 'healthcare', 'industrial_services', \
-			   'services', 'technology', 'utilities')
+    sectors = ('basic_materials', 'conglomerates', 'consumer_goods', 'financial', 'healthcare', 'industrial_services', \
+               'services', 'technology', 'utilities')
 
-	in_file_name = 'etfs_etns'
-	location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
+    in_file_name = 'etfs_etns'
+    location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
 
-	in_file = open(location, 'r')
-	stock_list = in_file.read().split('\n')
-	for k, item in enumerate(stock_list):
-		new_val = item.split('\r')[0]
-		stock_list[k] = new_val
-	in_file.close()
+    in_file = open(location, 'r')
+    stock_list = in_file.read().split('\n')
+    for k, item in enumerate(stock_list):
+        new_val = item.split('\r')[0]
+        stock_list[k] = new_val
+    in_file.close()
 
-	# stock_list = ['SPY', 'KRU']
-	paired_list = get_paired_stock_list(sorted(stock_list), fixed_stock='SPY')
+    # stock_list = ['SPY', 'KRU']
+    paired_list = get_paired_stock_list(sorted(stock_list), fixed_stock='SPY')
 
-	len_stocks = len(paired_list)
+    len_stocks = len(paired_list)
 
-	interest_items = []
-	trade_log = []
+    interest_items = []
+    trade_log = []
 
-	current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
-	out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/indicator_results_' + in_file_name + '_' + str(current_time) +'.csv'
-	out_file = open(out_file_name, 'w')
+    # current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
+    current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+    out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/indicator_results_' + in_file_name + '_' + str(current_time) +'.csv'
+    out_file = open(out_file_name, 'w')
 
-	days_analyzed = 0
-	base_stock = paired_list[0]['stock_1']
-	stock_1_data = manage_redis.parse_fast_data(base_stock, db_to_use=0)
-	for k, item in enumerate(paired_list):
-		print k, len_stocks, item['stock_1'], item['stock_2']
-		output, trades, x = do_indicator_test(item, k, len(paired_list), stock_1_data)
-		if x:
-			days_analyzed += x
-		if trades is not None and len(trades) > 0:
-			trade_log.extend(trades)
-	
-	output_fields = ('stock_1', 'stock_2', 'entry_date', 'exit_date', 'entry_price', 'exit_price', 'entry_vol', 'entry_sma', \
-					 'entry_rsi', 'exit_rsi', 'entry_sigma', 'entry_sigma_over_p', 'time_in_trade', \
-					 'trade_result', 'ret', 'chained_ret')
+    days_analyzed = 0
+    base_stock = paired_list[0]['stock_1']
+    stock_1_data = manage_redis.parse_fast_data(base_stock, db_to_use=0)
+    for k, item in enumerate(paired_list):
+        print k, len_stocks, item['stock_1'], item['stock_2']
+        output, trades, x = do_indicator_test(item, k, len(paired_list), stock_1_data)
+        if x:
+            days_analyzed += x
+        if trades is not None and len(trades) > 0:
+            trade_log.extend(trades)
 
-	output_string = ','.join(output_fields)
-	output_string += '\n'
+    output_fields = ('stock_1', 'stock_2', 'entry_date', 'exit_date', 'entry_price', 'exit_price', 'entry_vol', 'entry_sma', \
+                     'entry_rsi', 'exit_rsi', 'entry_sigma', 'entry_sigma_over_p', 'time_in_trade', \
+                     'trade_result', 'ret', 'chained_ret')
 
-	# The backtest_trade_log effectively shrinks the trade log into only those trades that would be 
-	# possible in a chronologically traded system (i.e. one at a time)
-	total_trades_available = len(trade_log)
-	trade_log = backtest_trade_log(trade_log)
+    output_string = ','.join(output_fields)
+    output_string += '\n'
 
-	rets = []
-	for trade_item in trade_log:
-		rets.append(trade_item.chained_ret)
+    # The backtest_trade_log effectively shrinks the trade log into only those trades that would be
+    # possible in a chronologically traded system (i.e. one at a time)
+    total_trades_available = len(trade_log)
+#    trade_log = backtest_trade_log(trade_log)
+
+    rets = []
+    for trade_item in trade_log:
+        rets.append(trade_item.chained_ret)
 
 #		print trade_item.stock_2, trade_item.entry_date, trade_item.exit_date, trade_item.entry_price, trade_item.exit_price, trade_item.ret, trade_item.chained_ret, \
 #				trade_item.entry_sigma, trade_item.entry_sigma_over_p
 #		if trade_item.chained_ret < 0.0:
 #			return
 
-		output_string += ','.join([str(getattr(trade_item, item)) for item in output_fields])
-		output_string += '\n'
+        output_string += ','.join([str(getattr(trade_item, item)) for item in output_fields])
+        output_string += '\n'
 
-	out_file.write(output_string)
-	out_file.close()
+    out_file.write(output_string)
+    out_file.close()
 
-	# Note that if there is a negative total_return, then the pow function will throw a domain error!!!!
-	total_return = np.product(rets)
-	geom_return = math.pow(total_return, (1.0/len(trade_log)))
+    # Note that if there is a negative total_return, then the pow function will throw a domain error!!!!
+    total_return = np.product(rets)
+    geom_return = math.pow(total_return, (1.0/len(trade_log)))
 
-	### The section here can only be run if backtest_trade_log() was called
-	sharpe_ratio, total_days_in = get_sharpe_ratio(trade_log)
-	total_years_in = total_days_in / 252
-	annualized_return = math.pow(total_return, (1.0/total_years_in))
+    ### The section here can only be run if backtest_trade_log() was called
+#    sharpe_ratio, sortino_ratio, total_days_in = get_intra_prices(trade_log)
+#    total_years_in = total_days_in / 252
+#    annualized_return = math.pow(total_return, (1.0/total_years_in))
+#
+#
+#    print "\n\nTrades, Total, geom ret, ann ret", len(trade_log), total_return, geom_return, annualized_return
+    ###
 
+    print '\nStock-Days Analyzed', days_analyzed
+    print '\nTotal Trades Available: ', total_trades_available
 
-	print "\n\nTrades, Total, geom ret, ann ret", len(trade_log), total_return, geom_return, annualized_return
-	###
-
-	print '\nStock-Days Analyzed', days_analyzed
-	print '\nTotal Trades Available: ', total_trades_available
-
-	print "\nFinished: ", len_stocks
-	print "File Written: ", in_file_name + out_file_name.split(in_file_name)[-1]
+    print "\nFinished: ", len_stocks
+    print "File Written: ", in_file_name + out_file_name.split(in_file_name)[-1]
 
 def do_indicator_test(item, k, len_stocks, stock_1_data):
 #	stock_1_data = manage_redis.parse_fast_data(item['stock_1'], db_to_use=0)
-	stock_2_data = manage_redis.parse_fast_data(item['stock_2'], db_to_use=0)
-	
-	try:
-		# print "Getting data for: ", item['stock_1'], item['stock_2']
-		stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
-	except:
-		return None, None, None
+    stock_2_data = manage_redis.parse_fast_data(item['stock_2'], db_to_use=0)
 
-	stock_2_close = [x['AdjClose'] for x in stock_2_trimmed]
-	stock_2_high = [x['AdjHigh'] for x in stock_2_trimmed]
-	stock_2_low = [x['AdjLow'] for x in stock_2_trimmed]
-	stock_2_volume = [x['Volume'] for x in stock_2_trimmed]
+    try:
+        # print "Getting data for: ", item['stock_1'], item['stock_2']
+        stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
+    except:
+        return None, None, None
 
-	if len(stock_2_trimmed) < 201:
-		return None, None, None
+    stock_2_close = [x['AdjClose'] for x in stock_2_trimmed]
+    stock_2_high = [x['AdjHigh'] for x in stock_2_trimmed]
+    stock_2_low = [x['AdjLow'] for x in stock_2_trimmed]
+    stock_2_volume = [x['Volume'] for x in stock_2_trimmed]
 
-	days_analyzed = len(stock_2_trimmed) - 200
-	
-	trade_log = []
+    if len(stock_2_trimmed) < 201:
+        return None, None, None
 
-	end_data = len(stock_2_trimmed)
-	output = None
-	next_index = 0
+    days_analyzed = len(stock_2_trimmed) - 200
 
-	signal = signals.SignalsSigmaSpanVolatilityTestNew(stock_2_close, stock_2_volume, stock_2_trimmed, item)
+    trade_log = []
 
-	for x in xrange(200, end_data):
-		# If we've been told we're still in a trade then we simply skip this day
-		if x <= next_index:
-			continue
+    end_data = len(stock_2_trimmed)
+    output = None
+    next_index = 0
 
-		trade_result = False
-		result = None
-		trade_result = signal.get_entry_signal(x)
-		if not trade_result:
-			continue
-		elif trade_result:
-			# We will only enter here if get_entry_signal() returned a trade_result, meaning that it signaled an entry
-			# and filled in the entry parameters for us
-			result = trade_result
-			result, next_index = signal.get_exit(x, result)
+    signal = signals.SignalsSigmaSpanVolatilityTest(stock_2_close, stock_2_volume, stock_2_trimmed, item)
 
-			if result:
-				trade_log.append(result)
+    for x in xrange(200, end_data):
+        # If we've been told we're still in a trade then we simply skip this day
+        if x <= next_index:
+            continue
+
+        trade_result = False
+        result = None
+        trade_result = signal.get_entry_signal(x)
+        if not trade_result:
+            continue
+        elif trade_result:
+            # We will only enter here if get_entry_signal() returned a trade_result, meaning that it signaled an entry
+            # and filled in the entry parameters for us
+            result = trade_result
+            result, next_index = signal.get_exit(x, result)
+
+            if result:
+                trade_log.append(result)
 
 
-	return output, trade_log, days_analyzed
+    return output, trade_log, days_analyzed
 
 
 def backtest_trade_log(trade_log):
-	print "Total Entries Found Length: ", len(trade_log)
-	chrono_trade_log = trade_log
-	chrono_trade_log.sort(key=lambda x: x.entry_date)
+    print "Total Entries Found Length: ", len(trade_log)
+    start_date = datetime.datetime(1900, 1, 1)
+    end_date = datetime.datetime(2100,1,1)
+    chrono_trade_log = [t for t in trade_log if datetime.datetime.strptime(t.entry_date, '%Y-%m-%d') > start_date and datetime.datetime.strptime(t.entry_date, '%Y-%m-%d') < end_date]
+    chrono_trade_log.sort(key=lambda x: x.entry_date)
 
-	# for result in chrono_trade_log:
-		# print result.stock_2, result.entry_date, result.exit_date
+    # for result in chrono_trade_log:
+        # print result.stock_2, result.entry_date, result.exit_date
 
-	small_log = []
-	len_data = len(chrono_trade_log)
+    small_log = []
+    len_data = len(chrono_trade_log)
 
-	x = 0
-	while x < len_data:
+    x = 0
+    while x < len_data:
 
-		current_date = chrono_trade_log[x].entry_date
+        current_date = chrono_trade_log[x].entry_date
 
-		# We must skip trading opportunities if we have not exited the first trade!!
-		if len(small_log) > 0:
-			last_exit = small_log[-1].exit_date
-			todays_entry = current_date
+        # We must skip trading opportunities if we have not exited the first trade!!
+        if len(small_log) > 0:
+            last_exit = small_log[-1].exit_date
+            todays_entry = current_date
 
-			last_exit = datetime.datetime.strptime(last_exit, '%Y-%m-%d')
-			todays_entry = datetime.datetime.strptime(todays_entry, '%Y-%m-%d')
+            last_exit = datetime.datetime.strptime(last_exit, '%Y-%m-%d')
+            todays_entry = datetime.datetime.strptime(todays_entry, '%Y-%m-%d')
 
-			# The continue here will cut out all other logic and move on to the next item in the
-			# master trade log. Basically, if we are already in a trade and have not exited yet,
-			# then nothing else matters, we must keep looking at other trades
-			if todays_entry <= last_exit:
-				x += 1
-				continue
+            # The continue here will cut out all other logic and move on to the next item in the
+            # master trade log. Basically, if we are already in a trade and have not exited yet,
+            # then nothing else matters, we must keep looking at other trades
+            if todays_entry <= last_exit:
+                x += 1
+                continue
 
-		# We are iterating over the entry date-sorted chrono trade log so we are guaranteed to 
-		# only encounter trades in chrono order. The filter here finds ALL trades starting on the
-		# day of the current trade, so that we can see all possibilities like in real life
-		# Then append the best trade opportunity and incrememt the chrono trade log counter by the
-		# number of trades that started today
+        # We are iterating over the entry date-sorted chrono trade log so we are guaranteed to
+        # only encounter trades in chrono order. The filter here finds ALL trades starting on the
+        # day of the current trade, so that we can see all possibilities like in real life
+        # Then append the best trade opportunity and incrememt the chrono trade log counter by the
+        # number of trades that started today
 
-		start_today = [z for z in chrono_trade_log if z.entry_date == current_date]
+        start_today = [z for z in chrono_trade_log if z.entry_date == current_date]
 
 #		if len(start_today) == 0:
 #			x += 1
 #			continue
-		# print "start_today", current_date, len(start_today)
-		
-		# Choose the most volatile stock at a given day
-		target = 999
-		start_today.sort(key=lambda z: abs((z.entry_sigma_over_p - target)), reverse=False)
+        # print "start_today", current_date, len(start_today)
 
-#		start_today.sort(key=lambda z: abs((z.sigma_span - z.sigma_span_long)), reverse=True)
-
-		# start_today.sort(key=lambda z: z.entry_sigma_over_p, reverse=True)
-
-		# Choose a stock with the most extreme RSI reading for a given day
-		# Obviously, this action lowers absolute returns. But interestingly enough, evidence suggests that this actually
-		# slightly *DECREASES* the sharpe ratio of the system. However, the system is still profitable and not destroyed
-		# by using this. Good result all around
-		# start_today.sort(key=lambda z: abs(50 - z.entry_rsi), reverse=True)
-
-		# print "here", [z.entry_sigma_over_p for z in start_today]
-		small_log.append(start_today[0])
-		###
-		# print "Start Today: ", len(small_log), len(start_today)
-
-		x += len(start_today)
-
-	return small_log
-
-def get_sharpe_ratio(trade_log):
-
-	### To properly determine the sharp ratio, we must compare the returns in the trade log with returns in
-	# SPY over the same period of time. Specifically, we must know the number of days that SPY traded within the
-	# time period of interest, then insert returns of zero (1.0) in the trade log so that the length matches SPY
-	ref_price_data = manage_redis.parse_fast_data('SPY', db_to_use=0)
-
-	system_ret_log = []
-	print "*****************************SHARPE RATIO ANALYSIS"
-	for item in trade_log:
-		# print item.entry_date, item.exit_date, item.entry_price, item.exit_price, item.ret, item.time_in_trade, len(item.price_log), item.price_log
-		p = ('new_trade', item.long_short, item.price_log[0])
-		system_ret_log.append(p)
-		if len(item.price_log) > 1:
-			for x in xrange(1, len(item.price_log)):
-				p = ('existing_trade', item.long_short, item.price_log[x])
-				system_ret_log.append(p)
-
-	# print '\n\n\n', system_ret_log[-20:0], len(system_ret_log)
-
-		
-	first_entry = trade_log[0].entry_date
-	last_exit = trade_log[-1].exit_date
-
-	first_entry = datetime.datetime.strptime(first_entry, '%Y-%m-%d')
-	last_exit = datetime.datetime.strptime(last_exit, '%Y-%m-%d')
-
-	ref_trimmed_price_data = []
-	for day in ref_price_data:
-		z = datetime.datetime.strptime(day['Date'], '%Y-%m-%d')
-		if z >= first_entry and z <= last_exit:
-			# We hardcode "long" here because this is a buy and hold assumption...
-			p = ('existing_trade', 'long', day['AdjClose'])
-			ref_trimmed_price_data.append(p)
-
-	mean, std, sharpe_ratio = get_returns(ref_trimmed_price_data)
-	print "Reference: \nMu, Sigma, Sharpe, #Days:", round(mean, 6), round(std, 6), round(sharpe_ratio, 6), len(ref_trimmed_price_data)
-
-	mean, std, sharpe_ratio = get_returns(system_ret_log)
-	print "\nSystem: \nMu, Sigma, Sharpe, #Days:", round(mean, 6), round(std, 6), round(sharpe_ratio, 6), len(system_ret_log)
-	print "\nPct In Market: ", round(float(len(system_ret_log)) / len(ref_trimmed_price_data), 4)
-
-	total_days = len(ref_trimmed_price_data)
-
-	return sharpe_ratio, total_days
+        # Choose the most volatile stock at a given day
+        target = 999
+        start_today.sort(key=lambda z: abs((z.entry_sigma_over_p - target)), reverse=False)
+        # start_today.sort(key=lambda z: abs((z.entry_volatility - target)), reverse=False)
 
 
-def get_returns(price_list):
+        # Choose a stock with the most extreme RSI reading for a given day
+        # Obviously, this action lowers absolute returns. But interestingly enough, evidence suggests that this actually
+        # slightly *DECREASES* the sharpe ratio of the system. However, the system is still profitable and not destroyed
+        # by using this. Good result all around
+        # start_today.sort(key=lambda z: abs(50 - z.entry_rsi), reverse=True)
 
-	# The input argument into this function is a 3-tuple of: ( new/existing trade , long/short, price )
+        # print "here", [z.entry_sigma_over_p for z in start_today]
 
-	ret_list = []
+        if len(start_today) > 0:
+            small_log.append(start_today[0])
+        else:
+            small_log.append(start_today[0])
+        ###
+        # print "Start Today: ", len(small_log), len(start_today)
 
-	len_data = len(price_list)
+        x += len(start_today)
 
-	for k in xrange(0, len_data):
-		if k == 0:
-			continue
+    return small_log
 
-		if price_list[k][0] == 'new_trade':
-			# we skip adding a "return" for the first day of a trade since we have not been in the trade overnight yet
+def get_intra_prices(trade_log):
 
-			current_entry_price = price_list[k][2]
+    ### To properly determine the sharpe ratio, we must compare the returns in the trade log with returns in
+    # SPY over the same period of time. Specifically, we must know the number of days that SPY traded within the
+    # time period of interest, then insert returns of zero (1.0) in the trade log so that the length matches SPY
+    ref_price_data = manage_redis.parse_fast_data('SPY', db_to_use=0)
+
+    system_ret_log = []
+    print "*****************************SHARPE RATIO ANALYSIS"
+    for item in trade_log:
+        # print item.entry_date, item.exit_date, item.entry_price, item.exit_price, item.ret, item.time_in_trade, len(item.price_log), item.price_log
+        p = ('new_trade', item.long_short, item.price_log[0])
+        system_ret_log.append(p)
+        if len(item.price_log) > 1:
+            for x in xrange(1, len(item.price_log)):
+                p = ('existing_trade', item.long_short, item.price_log[x])
+                system_ret_log.append(p)
+
+    # print '\n\n\n', system_ret_log[-20:0], len(system_ret_log)
+
+
+    first_entry = trade_log[0].entry_date
+    last_exit = trade_log[-1].exit_date
+
+    first_entry = datetime.datetime.strptime(first_entry, '%Y-%m-%d')
+    last_exit = datetime.datetime.strptime(last_exit, '%Y-%m-%d')
+
+    ref_trimmed_price_data = []
+    for day in ref_price_data:
+        z = datetime.datetime.strptime(day['Date'], '%Y-%m-%d')
+        if z >= first_entry and z <= last_exit:
+            # We hardcode "long" here because this is a buy and hold assumption...
+            p = ('existing_trade', 'long', day['AdjClose'])
+            ref_trimmed_price_data.append(p)
+
+    mean, std, sharpe, sortino = get_sharpe_ratio(ref_trimmed_price_data)
+    print "Reference: \nMu, Sigma, Sharpe, Sortino, #Days:", round(mean, 6), round(std, 6), round(sharpe, 6), round(sortino, 6), len(ref_trimmed_price_data)
+
+    mean, std, sharpe, sortino = get_sharpe_ratio(system_ret_log)
+    print "\nSystem: \nMu, Sigma, Sharpe, Sortino, #Days:", round(mean, 6), round(std, 6), round(sharpe, 6), round(sortino, 6), len(system_ret_log)
+    print "\nPct In Market: ", round(float(len(system_ret_log)) / len(ref_trimmed_price_data), 4)
+
+    total_days = len(ref_trimmed_price_data)
+
+    return sharpe, sortino, total_days
+
+
+def get_sharpe_ratio(price_list):
+
+    # The input argument into this function is a 3-tuple of: ( new/existing trade , long/short, price )
+
+    ret_list = []
+
+    len_data = len(price_list)
+
+    for k in xrange(0, len_data):
+        if k == 0:
+            continue
+
+        if price_list[k][0] == 'new_trade':
+            # we skip adding a "return" for the first day of a trade since we have not been in the trade overnight yet
+
+            current_entry_price = price_list[k][2]
 #			print k, price_list[k], (price_list[k][2] / price_list[k-1][2])
-			continue
+            continue
 
-		# Strategy: Calculate baseline ret same safe way as always. If short, change sign as we did before. Then add
-		# one to use chained return
-		baseline_ret = (price_list[k][2] - price_list[k-1][2]) / price_list[k-1][2]
-		if price_list[k][1] == 'short':
-			baseline_ret = -baseline_ret
-		current_ret = baseline_ret + 1
+        # Strategy: Calculate baseline ret same safe way as always. If short, change sign as we did before. Then add
+        # one to use chained return
+        baseline_ret = (price_list[k][2] - price_list[k-1][2]) / price_list[k-1][2]
+        if price_list[k][1] == 'short':
+            baseline_ret = -baseline_ret
+        current_ret = baseline_ret + 1
 
 
-		ret_list.append(current_ret)
+        ret_list.append(current_ret)
 #		print k, price_list[k], current_ret
 
-	mean = np.mean(ret_list) - 1
-	std = np.std(ret_list)
-	sharpe_ratio = mean / std
 
-	return mean, std, sharpe_ratio
+    negative_ret_list = [r for r in ret_list if r <= 1.0]
+
+    mean = np.mean(ret_list) - 1
+    std = np.std(ret_list)
+    neg_std = np.std(negative_ret_list)
+    sharpe_ratio = mean / std
+    sortino_ratio = mean / neg_std
+
+    return mean, std, sharpe_ratio, sortino_ratio
 
