@@ -66,7 +66,7 @@ def run_indicator_system():
     # The backtest_trade_log effectively shrinks the trade log into only those trades that would be
     # possible in a chronologically traded system (i.e. one at a time)
     total_trades_available = len(trade_log)
-#    trade_log = backtest_trade_log(trade_log)
+    # trade_log = backtest_trade_log(trade_log)
 
     rets = []
     for trade_item in trade_log:
@@ -88,12 +88,12 @@ def run_indicator_system():
     geom_return = math.pow(total_return, (1.0/len(trade_log)))
 
     ### The section here can only be run if backtest_trade_log() was called
-#    sharpe_ratio, sortino_ratio, total_days_in = get_intra_prices(trade_log)
-#    total_years_in = total_days_in / 252
-#    annualized_return = math.pow(total_return, (1.0/total_years_in))
-#
-#
-#    print "\n\nTrades, Total, geom ret, ann ret", len(trade_log), total_return, geom_return, annualized_return
+    sharpe_ratio, sortino_ratio, total_days_in = get_intra_prices(trade_log)
+    total_years_in = total_days_in / 252
+    annualized_return = math.pow(total_return, (1.0/total_years_in))
+
+
+    print "\n\nTrades, Total, geom ret, ann ret", len(trade_log), total_return, geom_return, annualized_return
     ###
 
     print '\nStock-Days Analyzed', days_analyzed
@@ -226,6 +226,9 @@ def backtest_trade_log(trade_log):
 
 def get_intra_prices(trade_log):
 
+    # If backtest trade log was called first, this is already sorted, but if not, we must do it here
+    trade_log.sort(key=lambda x: x.entry_date)
+
     ### To properly determine the sharpe ratio, we must compare the returns in the trade log with returns in
     # SPY over the same period of time. Specifically, we must know the number of days that SPY traded within the
     # time period of interest, then insert returns of zero (1.0) in the trade log so that the length matches SPY
@@ -311,4 +314,29 @@ def get_sharpe_ratio(price_list):
     sortino_ratio = mean / neg_std
 
     return mean, std, sharpe_ratio, sortino_ratio
+
+
+class StatsItems(object):
+
+    def __init__(self):
+
+        total_trades = None
+        num_winners = None
+        num_losers = None
+
+        arith_mean_all = None
+        geom_mean_all = None
+        chained_all = None
+        arith_mean_winners = None
+        arith_mean_losers = None
+
+        sigma_ret_all = None
+        sigma_ret_winners = None
+        sigma_ret_losers = None
+
+        sharpe_ratio = None
+        sortino_ratio = None
+
+
+
 
