@@ -67,7 +67,7 @@ def run_indicator_system():
     # possible in a chronologically traded system (i.e. one at a time)
     total_trades_available = len(trade_log)
     ###
-    # trade_log = backtest_trade_log(trade_log)
+    #trade_log = backtest_trade_log(trade_log)
 
     rets = []
     for trade_item in trade_log:
@@ -129,7 +129,7 @@ def do_indicator_test(item, k, len_stocks, stock_1_data):
     output = None
     next_index = 0
 
-    signal = signals.SignalsSigmaSpanVolatilityTest(stock_2_close, stock_2_volume, stock_2_trimmed, item)
+    signal = signals.SignalsSigmaSpanVolatilityTest_2(stock_2_close, stock_2_volume, stock_2_trimmed, item)
 
     for x in xrange(200, end_data):
         # If we've been told we're still in a trade then we simply skip this day
@@ -194,15 +194,12 @@ def backtest_trade_log(trade_log):
         # number of trades that started today
 
         start_today = [z for z in chrono_trade_log if z.entry_date == current_date]
-
-#		if len(start_today) == 0:
-#			x += 1
-#			continue
         # print "start_today", current_date, len(start_today)
 
         # Choose the most volatile stock at a given day
         target = 999
-        start_today.sort(key=lambda z: abs((z.entry_sigma_over_p - target)), reverse=False)
+        start_today.sort(key=lambda z: abs((z.entry_score - target)), reverse=False)
+        # start_today.sort(key=lambda z: abs((z.entry_sigma_over_p - target)), reverse=False)
         # start_today.sort(key=lambda z: abs((z.entry_volatility - target)), reverse=False)
 
         ### Executing this results in selecting a *random* entry that is available on the given day
@@ -210,18 +207,13 @@ def backtest_trade_log(trade_log):
 #        idx = random.randrange(len(start_today))
 #        start_today = [start_today[idx]]
 
-        # Choose a stock with the most extreme RSI reading for a given day
-        # Obviously, this action lowers absolute returns. But interestingly enough, evidence suggests that this actually
-        # slightly *DECREASES* the sharpe ratio of the system. However, the system is still profitable and not destroyed
-        # by using this. Good result all around
-        # start_today.sort(key=lambda z: abs(50 - z.entry_rsi), reverse=True)
-
         # print "here", [z.entry_sigma_over_p for z in start_today]
 
         if len(start_today) > 0:
             small_log.append(start_today[0])
         else:
-            small_log.append(start_today[0])
+            pass
+            # small_log.append(start_today[0])
         ###
         # print "Start Today: ", len(small_log), len(start_today)
 
@@ -294,7 +286,7 @@ def get_intra_prices(trade_log):
 
 def get_sharpe_ratio(price_list):
 
-    # The input argument into this function is a 3-tuple of: ( new/existing trade , long/short, price )
+    # The input argument into this function is a list of 3-tuples of: ( new/existing trade , long/short, price )
 
     ret_list = []
 
@@ -317,7 +309,6 @@ def get_sharpe_ratio(price_list):
         if price_list[k][1] == 'short':
             baseline_ret = -baseline_ret
         current_ret = baseline_ret + 1
-
 
         ret_list.append(current_ret)
 #		print k, price_list[k], current_ret
