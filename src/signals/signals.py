@@ -289,14 +289,14 @@ class SignalsSigmaSpanVolatilityTest(SignalsSigmaSpan):
                   'sigma_span_historical_lookback': 100,
 
                   'entry_sigma_span': 1.6,
-                  'stop_loss_sigma_loss': 0.3,
+                  'stop_loss_sigma_loss': 2.0,
                   'stop_loss_abs_pct_loss': 0.06,
                   'target_sigma_span': 0.8,
 
                   'liquidity_min_avg_volume': 100000,
                   'liquidity_min_avg_cap': 2500000,
                   # 'volatility_min_required': 0.25,
-                  'volatility_min_required': 0.060,
+                  'volatility_min_required': 0.040,
                   'volatility_max_allowed': 100
                  }
 
@@ -306,12 +306,12 @@ class SignalsSigmaSpanVolatilityTest(SignalsSigmaSpan):
         self.sma = tools.simple_moving_average(self.closes, self.k['sma_length'])
 
         self.volatility = tools.volatility_bs_annualized(self.closes, 30, returns_period_length=5)
-        self.mean_vol = stats.scoreatpercentile(self.volatility[-1008:], 80)
+        self.ref_vol = stats.scoreatpercentile(self.volatility[-1008:], 80)
 
         self.sigma_closes = tools.sigma_prices(self.closes, self.k['sigma_closes_length'])
         self.avg_volume = tools.simple_moving_average(self.volume, self.k['avg_volume_length'])
 
-        self.sigma_span, self.historical_sigma = tools.sigma_span(self.closes, self.k['sigma_span_length'], self.k['sigma_span_historical_lookback'], sigma_input = self.sigma_closes)
+        self.sigma_span, self.historical_sigma = tools.sigma_span(self.closes, self.k['sigma_span_length'], self.k['sigma_span_historical_lookback'])
 
     def get_entry_signal(self, x):
 
@@ -328,7 +328,7 @@ class SignalsSigmaSpanVolatilityTest(SignalsSigmaSpan):
         sma_0 = self.sma[x]
         p_0 = self.closes[x]
 
-        ref_vol = 1.0 * self.mean_vol
+        ref_vol = 1.0 * self.ref_vol
 
         if self.volatility[x] < ref_vol:
             return False
@@ -858,7 +858,7 @@ class SignalsRSISystemVolatilityTest(SignalsRSISystem):
                   'target_rsi_long': 55,
                   'target_rsi_short': 45,
 
-                  'liquidity_min_avg_volume': 0,
+                  'liquidity_min_avg_volume': 100000,
                   'liquidity_min_avg_cap': -1,
                   'volatility_min_required': 0.08,
                   'volatility_max_allowed': 100
@@ -874,7 +874,7 @@ class SignalsRSISystemVolatilityTest(SignalsRSISystem):
 
         self.volatility = tools.volatility_bs_annualized(self.closes, 30, returns_period_length=4)
         ### self.mean_vol = np.median(self.volatility)
-        self.mean_vol = stats.scoreatpercentile(self.volatility, 50)
+        self.mean_vol = stats.scoreatpercentile(self.volatility, 80)
 
         self.sigma_closes = tools.sigma_prices(self.closes, self.k['sigma_closes_length'])
         self.avg_volume = tools.simple_moving_average(self.volume, self.k['avg_volume_length'])
@@ -946,7 +946,7 @@ class SignalsRSISystemVolatilityTest(SignalsRSISystem):
 
 
 
-class trade_result():
+class trade_result(object):
 
     def __init__(self):
         self.stock_1 = None

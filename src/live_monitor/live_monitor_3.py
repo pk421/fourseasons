@@ -85,7 +85,7 @@ def do_web_query(symbol_string, retry=5):
 
 
 
-def search_for_trades(in_trade=[]):
+def search_for_trades(in_trade=['SPY']):
 
     """Algo: Try to do a batch request to get the latest quotes for all symbols from yahoo. Do a GET from redis for each
     stock, append the latest price to the end of the list, then run thru MACD / RSI. See if stock meets criteria,
@@ -277,7 +277,7 @@ def get_parameters(symbol, latest_name, latest_date, latest_time, latest_price, 
 
     volatility = tools.volatility_bs_annualized(merged_prices, 30, returns_period_length=5)
     volatility_0 = round(volatility[-1], 4)
-    volatility_percentile = round(stats.percentileofscore(volatility, volatility_0), 4)
+    volatility_percentile = round(stats.percentileofscore(volatility[-1008:], volatility_0), 4)
     if volatility_percentile < 0:
         return False, "volatility is not at a high enough percentile"
 

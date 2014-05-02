@@ -66,6 +66,7 @@ def run_indicator_system():
     # The backtest_trade_log effectively shrinks the trade log into only those trades that would be
     # possible in a chronologically traded system (i.e. one at a time)
     total_trades_available = len(trade_log)
+    ###
     # trade_log = backtest_trade_log(trade_log)
 
     rets = []
@@ -87,17 +88,17 @@ def run_indicator_system():
     total_return = np.product(rets)
     geom_return = math.pow(total_return, (1.0/len(trade_log)))
 
-    ### The section here can only be run if backtest_trade_log() was called
+    ###
     sharpe_ratio, sortino_ratio, total_days_in = get_intra_prices(trade_log)
     total_years_in = total_days_in / 252
     annualized_return = math.pow(total_return, (1.0/total_years_in))
 
 
-    print "\n\nTrades, Total, geom ret, ann ret", len(trade_log), total_return, geom_return, annualized_return
+    print "\nTrades, Total, geom ret, ann ret", len(trade_log), round(total_return, 5), round(geom_return, 5), round(annualized_return, 5)
     ###
 
     print '\nStock-Days Analyzed', days_analyzed
-    print '\nTotal Trades Available: ', total_trades_available
+    print 'Total Trades Available: ', total_trades_available
 
     print "\nFinished: ", len_stocks
     print "File Written: ", in_file_name + out_file_name.split(in_file_name)[-1]
@@ -204,6 +205,10 @@ def backtest_trade_log(trade_log):
         start_today.sort(key=lambda z: abs((z.entry_sigma_over_p - target)), reverse=False)
         # start_today.sort(key=lambda z: abs((z.entry_volatility - target)), reverse=False)
 
+        ### Executing this results in selecting a *random* entry that is available on the given day
+#        import random
+#        idx = random.randrange(len(start_today))
+#        start_today = [start_today[idx]]
 
         # Choose a stock with the most extreme RSI reading for a given day
         # Obviously, this action lowers absolute returns. But interestingly enough, evidence suggests that this actually
@@ -262,16 +267,29 @@ def get_intra_prices(trade_log):
             p = ('existing_trade', 'long', day['AdjClose'])
             ref_trimmed_price_data.append(p)
 
-    mean, std, sharpe, sortino = get_sharpe_ratio(ref_trimmed_price_data)
-    print "Reference: \nMu, Sigma, Sharpe, Sortino, #Days:", round(mean, 6), round(std, 6), round(sharpe, 6), round(sortino, 6), len(ref_trimmed_price_data)
+    rmean, rstd, rneg_std, rpos_std, rsharpe, rsortino, ravg_loser, ravg_winner, rpct_losers = get_sharpe_ratio(ref_trimmed_price_data)
+#    print "Reference: \nArith Mu, Sigma, Neg Sigma, Sharpe, Sortino, #Days:", round(mean, 6), round(std, 6), round(neg_std, 6), round(sharpe, 6), round(sortino, 6), len(ref_trimmed_price_data)
 
-    mean, std, sharpe, sortino = get_sharpe_ratio(system_ret_log)
-    print "\nSystem: \nMu, Sigma, Sharpe, Sortino, #Days:", round(mean, 6), round(std, 6), round(sharpe, 6), round(sortino, 6), len(system_ret_log)
-    print "\nPct In Market: ", round(float(len(system_ret_log)) / len(ref_trimmed_price_data), 4)
+    smean, sstd, sneg_std, spos_std, ssharpe, ssortino, savg_loser, savg_winner, spct_losers = get_sharpe_ratio(system_ret_log)
+#    print "\nSystem: \nArith Mu, Sigma, Neg Sigma, Sharpe, Sortino, #Days:", round(mean, 6), round(std, 6), round(neg_std, 6), round(sharpe, 6), round(sortino, 6), len(system_ret_log)
+
+
+    print '\t\tSystem:\t\tReference:'
+    print 'ArithMu: \t', round(smean, 6), '\t', round(rmean, 6)
+    print 'Sigma: \t\t', round(sstd, 6), '\t', round(rstd, 6)
+    print 'NegSigma: \t', round(sneg_std, 6), '\t', round(rneg_std, 6)
+#    print 'PosSigma: \t', round(spos_std, 6), '\t', round(rpos_std, 6)
+    print 'NegSigma/Tot: \t', round((sneg_std/sstd), 6), '\t', round((rneg_std/rstd), 6)
+    print 'Sharpe: \t', round(ssharpe, 6), '\t', round(rsharpe, 6)
+    print 'Sortino: \t', round(ssortino, 6), '\t', round(rsortino, 6)
+
+    profit_factor = ((1-spct_losers) * (savg_winner)) / ((spct_losers) * savg_loser)
+    print "\nPctLosers, Mu Winner, Mu Loser, PF: ", round(spct_losers, 5), round(savg_winner, 5), round(savg_loser, 5), round(profit_factor, 5)
+    print "Pct In Market: ", round(float(len(system_ret_log)) / len(ref_trimmed_price_data), 4)
 
     total_days = len(ref_trimmed_price_data)
 
-    return sharpe, sortino, total_days
+    return ssharpe, ssortino, total_days
 
 
 def get_sharpe_ratio(price_list):
@@ -306,14 +324,23 @@ def get_sharpe_ratio(price_list):
 
 
     negative_ret_list = [r for r in ret_list if r <= 1.0]
+    positive_ret_list = [r for r in ret_list if r > 1.0]
+
+    total_losers = len(negative_ret_list)
+    total_winners = len(positive_ret_list)
+    pct_losers = float(total_losers) / len(ret_list)
+
+    avg_loser = np.mean(negative_ret_list)
+    avg_winner = np.mean(positive_ret_list)
 
     mean = np.mean(ret_list) - 1
     std = np.std(ret_list)
     neg_std = np.std(negative_ret_list)
+    pos_std = np.std(positive_ret_list)
     sharpe_ratio = mean / std
     sortino_ratio = mean / neg_std
 
-    return mean, std, sharpe_ratio, sortino_ratio
+    return mean, std, neg_std, pos_std, sharpe_ratio, sortino_ratio, avg_loser, avg_winner, pct_losers
 
 
 class StatsItems(object):

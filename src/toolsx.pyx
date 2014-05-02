@@ -243,11 +243,8 @@ def rsi(price_data, r1):
 
 def sigma_prices(price_data, v1):
 
-    #The function uses a formula very similar to the Bollinger Bands in which a "windowed" standard deviation is
-    #calculated to ensure a high speed. The only major difference is that this formula does NOT feed in Simple Price
-    #Data directly, but rather computes the day on day return of closing prices and then feeds that into the standard
-    #deviation formula. At the end, the result is multiplied by the sqrt of 252 to give an annualized number. Also note
-    #that using math.log is approx. 3 times faster than np.log
+    # This function is similar to the volatility_bs_annualized function, but it does NOT calculate the log returns.
+    # Rather, it simply returns the standard deviation of the price points directly.
 
     len_data = len(price_data)
 
