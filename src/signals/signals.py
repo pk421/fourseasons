@@ -291,8 +291,8 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
 
                   'liquidity_min_avg_volume': 100000,
                   'liquidity_min_avg_cap': 2500000,
-                  # 'volatility_min_required': 0.040,
-                  # 'volatility_max_allowed': 100
+                  'volatility_min_required': 0.040,
+                  'volatility_max_allowed': 100
                  }
 
         self.initialize_indicators()
@@ -302,11 +302,19 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
         vol_short = self.volatility[x-1]
         vol_long = self.volatility_long[x-1]
         # we expect to see a period of shorter term volatility that has recently started, or increased
+        vol_diff_0 = vol_short - vol_long
+        vol_diff_2 = (self.volatility[x-1] - self.volatility_long[x-1]) - (self.volatility[x-3] - self.volatility_long[x-3])
         if vol_short < vol_long:
             return False
 
         if self.volatility[x] < self.ref_vol:
             return False
+
+        sigma = self.sigma_closes[x-1]
+        # cancel entry if there is low volatility...
+        if (sigma / self.closes[x]) < self.k['volatility_min_required'] or (sigma / self.closes[x]) > self.k['volatility_max_allowed']:
+            return False
+        return True
 
         return True
 
@@ -314,7 +322,9 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
         self.sma = tools.simple_moving_average(self.closes, self.k['sma_length'])
 
         self.volatility = tools.volatility_bs_annualized(self.closes, 30, returns_period_length=5)
-        self.volatility_long = tools.volatility_bs_annualized(self.closes, 100, returns_period_length=5)
+
+        volaltility_long_lookback = min(100, (len(self.closes) - 5))
+        self.volatility_long = tools.volatility_bs_annualized(self.closes, volaltility_long_lookback, returns_period_length=5)
 
         self.ref_vol = stats.scoreatpercentile(self.volatility[-1008:], 80)
 
@@ -345,14 +355,14 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
             if (self.sigma_span[x-1] > -self.k['entry_sigma_span'] and self.sigma_span[x] < -self.k['entry_sigma_span']):
                 trade_result = self.get_entry_trade_result(x)
                 trade_result.long_short = 'long'
-                trade_result.target = 1.2 * (1 + self.historical_sigma[x]) * trade_result.entry_price
+                trade_result.target = (1 + (1.6 * self.volatility[x] / 7)) * trade_result.entry_price
                 return trade_result
 
         elif p_0 < sma_0:
             if (self.sigma_span[x-1] < self.k['entry_sigma_span'] and self.sigma_span[x] > self.k['entry_sigma_span']):
                 trade_result = self.get_entry_trade_result(x)
                 trade_result.long_short = 'short'
-                trade_result.target = 1.2 * (1 - self.historical_sigma[x]) * trade_result.entry_price
+                trade_result.target = (1 - (1.6 * self.volatility[x] / 7)) * trade_result.entry_price
                 return trade_result
 
         return False
@@ -388,7 +398,7 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
                 ret = -price_change_pc
 
             time_in = x - (start_index - 1)
-            exit_time = 4
+            exit_time = 5
             exit_after_loss = 999
 
             ### print x, result.stock_2, sigma_span[x], result.entry_price, current_price
@@ -397,8 +407,11 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
 #            if trading_up and (self.sigma_span[x] > self.k['target_sigma_span'] or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
 #                ret <= pc_stop_loss):
 
-            if trading_up and (time_in == exit_time or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
-                ret <= pc_stop_loss or (ret < 0 and time_in > exit_after_loss)):
+            if trading_up and (time_in == exit_time or \
+                current_price > result.target or \
+                current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
+                ret <= pc_stop_loss or \
+                (ret < 0 and time_in > exit_after_loss)):
 
 #            if trading_up and (self.closes[x] > result.target or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
 #                ret <= pc_stop_loss):
@@ -424,8 +437,11 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
 #            elif trading_down and (self.sigma_span[x] < -self.k['target_sigma_span'] or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
 #                ret <= pc_stop_loss):
 
-            elif trading_down and (time_in == exit_time or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
-                ret <= pc_stop_loss or (ret < 0 and time_in > exit_after_loss)):
+            elif trading_down and (time_in == exit_time or \
+                current_price < result.target or \
+                current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
+                ret <= pc_stop_loss or \
+                (ret < 0 and time_in > exit_after_loss)):
 
 #            elif trading_down and (self.closes[x] < result.target or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
 #                ret <= pc_stop_loss):
@@ -652,6 +668,8 @@ class SignalsSigmaSpanVolatilityTest(SignalsSigmaSpan):
         #Must use x-1 as the index here b/c this is the sigma that would have been available at entry time
         result.entry_sigma = self.sigma_closes[x-1]
         result.entry_sigma_over_p = result.entry_sigma / result.entry_price
+
+        result.entry_score = result.entry_sigma_over_p
 
         result.entry_sigma_percentile = stats.percentileofscore(self.volatility, self.volatility[x])
         result.entry_volatility = self.volatility[x]

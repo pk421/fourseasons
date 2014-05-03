@@ -67,7 +67,7 @@ def run_indicator_system():
     # possible in a chronologically traded system (i.e. one at a time)
     total_trades_available = len(trade_log)
     ###
-    #trade_log = backtest_trade_log(trade_log)
+    trade_log = backtest_trade_log(trade_log)
 
     rets = []
     for trade_item in trade_log:
