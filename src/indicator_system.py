@@ -68,6 +68,7 @@ def run_indicator_system():
     total_trades_available = len(trade_log)
     ###
     trade_log = backtest_trade_log(trade_log)
+    ###
 
     rets = []
     for trade_item in trade_log:
@@ -94,6 +95,18 @@ def run_indicator_system():
     annualized_return = math.pow(total_return, (1.0/total_years_in))
 
 
+    negative_ret_list = [r for r in rets if r <= 1.0]
+    positive_ret_list = [r for r in rets if r > 1.0]
+
+    total_losers = len(negative_ret_list)
+    total_winners = len(positive_ret_list)
+    pct_losers = float(total_losers) / len(rets)
+
+    avg_loser = np.mean(negative_ret_list)
+    avg_winner = np.mean(positive_ret_list)
+    profit_factor = ((1-pct_losers) * (avg_winner)) / ((pct_losers) * avg_loser)
+
+    print "\nTrade PctLosers, Mu Winner, Mu Loser, PF: ", round(pct_losers, 5), round(avg_winner, 5), round(avg_loser, 5), round(profit_factor, 5)
     print "\nTrades, Total, geom ret, ann ret", len(trade_log), round(total_return, 5), round(geom_return, 5), round(annualized_return, 5)
     ###
 
@@ -215,7 +228,7 @@ def backtest_trade_log(trade_log):
             pass
             # small_log.append(start_today[0])
         ###
-        # print "Start Today: ", len(small_log), len(start_today)
+        print "Start Today: ", len(small_log), len(start_today)
 
         x += len(start_today)
 
@@ -275,9 +288,9 @@ def get_intra_prices(trade_log):
     print 'Sharpe: \t', round(ssharpe, 6), '\t', round(rsharpe, 6)
     print 'Sortino: \t', round(ssortino, 6), '\t', round(rsortino, 6)
 
-    profit_factor = ((1-spct_losers) * (savg_winner)) / ((spct_losers) * savg_loser)
-    print "\nPctLosers, Mu Winner, Mu Loser, PF: ", round(spct_losers, 5), round(savg_winner, 5), round(savg_loser, 5), round(profit_factor, 5)
-    print "Pct In Market: ", round(float(len(system_ret_log)) / len(ref_trimmed_price_data), 4)
+    # profit_factor = ((1-spct_losers) * (savg_winner)) / ((spct_losers) * savg_loser)
+    # print "\nDay By Day PctLosers, Mu Winner, Mu Loser, PF: ", round(spct_losers, 5), round(savg_winner, 5), round(savg_loser, 5), round(profit_factor, 5)
+    print "Frac Time In Market: ", round(float(len(system_ret_log)) / len(ref_trimmed_price_data), 4)
 
     total_days = len(ref_trimmed_price_data)
 
