@@ -281,31 +281,35 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
         self.k = {'sma_length': 175,
                   'sigma_closes_length': 100,
                   'avg_volume_length': 30,
-                  'sigma_span_length': 5,
-                  'sigma_span_historical_lookback': 100,
 
                   'entry_sigma_span': 1.6,
                   'stop_loss_sigma_loss': 2.0,
                   'stop_loss_abs_pct_loss': 0.06,
-                  'target_sigma_span': 0.8,
+                  # 'target_sigma_span': 1.6,,
+                  'target_volatility_multiple': 1.6,
+
+                  'sigma_span_length': 5,
+                  'sigma_span_historical_lookback': 100,
+                  'exit_days': 4,
 
                   'liquidity_min_avg_volume': 100000,
                   'liquidity_min_avg_cap': 2500000,
                   'volatility_min_required': 0.040,
-                  'volatility_max_allowed': 100
+                  'volatility_max_allowed': 100,
+                  'volatility_long_lookback': 100
                  }
 
         self.initialize_indicators()
 
     def check_volatility(self, x):
 
-        vol_short = self.volatility[x-1]
-        vol_long = self.volatility_long[x-1]
-        # we expect to see a period of shorter term volatility that has recently started, or increased
-        vol_diff_0 = vol_short - vol_long
-        vol_diff_2 = (self.volatility[x-1] - self.volatility_long[x-1]) - (self.volatility[x-3] - self.volatility_long[x-3])
-        if vol_short < vol_long:
-            return False
+#        vol_short = self.volatility[x-1]
+#        vol_long = self.volatility_long[x-1]
+#        # we expect to see a period of shorter term volatility that has recently started, or increased
+#        vol_diff_0 = vol_short - vol_long
+#        vol_diff_2 = (self.volatility[x-1] - self.volatility_long[x-1]) - (self.volatility[x-3] - self.volatility_long[x-3])
+#        if vol_short < vol_long:
+#            return False
 
         if self.volatility[x] < self.ref_vol:
             return False
@@ -321,10 +325,10 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
     def initialize_indicators(self):
         self.sma = tools.simple_moving_average(self.closes, self.k['sma_length'])
 
-        self.volatility = tools.volatility_bs_annualized(self.closes, 30, returns_period_length=5)
+        self.volatility = tools.volatility_bs_annualized(self.closes, 30, returns_period_length=self.k['sigma_span_length'])
 
-        volaltility_long_lookback = min(100, (len(self.closes) - 5))
-        self.volatility_long = tools.volatility_bs_annualized(self.closes, volaltility_long_lookback, returns_period_length=5)
+        volatility_long_lookback = min(self.k['volatility_long_lookback'], (len(self.closes) - 10))
+        # self.volatility_long = tools.volatility_bs_annualized(self.closes, volatility_long_lookback, returns_period_length=self.k['sigma_span_length'])
 
         self.ref_vol = stats.scoreatpercentile(self.volatility[-1008:], 80)
 
@@ -351,18 +355,20 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
         sma_0 = self.sma[x]
         p_0 = self.closes[x]
 
+        target_factor = np.sqrt(252/self.k['sigma_span_length'])
+
         if p_0 > sma_0:
             if (self.sigma_span[x-1] > -self.k['entry_sigma_span'] and self.sigma_span[x] < -self.k['entry_sigma_span']):
                 trade_result = self.get_entry_trade_result(x)
                 trade_result.long_short = 'long'
-                trade_result.target = (1 + (1.6 * self.volatility[x] / 7)) * trade_result.entry_price
+                trade_result.target = (1 + (self.k['target_volatility_multiple'] * self.volatility[x] / target_factor)) * trade_result.entry_price
                 return trade_result
 
         elif p_0 < sma_0:
             if (self.sigma_span[x-1] < self.k['entry_sigma_span'] and self.sigma_span[x] > self.k['entry_sigma_span']):
                 trade_result = self.get_entry_trade_result(x)
                 trade_result.long_short = 'short'
-                trade_result.target = (1 - (1.6 * self.volatility[x] / 7)) * trade_result.entry_price
+                trade_result.target = (1 - (self.k['target_volatility_multiple'] * self.volatility[x] / target_factor)) * trade_result.entry_price
                 return trade_result
 
         return False
@@ -398,7 +404,7 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
                 ret = -price_change_pc
 
             time_in = x - (start_index - 1)
-            exit_time = 5
+            exit_time = self.k['exit_days']
             exit_after_loss = 999
 
             ### print x, result.stock_2, sigma_span[x], result.entry_price, current_price
@@ -748,7 +754,7 @@ class MomentumVolatilityTest(SignalsBase):
 
         xmas_up = self.sma_2[x] > self.sma_3[x] and self.sma_2[x-1] < self.sma_3[x-1]
         xmas_down = self.sma_2[x] > self.sma_3[x] and self.sma_2[x-1] < self.sma_3[x-1]
-        
+
 
         if p_0 > sma_0:
 #            if (self.sigma_span[x-1] > -self.k['entry_sigma_span'] and self.sigma_span[x] < -self.k['entry_sigma_span']):
@@ -1128,7 +1134,7 @@ class SignalsRSISystemVolatilityTest(SignalsRSISystem):
 
         return False
 
-    
+
     def get_entry_trade_result(self, x):
         result = trade_result()
 
