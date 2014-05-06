@@ -325,10 +325,10 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
     def initialize_indicators(self):
         self.sma = tools.simple_moving_average(self.closes, self.k['sma_length'])
 
-        self.volatility = tools.volatility_bs_annualized(self.closes, 30, returns_period_length=self.k['sigma_span_length'])
+        self.volatility = tools.volatility_bs_annualized(self.closes, 50, returns_period_length=self.k['sigma_span_length'])
 
         volatility_long_lookback = min(self.k['volatility_long_lookback'], (len(self.closes) - 10))
-        # self.volatility_long = tools.volatility_bs_annualized(self.closes, volatility_long_lookback, returns_period_length=self.k['sigma_span_length'])
+#        self.volatility_long = tools.volatility_bs_annualized(self.closes, volatility_long_lookback, returns_period_length=self.k['sigma_span_length'])
 
         self.ref_vol = stats.scoreatpercentile(self.volatility[-1008:], 80)
 
