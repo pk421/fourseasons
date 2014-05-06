@@ -330,7 +330,7 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
         volatility_long_lookback = min(self.k['volatility_long_lookback'], (len(self.closes) - 10))
         self.volatility_long = tools.volatility_bs_annualized(self.closes, volatility_long_lookback, returns_period_length=self.k['sigma_span_length'])
 
-        self.ref_vol = stats.scoreatpercentile(self.volatility[-1008:], 80)
+        self.ref_vol = stats.scoreatpercentile(self.volatility[-1008:], 50)
 
         # sigma_closes is convenient because it is in terms of dollars and can be easily used to set a dollar-based
         # stop loss. It is correlated with the volatility, but they are not scaled, so it is worth testing a stop loss
