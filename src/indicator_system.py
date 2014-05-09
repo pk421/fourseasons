@@ -22,7 +22,7 @@ def run_indicator_system():
     sectors = ('basic_materials', 'conglomerates', 'consumer_goods', 'financial', 'healthcare', 'industrial_services', \
                'services', 'technology', 'utilities')
 
-    in_file_name = 'etfs_etns'
+    in_file_name = 'etfs_etns_sp_500'
     location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
 
     in_file = open(location, 'r')
@@ -31,6 +31,8 @@ def run_indicator_system():
         new_val = item.split('\r')[0]
         stock_list[k] = new_val
     in_file.close()
+
+    etf_list = get_etf_list()
 
     # stock_list = ['SPY', 'KRU']
     paired_list = get_paired_stock_list(sorted(stock_list), fixed_stock='SPY')
@@ -49,8 +51,9 @@ def run_indicator_system():
     base_stock = paired_list[0]['stock_1']
     stock_1_data = manage_redis.parse_fast_data(base_stock, db_to_use=0)
     for k, item in enumerate(paired_list):
-        print k, len_stocks, item['stock_1'], item['stock_2']
-        output, trades, x = do_indicator_test(item, k, len(paired_list), stock_1_data)
+        is_stock = not item['stock_2'] in etf_list
+        print k, len_stocks, item['stock_1'], item['stock_2'], '\t', is_stock
+        output, trades, x = do_indicator_test(item, k, len(paired_list), stock_1_data, is_stock = is_stock)
         if x:
             days_analyzed += x
         if trades is not None and len(trades) > 0:
@@ -67,7 +70,7 @@ def run_indicator_system():
     # possible in a chronologically traded system (i.e. one at a time)
     total_trades_available = len(trade_log)
     ###
-    trade_log = backtest_trade_log(trade_log)
+    # trade_log = backtest_trade_log(trade_log)
     ###
 
     rets = []
@@ -116,7 +119,7 @@ def run_indicator_system():
     print "\nFinished: ", len_stocks
     print "File Written: ", in_file_name + out_file_name.split(in_file_name)[-1]
 
-def do_indicator_test(item, k, len_stocks, stock_1_data):
+def do_indicator_test(item, k, len_stocks, stock_1_data, is_stock):
 #	stock_1_data = manage_redis.parse_fast_data(item['stock_1'], db_to_use=0)
     stock_2_data = manage_redis.parse_fast_data(item['stock_2'], db_to_use=0)
 
@@ -142,7 +145,7 @@ def do_indicator_test(item, k, len_stocks, stock_1_data):
     output = None
     next_index = 0
 
-    signal = signals.SignalsSigmaSpanVolatilityTest_2(stock_2_close, stock_2_volume, stock_2_trimmed, item)
+    signal = signals.SignalsSigmaSpanVolatilityTest_2(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock)
 
     for x in xrange(200, end_data):
         # If we've been told we're still in a trade then we simply skip this day
@@ -346,6 +349,19 @@ def get_sharpe_ratio(price_list):
 
     return mean, std, neg_std, pos_std, sharpe_ratio, sortino_ratio, avg_loser, avg_winner, pct_losers
 
+
+def get_etf_list():
+    in_file_name = 'etfs_etns'
+    location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
+
+    in_file = open(location, 'r')
+    etf_list = in_file.read().split('\n')
+    for k, item in enumerate(etf_list):
+        new_val = item.split('\r')[0]
+        etf_list[k] = new_val
+    in_file.close()
+
+    return etf_list
 
 class StatsItems(object):
 

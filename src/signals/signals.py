@@ -274,7 +274,7 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
     suggests rising and more recent volatility.
     """
 
-    def __init__(self, closes, volume, stock_2_trimmed, item):
+    def __init__(self, closes, volume, stock_2_trimmed, item, is_stock = False):
 
         super(SignalsSigmaSpan, self).__init__(closes, volume, stock_2_trimmed, item)
 
@@ -282,11 +282,11 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
                   'sigma_closes_length': 100,
                   'avg_volume_length': 30,
 
-                  'entry_sigma_span': 1.8,
+                  'entry_sigma_span': 1.6,
                   'stop_loss_sigma_loss': 2.0,
                   'stop_loss_abs_pct_loss': 0.06,
                   # 'target_sigma_span': 1.6,,
-                  'target_volatility_multiple': 1.8,
+                  'target_volatility_multiple': 1.6,
 
                   'sigma_span_length': 5,
                   'sigma_span_historical_lookback': 100,
@@ -294,10 +294,22 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
 
                   'liquidity_min_avg_volume': 100000,
                   'liquidity_min_avg_cap': 2500000,
-                  'volatility_min_required': 0.080,
+                  'volatility_min_required': 0.040,
+                  'short_volatility_percentile': 80,
+
                   'volatility_max_allowed': 100,
                   'volatility_long_lookback': 100
                  }
+
+        if is_stock:
+            self.k['entry_sigma_span'] = 1.8
+            ### this was a fortuitous error: setting abs stop loss to 1.8 (1800%) instead of 0.06 and then NOT changing target vol_multiple
+            # This effectively disabled the stoploss altogether...
+            self.k['stop_loss_abs_pct_loss'] = 0.06
+            self.k['target_volatility_multiple'] = 1.8
+
+            self.k['volatility_min_required'] = 0.080
+            self.k['short_volatility_percentile'] = 85
 
         self.initialize_indicators()
 
@@ -330,7 +342,7 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
         volatility_long_lookback = min(self.k['volatility_long_lookback'], (len(self.closes) - 10))
         self.volatility_long = tools.volatility_bs_annualized(self.closes, volatility_long_lookback, returns_period_length=self.k['sigma_span_length'])
 
-        self.ref_vol = stats.scoreatpercentile(self.volatility[-1008:], 85)
+        self.ref_vol = stats.scoreatpercentile(self.volatility[-1008:], self.k['short_volatility_percentile'])
 
         # sigma_closes is convenient because it is in terms of dollars and can be easily used to set a dollar-based
         # stop loss. It is correlated with the volatility, but they are not scaled, so it is worth testing a stop loss
