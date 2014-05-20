@@ -70,7 +70,7 @@ def run_indicator_system():
     # possible in a chronologically traded system (i.e. one at a time)
     total_trades_available = len(trade_log)
     ###
-    # trade_log = backtest_trade_log(trade_log)
+    trade_log = backtest_trade_log(trade_log)
     ###
 
     rets = []
@@ -107,7 +107,7 @@ def run_indicator_system():
 
     avg_loser = np.mean(negative_ret_list)
     avg_winner = np.mean(positive_ret_list)
-    profit_factor = ((1-pct_losers) * (avg_winner)) / ((pct_losers) * avg_loser)
+    profit_factor = ((1-pct_losers) * abs(avg_winner-1)) / ((pct_losers) * abs(avg_loser-1))
 
     print "\nTrade PctLosers, Mu Winner, Mu Loser, PF: ", round(pct_losers, 5), round(avg_winner, 5), round(avg_loser, 5), round(profit_factor, 5)
     print "\nTrades, Total, geom ret, ann ret", len(trade_log), round(total_return, 5), round(geom_return, 5), round(annualized_return, 5)

@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import stats
 
-def volatility_bs_annualized(price_data, v1, returns_period_length=1):
+def volatility_bs_annualized(price_data, v1, returns_period_length=1, send_latest_mean_ln_return=False):
 
      #The function uses a formula very similar to the Bollinger Bands in which a "windowed" standard deviation is
      #calculated to ensure a high speed. The only major difference is that this formula does NOT feed in Simple Price
@@ -95,7 +95,10 @@ def volatility_bs_annualized(price_data, v1, returns_period_length=1):
          print "%i \t %s \t %0.2f \t %0.4f \t %0.4f \t %0.4f \t %0.4f" % (x, current_date, price_data[x].close, ln_daily_returns[x], ma_returns[x], sigma[x], volatility[x])
      """
 
-     return volatility
+     if send_latest_mean_ln_return:
+        return volatility, ma_returns[-1]
+     else:
+        return volatility
 
 def simple_moving_average(price_data, s1):
 
@@ -332,3 +335,40 @@ def sigma_span(price_data, days, historical_sigma_lookback, sigma_input=None, si
     sigma_span[0:warmup_factor] = 0
 
     return sigma_span, historical_sigma
+
+
+#def sigma_span(price_data, days, historical_sigma_lookback, sigma_input=None, sigma_average_range=0):
+#
+##    if sigma_input is not None:
+##        historical_sigma = sigma_input
+#
+##    else:
+##        # simply extract the most recent value
+##        historical_sigma = sigma_prices(price_data, sigma_average_range)
+#
+#    # this is the historical std dev of the change in price over the past days
+#    historical_volatility, latest_mean_ln_return = volatility_bs_annualized(price_data, historical_sigma_lookback, returns_period_length=days, send_latest_mean_ln_return=True)
+#    most_recent_mean_ret = np.exp(latest_mean_ln_return)
+#
+#    warmup_factor = days + 1
+#
+#    len_data = len(price_data)
+#    sigma_span = np.empty(len_data)
+#
+#    for x in xrange(days + 1, len_data):
+#        if historical_volatility[x] == 0:
+#            sigma_span[x] = 0
+#            continue
+#        if price_data[x] != price_data[x-1]:
+#            displacement = np.log((price_data[x] - price_data[x-days]) / price_data[x-days])
+#        else:
+#            displacement = 0
+#
+#        sigma_span[x] = displacement / historical_volatility[x]
+#        # sigma_span[x] = stats.percentileofscore(historical_sigma, displacement) - 50
+#
+##		print x, tr[x]['Date'], price_data[x], price_data[x-days], displacement, historical_sigma[x], sigma_span[x]
+#
+#    sigma_span[0:warmup_factor] = 0
+#
+#    return sigma_span, most_recent_mean_ret, historical_sigma
