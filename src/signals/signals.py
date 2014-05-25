@@ -548,12 +548,18 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
                   'entry_sigma_span': 1.6,
                   'stop_loss_sigma_loss': 2.0,
                   'stop_loss_abs_pct_loss': 0.06,
-                  # 'target_sigma_span': 1.6,,
-                  'target_volatility_multiple': 1.6,
 
+                  # target sigma span is an exit based on the actual sigma span value at that particular day
+                  'target_sigma_span': 100,     # setting to a very high positive number effectively disables this
+                  'target_volatility_multiple': 100, # 1.6,
+
+
+                  # the sigma span target sigma multiple looks at the return in the trade and exits if it is this
+                  # multiple of the historical sigma span's sigma that was used
+                  'sigma_span_target_sigma_multiple': 0.05, # set to high positive # to disable
                   'sigma_span_length': 5,
                   'sigma_span_historical_lookback': 100,
-                  'exit_days': 1,
+                  'exit_days': 4,
 
                   'liquidity_min_avg_volume': 100000,
                   'liquidity_min_avg_cap': 2500000,
@@ -569,7 +575,7 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
             ### this was a fortuitous error: setting abs stop loss to 1.8 (1800%) instead of 0.06 and then NOT changing target vol_multiple
             # This effectively disabled the stoploss altogether...
             self.k['stop_loss_abs_pct_loss'] = 0.08
-            self.k['target_volatility_multiple'] = 1.9
+            self.k['target_volatility_multiple'] = 100 # 1.9
 
             self.k['volatility_min_required'] = 0.060
             self.k['short_volatility_percentile'] = 85
@@ -589,6 +595,13 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
         if self.volatility[x] < self.ref_vol:
             return False
 
+#        macd_vol = self.macd_line_volatility[x-1]
+#        signal_vol = self.signal_line_volatility[x-1]
+#        histogram_vol = macd_vol - signal_vol
+#
+#        if histogram_vol <= 0:
+#            return False
+
         sigma = self.sigma_closes[x-1]
         # cancel entry if there is low volatility...
         if (sigma / self.closes[x]) < self.k['volatility_min_required'] or (sigma / self.closes[x]) > self.k['volatility_max_allowed']:
@@ -607,6 +620,8 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
         self.sigma_closes = tools.sigma_prices(self.closes, self.k['sigma_closes_length'])
 
         self.volatility = tools.volatility_bs_annualized(self.closes, 30, returns_period_length=self.k['sigma_span_length'])
+
+        # self.macd_line_volatility, self.signal_line_volatility = tools.macd(self.volatility, 12, 26, 9)
 
         # when we use a long lookback, sometimes we don't have enough data, so only lookback as far as we have data
         volatility_long_lookback = min(self.k['volatility_long_lookback'], (len(self.closes) - 10))
@@ -646,12 +661,12 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
                 trade_result.target = (1 + (self.k['target_volatility_multiple'] * self.volatility[x] / target_factor)) * trade_result.entry_price
                 return trade_result
 
-        elif p_0 < sma_0:
-            if (self.sigma_span[x-1] < self.k['entry_sigma_span'] and self.sigma_span[x] > self.k['entry_sigma_span']):
-                trade_result = self.get_entry_trade_result(x)
-                trade_result.long_short = 'short'
-                trade_result.target = (1 - (self.k['target_volatility_multiple'] * self.volatility[x] / target_factor)) * trade_result.entry_price
-                return trade_result
+#        elif p_0 < sma_0:
+#            if (self.sigma_span[x-1] < self.k['entry_sigma_span'] and self.sigma_span[x] > self.k['entry_sigma_span']):
+#                trade_result = self.get_entry_trade_result(x)
+#                trade_result.long_short = 'short'
+#                trade_result.target = (1 - (self.k['target_volatility_multiple'] * self.volatility[x] / target_factor)) * trade_result.entry_price
+#                return trade_result
 
         return False
 
@@ -699,7 +714,9 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
                 current_price > result.target or \
                 current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
                 ret <= pc_stop_loss or \
-                (ret < 0 and time_in > exit_after_loss)):
+                (ret < 0 and time_in > exit_after_loss) or \
+                self.sigma_span[x] > self.k['target_sigma_span'] or \
+                ret > self.k['sigma_span_target_sigma_multiple']):
 
 #            if trading_up and (self.closes[x] > result.target or current_price < (result.entry_price - (stop_loss * entry_sigma)) or \
 #                ret <= pc_stop_loss):
@@ -729,7 +746,9 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
                 current_price < result.target or \
                 current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
                 ret <= pc_stop_loss or \
-                (ret < 0 and time_in > exit_after_loss)):
+                (ret < 0 and time_in > exit_after_loss) or \
+                self.sigma_span[x] < -self.k['target_sigma_span'] or \
+                ret > self.k['sigma_span_target_sigma_multiple']):
 
 #            elif trading_down and (self.closes[x] < result.target or current_price > (result.entry_price + (stop_loss * entry_sigma)) or \
 #                ret <= pc_stop_loss):
@@ -773,7 +792,8 @@ class SignalsSigmaSpanVolatilityTest_2(SignalsSigmaSpan):
 
         # result.entry_score = np.mean(self.volatility_long[-1008:])
         # result.entry_score = abs(self.volatility[x-1] - self.volatility_long[x-1])
-        result.entry_score = result.entry_sigma_over_p
+        result.entry_score = self.volatility_long[x]
+        # result.entry_score = result.entry_sigma_over_p
 
         result.entry_sigma_percentile = stats.percentileofscore(self.volatility, self.volatility[x])
         result.entry_volatility = self.volatility[x]
@@ -1478,7 +1498,7 @@ class MovingAverageSeasonalitySystem(SignalsSigmaSpan):
                   'volatility_min_required': 0.00,
                   'volatility_max_allowed': 100,
 
-                  'stop_loss_abs_pct_loss': 0.50,
+                  'stop_loss_abs_pct_loss': 0.06,
 
                   'entry_month': 11,
                   'entry_day': 10,
@@ -1523,8 +1543,16 @@ class MovingAverageSeasonalitySystem(SignalsSigmaSpan):
         if current_date > current_year_entry_date or current_date < current_year_exit_date:
             score += 0
 
-        if p_0 > sma_0 and self.closes[x-1] > self.sma[x-1]:
-            score += 1
+        # if p_0 > sma_0 and self.closes[x-1] > self.sma[x-1]:
+        if self.closes[x-1] > self.sma[x-1]:
+            # The weekday ordinal = 0 for M, 6 for Sun, so if tomorrow's number is less than today's then today is last
+            # trading day of the current week
+            try:
+                # if current_date.weekday() > datetime.datetime.strptime(self.stock_2_trimmed[x+1]['Date'], '%Y-%m-%d').weekday():
+                if current_date.month != datetime.datetime.strptime(self.stock_2_trimmed[x+1]['Date'], '%Y-%m-%d').month:
+                    score += 1
+            except:
+                pass
 
         if score > 0:
             trade_result = self.get_entry_trade_result(x)
@@ -1585,14 +1613,20 @@ class MovingAverageSeasonalitySystem(SignalsSigmaSpan):
             if current_date > current_year_entry_date or current_date < current_year_exit_date:
                 score += 0
 
-            if self.closes[x] > self.sma[x] or self.closes[x-1] > self.sma[x-1]:
-                score += 1
+            # if self.closes[x] < self.sma[x] and self.closes[x-1] < self.sma[x-1]:
+            if self.closes[x] < self.sma[x]:
+                try:
+                    # if current_date.weekday() > datetime.datetime.strptime(self.stock_2_trimmed[x+1]['Date'], '%Y-%m-%d').weekday():
+                    if current_date.month != datetime.datetime.strptime(self.stock_2_trimmed[x+1]['Date'], '%Y-%m-%d').month:
+                        score += 1
+                except:
+                    pass
 
             # print start_index, score, current_date, current_year_entry_date, current_year_exit_date
                 
 #            if trading_up and self.closes[x] <= self.sma[x]:
             if trading_up and \
-               (score < 1 or ret < pc_stop_loss):
+               (score > 0 or ret < pc_stop_loss):
 
                 result.time_in_trade = x - (start_index - 1)
                 result.exit_price = current_price
