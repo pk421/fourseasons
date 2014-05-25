@@ -22,7 +22,7 @@ def run_indicator_system():
     sectors = ('basic_materials', 'conglomerates', 'consumer_goods', 'financial', 'healthcare', 'industrial_services', \
                'services', 'technology', 'utilities')
 
-    in_file_name = 'etfs_etns_sp_500'
+    in_file_name = 'list_sp_500'
     location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
 
     in_file = open(location, 'r')
@@ -35,7 +35,7 @@ def run_indicator_system():
     etf_list = get_etf_list()
 
     # stock_list = ['SPY', 'KRU']
-    paired_list = get_paired_stock_list(sorted(stock_list), fixed_stock='SPY')
+    paired_list = get_paired_stock_list(sorted(stock_list), fixed_stock='^GSPC')
 
     len_stocks = len(paired_list)
 
@@ -59,7 +59,7 @@ def run_indicator_system():
         if trades is not None and len(trades) > 0:
             trade_log.extend(trades)
 
-    output_fields = ('stock_1', 'stock_2', 'entry_date', 'exit_date', 'entry_price', 'exit_price', 'entry_vol', 'entry_sma', \
+    output_fields = ('stock_1', 'stock_2', 'entry_date', 'exit_date', 'entry_price', 'exit_price', 'long_short', 'entry_vol', 'entry_sma', \
                      'entry_rsi', 'exit_rsi', 'entry_sigma', 'entry_sigma_over_p', 'time_in_trade', \
                      'trade_result', 'ret', 'chained_ret')
 
@@ -71,6 +71,7 @@ def run_indicator_system():
     total_trades_available = len(trade_log)
     ###
     trade_log = backtest_trade_log(trade_log)
+    # trade_log = new_backtest_trade_log(trade_log, num_logs = 2)
     ###
 
     rets = []
@@ -145,7 +146,7 @@ def do_indicator_test(item, k, len_stocks, stock_1_data, is_stock):
     output = None
     next_index = 0
 
-    signal = signals.SignalsSigmaSpanVolatilityTest_2(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock)
+    signal = signals.MovingAverageSeasonalitySystem(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock)
 
     for x in xrange(200, end_data):
         # If we've been told we're still in a trade then we simply skip this day
@@ -170,7 +171,7 @@ def do_indicator_test(item, k, len_stocks, stock_1_data, is_stock):
     return output, trade_log, days_analyzed
 
 
-def backtest_trade_log(trade_log):
+def backtest_trade_log(trade_log, exclude_log=None):
     print "Total Entries Found Length: ", len(trade_log)
     start_date = datetime.datetime(1900, 1, 1)
     end_date = datetime.datetime(2100,1,1)
@@ -226,7 +227,13 @@ def backtest_trade_log(trade_log):
         # print "here", [z.entry_sigma_over_p for z in start_today]
 
         if len(start_today) > 0:
-            small_log.append(start_today[0])
+            if exclude_log is not None:
+                for s in xrange(0, len(start_today)):
+                    if start_today[s] not in exclude_log:
+                        small_log.append(start_today[s])
+                        break
+            else:
+                small_log.append(start_today[0])
         else:
             pass
             # small_log.append(start_today[0])
@@ -245,7 +252,7 @@ def get_intra_prices(trade_log):
     ### To properly determine the sharpe ratio, we must compare the returns in the trade log with returns in
     # SPY over the same period of time. Specifically, we must know the number of days that SPY traded within the
     # time period of interest, then insert returns of zero (1.0) in the trade log so that the length matches SPY
-    ref_price_data = manage_redis.parse_fast_data('SPY', db_to_use=0)
+    ref_price_data = manage_redis.parse_fast_data('^GSPC', db_to_use=0)
 
     system_ret_log = []
     print "*****************************SHARPE RATIO ANALYSIS"
@@ -348,6 +355,36 @@ def get_sharpe_ratio(price_list):
     sortino_ratio = mean / neg_std
 
     return mean, std, neg_std, pos_std, sharpe_ratio, sortino_ratio, avg_loser, avg_winner, pct_losers
+
+def new_backtest_trade_log(trade_log, num_logs = 1):
+
+    final_log = []
+
+    # sending the empty exclude_log is necessary to engage additional logic
+    final_log = backtest_trade_log(trade_log, exclude_log=[])
+
+    for n in xrange(1, num_logs):
+        this_log = backtest_trade_log(trade_log, exclude_log=final_log)
+        final_log.extend(this_log)
+
+    for item in final_log:
+        item.ret = (item.ret / num_logs)
+        item.chained_ret = ((item.chained_ret - 1) / num_logs) + 1
+
+    final_log.sort(key=lambda x: x.exit_date)
+    final_log.sort(key=lambda x: x.entry_date)
+
+
+    if num_logs > 1:
+        # Here we must hack some statistical values to print so we can easily chart the result...
+        for x in xrange(0, len(final_log)):
+            current_chained = 1
+            current_average = 1
+            
+
+
+    return final_log
+
 
 
 def get_etf_list():
