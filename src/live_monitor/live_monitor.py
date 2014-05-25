@@ -332,7 +332,6 @@ def write_current_results(key='current_results', body='not set'):
 
 def run_live_monitor():
 
-    import src.live_monitor.live_monitor_2 as live_monitor_2
     import src.live_monitor.live_monitor_3 as live_monitor_3
     live_monitor_3.run_live_monitor()
 
