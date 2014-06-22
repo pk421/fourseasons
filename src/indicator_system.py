@@ -22,7 +22,7 @@ def run_indicator_system():
     sectors = ('basic_materials', 'conglomerates', 'consumer_goods', 'financial', 'healthcare', 'industrial_services', \
                'services', 'technology', 'utilities')
 
-    in_file_name = 'list_sp_500'
+    in_file_name = 'etfs_etns_sp_500'
     location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
 
     in_file = open(location, 'r')
@@ -35,7 +35,7 @@ def run_indicator_system():
     etf_list = get_etf_list()
 
     # stock_list = ['SPY', 'KRU']
-    paired_list = get_paired_stock_list(sorted(stock_list), fixed_stock='^GSPC')
+    paired_list = get_paired_stock_list(sorted(stock_list), fixed_stock='SPY')
 
     len_stocks = len(paired_list)
 
@@ -59,20 +59,29 @@ def run_indicator_system():
         if trades is not None and len(trades) > 0:
             trade_log.extend(trades)
 
-    output_fields = ('stock_1', 'stock_2', 'entry_date', 'exit_date', 'entry_price', 'exit_price', 'long_short', 'entry_vol', 'entry_sma', \
+    output_fields = ['stock_1', 'stock_2', 'entry_date', 'exit_date', 'entry_price', 'exit_price', 'long_short', 'entry_vol', 'entry_sma', \
                      'entry_rsi', 'exit_rsi', 'entry_sigma', 'entry_sigma_over_p', 'time_in_trade', \
-                     'trade_result', 'ret', 'chained_ret')
+                     'trade_result', 'ret', 'chained_ret']
 
-    output_string = ','.join(output_fields)
-    output_string += '\n'
+
+    do_backtest = 'y'
 
     # The backtest_trade_log effectively shrinks the trade log into only those trades that would be
     # possible in a chronologically traded system (i.e. one at a time)
     total_trades_available = len(trade_log)
     ###
-    trade_log = backtest_trade_log(trade_log)
-    # trade_log = new_backtest_trade_log(trade_log, num_logs = 2)
+    if do_backtest == 'y':
+        trade_log = backtest_trade_log(trade_log)
+    elif do_backtest == 'm':
+        trade_log = multi_port_backtest_trade_log(trade_log, num_logs = 4)
+        backtest_only_fields = ['entry_dollars', 'exit_dollars', 'start_cash_avail', 'total_valuation']
+
+        output_fields.extend(backtest_only_fields)
     ###
+
+
+    output_string = ','.join(output_fields)
+    output_string += '\n'
 
     rets = []
     for trade_item in trade_log:
@@ -135,10 +144,10 @@ def do_indicator_test(item, k, len_stocks, stock_1_data, is_stock):
     stock_2_low = [x['AdjLow'] for x in stock_2_trimmed]
     stock_2_volume = [x['Volume'] for x in stock_2_trimmed]
 
-    if len(stock_2_trimmed) < 201:
+    if len(stock_2_trimmed) < 253:
         return None, None, None
 
-    days_analyzed = len(stock_2_trimmed) - 200
+    days_analyzed = len(stock_2_trimmed) - 252
 
     trade_log = []
 
@@ -146,9 +155,11 @@ def do_indicator_test(item, k, len_stocks, stock_1_data, is_stock):
     output = None
     next_index = 0
 
-    signal = signals.MovingAverageSeasonalitySystem(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock)
-
-    for x in xrange(200, end_data):
+    # signal = signals.MovingAverageSeasonalitySystem(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock, kwargs = {'stock_1_close':stock_1_close} )
+    signal = signals.SignalsSigmaSpanVolatilityTest_2(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock)
+    # signal = signals.SignalsSigmaSpanVolatilityTest_3(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock, kwargs = {'stock_1_close':stock_1_close} )
+    
+    for x in xrange(252, end_data):
         # If we've been told we're still in a trade then we simply skip this day
         if x <= next_index:
             continue
@@ -228,8 +239,10 @@ def backtest_trade_log(trade_log, exclude_log=None):
 
         if len(start_today) > 0:
             if exclude_log is not None:
+                # This will avoid entering more than x number of trades on the same day. This reduces the timing risk
+                exclude_log_start_today = [e for e in exclude_log if e.entry_date == current_date]
                 for s in xrange(0, len(start_today)):
-                    if start_today[s] not in exclude_log:
+                    if start_today[s] not in exclude_log and len(exclude_log_start_today) <= 0:
                         small_log.append(start_today[s])
                         break
             else:
@@ -252,7 +265,7 @@ def get_intra_prices(trade_log):
     ### To properly determine the sharpe ratio, we must compare the returns in the trade log with returns in
     # SPY over the same period of time. Specifically, we must know the number of days that SPY traded within the
     # time period of interest, then insert returns of zero (1.0) in the trade log so that the length matches SPY
-    ref_price_data = manage_redis.parse_fast_data('^GSPC', db_to_use=0)
+    ref_price_data = manage_redis.parse_fast_data('SPY', db_to_use=0)
 
     system_ret_log = []
     print "*****************************SHARPE RATIO ANALYSIS"
@@ -356,34 +369,194 @@ def get_sharpe_ratio(price_list):
 
     return mean, std, neg_std, pos_std, sharpe_ratio, sortino_ratio, avg_loser, avg_winner, pct_losers
 
-def new_backtest_trade_log(trade_log, num_logs = 1):
+def multi_port_backtest_trade_log(trade_log, num_logs = 1):
 
     final_log = []
 
-    # sending the empty exclude_log is necessary to engage additional logic
-    final_log = backtest_trade_log(trade_log, exclude_log=[])
+    # num_logs = 1
 
-    for n in xrange(1, num_logs):
+    for n in xrange(0, num_logs):
         this_log = backtest_trade_log(trade_log, exclude_log=final_log)
         final_log.extend(this_log)
-
-    for item in final_log:
-        item.ret = (item.ret / num_logs)
-        item.chained_ret = ((item.chained_ret - 1) / num_logs) + 1
 
     final_log.sort(key=lambda x: x.exit_date)
     final_log.sort(key=lambda x: x.entry_date)
 
+    ###
+    print "lengths: ", len(trade_log), len(final_log)
 
-    if num_logs > 1:
-        # Here we must hack some statistical values to print so we can easily chart the result...
-        for x in xrange(0, len(final_log)):
-            current_chained = 1
-            current_average = 1
+    most_recent_port_value = 1.0
+    cash_available = 1.0
+    trades_open_now = 0
+    trade_slots_open = num_logs
+    pct_cash_per_trade = 1 / num_logs
+
+    first_entry_date = datetime.datetime.strptime(final_log[0].entry_date, '%Y-%m-%d')
+    last_exit_date = datetime.datetime.strptime(final_log[len(final_log) - 1].exit_date, '%Y-%m-%d')
+
+    ###
+    print "Dates: ", first_entry_date, last_exit_date
+
+    current_date = first_entry_date
+
+    fmt = '%Y-%m-%d'
+
+    open_trades = []
+    output_log = []
+
+    while current_date <= last_exit_date:
+
+        todays_date = current_date.strftime(fmt)
+
+        print "\nCurrent Date, master loop: ", todays_date
+
+        starts_today = [z for z in final_log if z.entry_date == todays_date]
+        exits_today = [z for z in final_log if z.exit_date == todays_date]
+
+        if len(starts_today) == 0 and len(exits_today) == 0:
+            current_date += datetime.timedelta(days=1)
+            continue
+
+        if starts_today:
+            print "Starts Today: ", starts_today
+        if exits_today:
+            print "Exits Today: ", exits_today
+
+        print "Trade Slots Open: ", trade_slots_open
+
+
+        trade_slots_open = num_logs - len(open_trades)
+        if len(exits_today) > 0:
+
+            for x in xrange(0, len(exits_today)):
+
+                current_trade = exits_today[x]
+
+                try:
+                    print "removing this: ", current_trade
+                    print "open trades before: ", open_trades
+                    open_trades = remove_trade(open_trades, current_trade)
+                    print "open trades after: ", open_trades
+
+                except:
+                    print "could not find this trade"
+
+
+                current_trade.exit_dollars = current_trade.entry_dollars * current_trade.chained_ret
+                cash_available += current_trade.exit_dollars
+                print "Current Trade Exit Dollars: ", current_trade.exit_dollars
+
+                print "cash available: ", cash_available
+
+                current_trade.total_valuation = get_valuation(open_trades, cash_available, todays_date)
+
+                output_log.append(current_trade)
+
+
+        trade_slots_open = num_logs - len(open_trades)
+        if len(starts_today) > 0 and trade_slots_open > 0:
+
+            pct_cash_per_trade = 1.0 / trade_slots_open
+            amount_to_allocate = cash_available * pct_cash_per_trade
+
+            max_loop = min(trade_slots_open, len(starts_today))
+            for x in xrange(0, max_loop):
+                starts_today[x].entry_dollars = amount_to_allocate
+                starts_today[x].exit_dollars = 'not_set'
+                starts_today[x].start_cash_avail = amount_to_allocate / pct_cash_per_trade
+                starts_today[x].profit_loss = 'not_set'
+
+                cash_available -= amount_to_allocate
+
+                open_trades.append(starts_today[x])
+
+
+
+        # start_today.sort(key=lambda z: abs((z.entry_score - target)), reverse=False)
+
+        # print current_date, todays_date, starts_today
+
+        current_date += datetime.timedelta(days=1)
+
+#    current_chained_total = 1.0
+#
+#    for x in xrange(0, len(final_log)):
+##        item.ret = (item.ret / num_logs)
+##        item.chained_ret = ((item.chained_ret - 1) / num_logs) + 1
+#
+#        final_log[x].ret = (final_log[x].ret / num_logs)
+#        final_log[x].chained_ret = ((final_log[x].chained_ret - 1) / num_logs) + 1
+#
+#        if x < 2:
+#            final_log[x].product_ret = final_log[x].chained_ret * current_chained_total
+#
+#        else:
+#            final_log[x].product_ret = final_log[x].chained_ret * final_log[x-2].chained_ret
+#
+#    if num_logs > 1:
+#        # Here we must hack some statistical values to print so we can easily chart the result...
+#        for x in xrange(0, len(final_log)):
+#            current_chained = 1
+#            current_average = 1
             
 
 
-    return final_log
+    return output_log
+
+
+
+
+def remove_trade(open_trades, current_trade):
+
+    for x in xrange(0, len(open_trades)):
+        item = open_trades[x]
+
+        if item.stock_2 != current_trade.stock_2:
+            continue
+        if item.entry_date != current_trade.entry_date:
+            continue
+        if item.entry_price != current_trade.entry_price:
+            continue
+
+        open_trades.pop(x)
+
+    return open_trades
+
+
+def get_valuation(open_trades, cash_available, current_date):
+    # take the latest item in the output log as the most recent portfolio total valuation
+    # cash available should already reflect the cash received from the current_trade
+    # that is, we don't actually need the current_trade here
+    # then, add in the valuation at this point in time for the open_trades that exist
+    # as a naive first-pass, we could value the open trades as their entry dollar value, though this would not be
+    # quite accurate
+
+#    fmt = '%Y-%m-%d'
+#    todays_date = current_date.strftime(fmt)
+
+    todays_date = current_date
+
+    total_valuation = cash_available
+
+    for item in open_trades:
+
+        entry_price = item.entry_price
+
+        i = item.date_log.index(todays_date)
+        current_price = item.price_log[i]
+
+        current_return = current_price / entry_price
+
+        current_trade_value = item.entry_dollars * current_return
+
+        total_valuation += current_trade_value
+
+
+    return total_valuation
+
+
+
+
 
 
 

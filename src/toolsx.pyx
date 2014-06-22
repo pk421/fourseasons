@@ -372,3 +372,44 @@ def sigma_span(price_data, days, historical_sigma_lookback, sigma_input=None, si
 #    sigma_span[0:warmup_factor] = 0
 #
 #    return sigma_span, most_recent_mean_ret, historical_sigma
+
+
+
+
+from util.memoize import MemoizeMutable
+
+@MemoizeMutable
+def memoized_simple_moving_average(price_data, s1):
+
+    # cdef np.ndarray[np.float_t, ndim=1] sma
+    # cdef int i, x, warmup_factor, len_data
+
+    len_data = len(price_data)
+
+    #Warmup Factor was determined from David's tests and varies for each function
+    warmup_factor = s1 + 1
+
+    sma = np.empty(len_data)
+
+    #Use numpy to find the mean of the first set of elements and put it in position s1-1. This allows us to use the
+    #windowed mean formula, below
+
+    # Find the mean
+    m = 0.0 # Mean
+    for x in xrange(s1):
+        m += price_data[x]
+    m = m / s1
+    sma[s1 - 1] = m
+
+    for x in xrange(s1, len_data):
+        sma[x] = sma[x-1] + ((price_data[x] - price_data[x-s1]) / s1)
+
+    sma[0:warmup_factor] = 0
+
+    """
+    for x in xrange(0,len_data):
+        current_date = data[x].date
+        print "%i \t %s \t %0.2f \t %0.4f" % (x, current_date, price_data[x].close, ema[x])
+    """
+
+    return sma
