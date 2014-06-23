@@ -2,6 +2,7 @@ import numpy as np
 import scipy as scipy
 import datetime
 import time
+import logging
 
 import math
 # import statsmodels.tsa.stattools as stats
@@ -24,7 +25,6 @@ def run_indicator_system():
 
     in_file_name = 'etfs_etns_sp_500'
     location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
-
     in_file = open(location, 'r')
     stock_list = in_file.read().split('\n')
     for k, item in enumerate(stock_list):
@@ -47,6 +47,8 @@ def run_indicator_system():
     out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/indicator_results_' + in_file_name + '_' + str(current_time) +'.csv'
     out_file = open(out_file_name, 'w')
 
+    data_failures = []
+
     days_analyzed = 0
     base_stock = paired_list[0]['stock_1']
     stock_1_data = manage_redis.parse_fast_data(base_stock, db_to_use=0)
@@ -58,6 +60,10 @@ def run_indicator_system():
             days_analyzed += x
         if trades is not None and len(trades) > 0:
             trade_log.extend(trades)
+        if output == 'data_failure' and trades == None and x == None:
+            data_failures.append(item['stock_2'])
+
+    print "Data Failures: ", len(data_failures), data_failures
 
     output_fields = ['stock_1', 'stock_2', 'entry_date', 'exit_date', 'entry_price', 'exit_price', 'long_short', 'entry_vol', 'entry_sma', \
                      'entry_rsi', 'exit_rsi', 'entry_sigma', 'entry_sigma_over_p', 'time_in_trade', \
@@ -137,7 +143,8 @@ def do_indicator_test(item, k, len_stocks, stock_1_data, is_stock):
         # print "Getting data for: ", item['stock_1'], item['stock_2']
         stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
     except:
-        return None, None, None
+        logging.warning('Exception in getting corrected data: %s' % (item['stock_2']))
+        return 'data_failure', None, None
 
     stock_2_close = [x['AdjClose'] for x in stock_2_trimmed]
     stock_2_high = [x['AdjHigh'] for x in stock_2_trimmed]
