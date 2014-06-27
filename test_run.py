@@ -10,6 +10,7 @@ try:
     from src.correlations import run_correlations
     from src.data_retriever import *
     from src.poll_realtime_data import *
+    from src.portfolio_analysis import run_portfolio_analysis
     from src.harding_seasonality import run_harding_seasonality
     from src.indicator_system import run_indicator_system
     from src.returns_analyzer import run_returns_analyzer
@@ -62,6 +63,10 @@ parser.add_argument("--load_redis",
 
 parser.add_argument("--poll_realtime_data",
                     help="test and engage a screenscraper to continuously feed in a data stream of prices and times",
+                    action="store_true")
+
+parser.add_argument("--portfolio_analysis",
+                    help="run a simulation with weightings in a portfolio",
                     action="store_true")
 
 parser.add_argument("--read_redis",
@@ -120,6 +125,9 @@ if args.load_redis:
 
 if args.poll_realtime_data:
     query_realtime_data()
+
+if args.portfolio_analysis:
+    run_portfolio_analysis()
 
 if args.read_redis:
     read_redis(db_number=1, to_disk=True)

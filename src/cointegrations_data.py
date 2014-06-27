@@ -6,6 +6,8 @@ from src import math_tools
 
 import logging
 
+logger = logging.getLogger(__name__)
+
 
 def get_corrected_data(stock_1_data, stock_2_data, get_returns = None):
     """
@@ -69,7 +71,7 @@ def trim_data(stock_1_data, stock_2_data):
                 trim_at = x
                 break
         stock_2_data = stock_2_data[0:(trim_at+1)]
-        logging.info('Stock 2 End Trimmed: %s %s' % (stock_2_data[0]['Symbol'], trim_at))
+        logger.info('Stock 2 End Trimmed: %s %s' % (stock_2_data[0]['Symbol'], trim_at))
 
     elif stock_2_end < stock_1_end:
         for x in xrange(0, len(stock_1_data)):
@@ -79,7 +81,7 @@ def trim_data(stock_1_data, stock_2_data):
                 trim_at = x
                 break
         stock_1_data = stock_1_data[0:(trim_at+1)]
-        logging.info('Stock 1 End Trimmed: %s %s' % (stock_2_data[0]['Symbol'], trim_at))
+        logger.info('Stock 1 End Trimmed: %s %s' % (stock_1_data[0]['Symbol'], trim_at))
 
     if len(stock_1_data) != len(stock_2_data):
         stock_1_data, stock_2_data = propagate_on_fly(stock_1_data, stock_2_data)
@@ -124,8 +126,8 @@ def propagate_on_fly(stock_1_data, stock_2_data):
         # if x > 3397 and x < 3407:
         # print x, stock_1_data[x]['Date'], stock_2_data[x]['Date'], stock_1_data[x]['Close'], stock_2_data[x]['Close']
 
-        logging.debug('%s %s %s %s %s' % (x, x_min, x_max, len(stock_1_data), len(stock_2_data)))
-        logging.debug('%s %s' % (stock_1_data[x]['Date'], stock_1_data[x]['Date']))
+        logger.debug('%s %s %s %s %s' % (x, x_min, x_max, len(stock_1_data), len(stock_2_data)))
+        logger.debug('%s %s' % (stock_1_data[x]['Date'], stock_1_data[x]['Date']))
 
         if stock_1_data[x]['Date'] != stock_2_data[x]['Date']:
             if datetime.datetime.strptime(stock_1_data[x]['Date'], '%Y-%m-%d').date() > \

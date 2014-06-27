@@ -271,7 +271,11 @@ def get_parameters(symbol, latest_name, latest_date, latest_time, latest_price, 
 
     ### Volatility Check
     sigma_0 = round(np.std(merged_prices[-101:]), 4)
-    sigma_over_p_0 = round(sigma_0 / float(latest_price), 4)
+    try:
+        sigma_over_p_0 = round(sigma_0 / float(latest_price), 4)
+    except:
+        print 'error: could not divide: ' + str(symbol) + ' price: ' + str(latest_price)
+        return False, "price seems to be zero " + str(symbol)
     if sigma_over_p_0 < 0.00:
         return False, "sigma_over_p_0 is too low for " + symbol
 
