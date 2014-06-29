@@ -53,6 +53,7 @@ def trim_data(stock_1_data, stock_2_data):
                 trim_at = x
                 break
         stock_1_data = stock_1_data[trim_at:]
+        logger.debug('Stock 1 Start Trimmed: %s %s' % (stock_1_data[0]['Symbol'], trim_at))
 
     elif stock_2_start < stock_1_start:
         for x in xrange(0, len(stock_2_data)):
@@ -62,6 +63,7 @@ def trim_data(stock_1_data, stock_2_data):
                 trim_at = x
                 break
         stock_2_data = stock_2_data[trim_at:]
+        logger.debug('Stock 2 Start Trimmed: %s %s' % (stock_2_data[0]['Symbol'], trim_at))
 
     if stock_1_end < stock_2_end:
         for x in xrange(0, len(stock_2_data)):
@@ -122,7 +124,8 @@ def propagate_on_fly(stock_1_data, stock_2_data):
     """
     x_min = min(len(stock_1_data), len(stock_2_data))
     x_max = max(len(stock_1_data), len(stock_2_data))
-    for x in xrange(0, x_max):
+
+    for x in xrange(0, x_min):
         # if x > 3397 and x < 3407:
         # print x, stock_1_data[x]['Date'], stock_2_data[x]['Date'], stock_1_data[x]['Close'], stock_2_data[x]['Close']
 
@@ -142,11 +145,11 @@ def propagate_on_fly(stock_1_data, stock_2_data):
                 temp['Date'] = copy.deepcopy(stock_1_data[x]['Date'])
                 stock_2_data.insert(x, temp)
 
-    # for x in xrange(3397, 3408):
-    # 	print x, stock_1_data[x]['Date'], stock_2_data[x]['Date'], stock_1_data[x]['Close'], stock_2_data[x]['Close']
-        # if stock_1_data[x]['Date'] != stock_2_data[x]['Date']:
-        # 	# print stock_1_data[x]['Date'], stock_2_data[x]['Date']
-        # 	break
+    # if we have reached the length of the shorter array, then we can just trim the longer one without propagation
+    if len(stock_1_data) < len(stock_2_data):
+        stock_2_data = stock_2_data[0:len(stock_1_data)]
+    elif len(stock_2_data) < len(stock_1_data):
+        stock_1_data = stock_1_data[0:len(stock_2_data)]
 
     return stock_1_data, stock_2_data
 
