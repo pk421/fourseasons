@@ -73,7 +73,7 @@ def trim_data(stock_1_data, stock_2_data):
                 trim_at = x
                 break
         stock_2_data = stock_2_data[0:(trim_at+1)]
-        logger.info('Stock 2 End Trimmed: %s %s' % (stock_2_data[0]['Symbol'], trim_at))
+        logger.debug('Stock 2 End Trimmed: %s %s' % (stock_2_data[0]['Symbol'], trim_at))
 
     elif stock_2_end < stock_1_end:
         for x in xrange(0, len(stock_1_data)):
@@ -83,7 +83,7 @@ def trim_data(stock_1_data, stock_2_data):
                 trim_at = x
                 break
         stock_1_data = stock_1_data[0:(trim_at+1)]
-        logger.info('Stock 1 End Trimmed: %s %s' % (stock_1_data[0]['Symbol'], trim_at))
+        logger.debug('Stock 1 End Trimmed: %s %s' % (stock_1_data[0]['Symbol'], trim_at))
 
     if len(stock_1_data) != len(stock_2_data):
         stock_1_data, stock_2_data = propagate_on_fly(stock_1_data, stock_2_data)

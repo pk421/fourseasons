@@ -13,96 +13,49 @@ from src.cointegrations_data import get_paired_stock_list, get_corrected_data, t
 from math_tools import get_returns
 
 import logging
+logging.root.setLevel(logging.INFO)
 
 def run_portfolio_analysis():
 
-    portfolio = Portfolio()
-
     assets_list = ['SPY', 'EFA', 'EWJ', 'EEM', 'IYR', 'RWX', 'IEF', 'TLT', 'DBC', 'GLD']
-#    assets_list = ['SPY', 'GLD', 'EEM', 'TLT']
-#    assets_list = ['SPY', 'SHY', 'GLD']
-    assets_list = ['TNA', 'EFA', 'EWJ', 'EEM', 'VNQ', 'RWX', 'IEF', 'TLT', 'DBC', 'SLV']
+    # assets_list = ['SPY', 'SHY', 'GLD']
+    # assets_list = ['TNA', 'EFA', 'EWJ', 'EEM', 'VNQ', 'RWX', 'IEF', 'TLT', 'DBC', 'SLV']
+    # assets_list = ['SPY', 'GLD']
 
-    assets_list = ['SPY', 'SSO', 'TNA', 'IEF']
-
-    logging.root.setLevel(logging.INFO)
-    logging.debug(str(assets_list))
-
-    # we implicitly assume that SPY has correct data and use it to baseline the other instruments
-    stock_1_data = manage_redis.parse_fast_data('SPY', db_to_use=0)
-    input_data = get_data(assets_list, stock_1_data)
-
-    covariance_matrix = get_covariance_matrix(input_data, assets_list, lookback=4)
-
-    
+    mdp_port = MDPPortfolio(assets_list=assets_list)
 
 
+    logging.debug(str(mdp_port.assets))
+
+#    stock_1_data = manage_redis.parse_fast_data(mdp_port.assets[0], db_to_use=0)
+    mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0])
+
+    if not mdp_port:
+        logging.warning("Get Data returned False, Failure")
+        return False
+
+#    rebalance_time = 90
+#    port.weights = [ [1.0 / len(port.assets)] for x in port.assets]
+#
+#    while x < len(mdp_port.trimmed[mdp_port.assets[0]]):
+#
+#        if not (x == 0 or x % rebalance_time == 0):
+#            x = x-1
+#            continue
+#
+#
+#
+#
+#
+#
+#
+#        x = x-1
+
+    covariance_matrix = mdp_port.get_covariance_matrix(x=len(mdp_port.trimmed[mdp_port.assets[0]]), lookback=50)
 
     return
 
-def get_covariance_matrix(input_data, assets_list, lookback=0):
-    if lookback == 0:
-        lookback = len(input_data[assets_list[0]]['trimmed'])
-    logging.info('Lookback Length: ' + str(lookback))
 
-    for item in assets_list:
-        closes = input_data[item]['closes']
-        input_data[item]['returns'] = get_returns(closes[-lookback:])
-        #print "***", item, closes, input_data[item]['returns']
-
-
-    returns_items = []
-    volatilities = []
-    for z in assets_list:
-        #print z, input_data[item]['returns']
-        rets = (input_data[z]['returns'])
-        returns_items.append(rets)
-        volatility = [np.std(rets)]
-        volatilities.append(volatility)
-    #print returns_items
-
-    # using (lookback-1) cuts out a leading zero that appears on day 1, since there is no return yet
-    returns_matrix = np.array([input_data[item]['returns'][-(lookback-1):] for item in assets_list])
-    print "\nRETURNS: \n", returns_matrix
-    
-
-    # print '\n', np.cov(input_data['SPY']['returns'])
-
-    volatilities = np.array(volatilities)
-    cov_matrix = np.cov(returns_items)
-    inv_cov_matrix = scipy.linalg.inv(cov_matrix)
-    transposed_volatilities = np.matrix.transpose(volatilities)
-
-
-    print "\nCOV MATRIX: \n", cov_matrix
-    print "\nINVERSE COV MATRIX: \n", inv_cov_matrix
-    print "\nVolatilties: \n", volatilities
-    print "\nTransposed Volatilities: \n", transposed_volatilities
-    print "\n"
-
-    numerator = np.dot(inv_cov_matrix, volatilities)
-    denominator_a = np.dot(transposed_volatilities, inv_cov_matrix)
-    denominator = np.dot(denominator_a, volatilities)
-    weights = np.divide(numerator, denominator)
-
-    print numerator, '\n\n', denominator_a, '\n\n', denominator, '\n\n', weights
-
-    total_sum = sum(weights)[0]
-
-    print "\nSUM: ", total_sum
-
-    normalized_weights = np.divide(weights, total_sum)
-
-    print "\nNormalized Weights:\n", normalized_weights
-
-
-    port_constraints = [{'type': 'eq', 'fun': positive_sum_only},\
-                        {'type': 'eq', 'fun': result_positive}]
-
-    # get_mean_variance(matrix)
-    # result = scipy.optimize.minimize(get_mean_variance, [0.5,0.5], method='TNC', options={'xtol': 1e-8, 'disp': True}, bounds = ((0, None), (0,None)))
-#    print result
-#    print result.x
 
 
 def get_mean_variance(matrix):
@@ -141,72 +94,174 @@ def result_positive(matrix):
 
 
 
-def get_data(assets_list, stock_1_data, base_etf='SPY'):
+def get_data(port, base_etf):
     """
-    Before this point everything was trimmed relative to SPY. Now, we trim everything so all datasets are same length.
+    This section trims everything relative to SPY (so it will not have MORE data than SPY), but it can have less, so the
+    lengths of the data are still not consistent yet.
     """
-    input_data = {}
+    stock_1_data = manage_redis.parse_fast_data(base_etf, db_to_use=0)
 
     logging.info('Loading Data...')
-    for item in assets_list:
+    logging.info('Base Start/End Dates: %s %s %s' % (base_etf, stock_1_data[0]['Date'],stock_1_data[-1]['Date']))
+    for item in port.assets:
         logging.debug(item)
         stock_2_data = manage_redis.parse_fast_data(item, db_to_use=0)
+        logging.info('Base Start/End Dates: %s %s %s' % (item, stock_2_data[0]['Date'], stock_2_data[-1]['Date']))
         stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
-        input_data['SPY'] = {}
-        input_data[item] = {}
-        input_data['SPY']['closes'] = stock_1_close
-        input_data['SPY']['trimmed'] = stock_1_trimmed
-        input_data[item]['closes'] = stock_2_close
-        input_data[item]['trimmed'] = stock_2_trimmed
+        port.closes[base_etf] = stock_1_close
+        port.trimmed[base_etf] = stock_1_trimmed
+        port.closes[item] = stock_2_close
+        port.trimmed[item] = stock_2_trimmed
 
-    logging.debug('%s %s' % (input_data[item]['trimmed'][0], input_data['SPY']['trimmed'][0]))
+        #iteratively trim the input data
+        stock_1_data = stock_1_trimmed
 
+#        logging.info('%s %s %s %s %s %s' % (item, port.trimmed[item][0]['Date'], port.trimmed[item][-1]['Date'], \
+#                                            base_etf, port.trimmed[base_etf][0]['Date'], port.trimmed[base_etf][-1]['Date']))
 
-    max_start_date = 0
-    etf_latest_start = 'SPY'
+    # logging.info('%s \n %s \n %s \n %s' % (port.trimmed[item][0], port.trimmed[item][-1], port.trimmed[base_etf][0], port.trimmed[base_etf][-1]))
 
-    for item in assets_list:
-#        print item, int(input_data[item]['trimmed'][0]['Date'].replace('-', ''))
-        start_date = int(input_data[item]['trimmed'][0]['Date'].replace('-', ''))
-        if start_date > max_start_date and item != 'SPY':
-            max_start_date = start_date
-            etf_latest_start = item
-
-    # logging.debug('%s %s' % (input_data[etf_latest_start]['trimmed'][0], input_data['SPY']['trimmed'][0]))
-
-    # run SPY thru trimming algo to reset its start date, then re-run all others against SPY to reset them
-    etf_close, base_close, etf_trim, base_trim = get_corrected_data(input_data[etf_latest_start]['trimmed'], input_data['SPY']['trimmed'])
-
-    input_data['SPY']['closes'] = base_close
-    input_data['SPY']['trimmed'] = base_trim
-
-    stock_1_data = input_data['SPY']['trimmed']
-    for item in assets_list:
-        logging.info(item)
-        stock_2_data = input_data[item]['trimmed']
+    # Now run all of the assets back through the trimming function but do it against the already-trimmed base etf
+    stock_1_data = port.trimmed[base_etf]
+    for item in port.assets:
+        logging.debug(item)
+        stock_2_data = port.trimmed[item]
         stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
-        input_data['SPY'] = {}
-        input_data[item] = {}
-        input_data['SPY']['closes'] = stock_1_close
-        input_data['SPY']['trimmed'] = stock_1_trimmed
-        input_data[item]['closes'] = stock_2_close
-        input_data[item]['trimmed'] = stock_2_trimmed
+        port.closes[base_etf] = stock_1_close
+        port.trimmed[base_etf] = stock_1_trimmed
+        port.closes[item] = stock_2_close
+        port.trimmed[item] = stock_2_trimmed
 
-    for item in assets_list:
-        logging.info('\n%s %s' % (item, int(input_data[item]['trimmed'][0]['Date'].replace('-', ''))))
-        logging.info('%s %s' % (item, input_data[item]['trimmed'][25]))
-
-    return input_data
+        logging.info('%s %s %s %s %s %s' % (item, port.trimmed[item][0]['Date'], port.trimmed[item][-1]['Date'], \
+                                    base_etf, port.trimmed[base_etf][0]['Date'], port.trimmed[base_etf][-1]['Date']))
 
 
+    if not port.validate_portfolio():
+        return False
 
-class Portfolio():
+    logging.info('\nData has been properly imported and validated.')
 
-    def __init__(self):
-        pass
+    return port
 
 
 
+
+class MDPPortfolio():
+
+    def __init__(self, assets_list):
+
+        self.assets = assets_list
+        self.weights = []
+
+        # These should not get reset
+        self.closes = {}
+        self.trimmed = {}
+
+        self.returns = {}
+        self.volatilities = {}
+
+        #Matrices / vectors
+        self.returns_matrix = None
+        self.volatilities_matrix = None
+        self.cov_matrix = None
+        self.inv_cov_matrix = None
+        self.transposed_volatilities_matrix = None
+
+        self.universal_lookback = 90
+        self.rebalance_time = 30
+
+        for item in assets_list:
+            self.closes[item] = []
+            self.trimmed[item] = []
+            self.returns[item] = []
+            self.volatilities[item] = []
+
+    def validate_portfolio(self):
+        len_data = len(self.trimmed[self.assets[0]])
+        start_date = self.trimmed[self.assets[0]][0]['Date']
+        end_date = self.trimmed[self.assets[0]][-1]['Date']
+
+        for item in self.assets:
+            if len(self.trimmed[item]) != len_data:
+                logging.info('Failed validation: %s %s %s %s' % (item, 'len trimmed', len(self.trimmed[item]), len_data))
+
+                logging.info('Failed validation: %s %s %s %s' % (item, 'len closes', len(self.closes[item]), len_data))
+                logging.info('Failed validation: %s %s %s %s' % (item, 'start dates', self.trimmed[item][0]['Date'], start_date))
+                logging.info('Failed validation: %s %s %s %s' % (item, 'end dates', self.trimmed[item][-1]['Date'], end_date))
+                return False
+            if len(self.closes[item]) != len_data:
+                logging.info('Failed validation: %s %s %s %s' % (item, 'len closes', len(self.closes[item]), len_data))
+                return False
+
+            if self.trimmed[item][0]['Date'] != start_date:
+                logging.info('Failed validation: %s %s %s %s' % (item, 'start dates', self.trimmed[item][0]['Date'], start_date))
+                return False
+            if self.trimmed[item][-1]['Date'] != end_date:
+                logging.info('Failed validation: %s %s %s %s' % (item, 'end_date', self.trimmed[item][-1]['Date'], end_date))
+                return False
+
+        return True
+
+    def get_covariance_matrix(self, x, lookback=0):
+
+        end_index = x
+        start_index = x - lookback
+
+#        if lookback == 0:
+#            lookback = len(self.trimmed[self.assets[0]])
+#        logging.info('Lookback Length: ' + str(lookback))
+
+        for item in self.assets:
+            closes = self.closes[item][start_index:end_index]
+            self.returns[item] = get_returns(closes)
+
+        for z in self.assets:
+            rets = (self.returns[z])
+            self.volatilities[z] = np.std(rets)
+
+        # using (lookback-1) cuts out a leading zero that appears on day 1, since there is no return yet
+        self.returns_matrix = np.array([self.returns[item] for item in self.assets])
+    #    print "\nRETURNS: \n", self.returns_matrix
+
+
+        volatilities = [ [self.volatilities[z]] for z in self.assets ]
+        self.volatilities_matrix = np.array(volatilities)
+        self.cov_matrix = np.cov(self.returns_matrix)
+        self.inv_cov_matrix = scipy.linalg.inv(self.cov_matrix)
+        self.transposed_volatilities_matrix = np.matrix.transpose(self.volatilities_matrix)
+
+
+    #    print "\nCOV MATRIX: \n", self.cov_matrix
+    #    print "\nINVERSE COV MATRIX: \n", self.inv_cov_matrix
+    #    print "\nVolatilties: \n", self.volatilities_matrix
+    #    print "\nTransposed Volatilities: \n", self.transposed_volatilities_matrix
+    #    print "\n"
+
+        numerator = np.dot(self.inv_cov_matrix, self.volatilities_matrix)
+        denominator_a = np.dot(self.transposed_volatilities_matrix, self.inv_cov_matrix)
+        denominator = np.dot(denominator_a, self.volatilities_matrix)
+        weights = np.divide(numerator, denominator)
+
+        print numerator, '\n\n', denominator_a, '\n\n', denominator, '\n\n', weights
+
+        total_sum = sum(weights)[0]
+
+        print "\nSUM: ", total_sum
+
+        normalized_weights = np.divide(weights, total_sum)
+
+        print "\nNormalized Weights:\n", normalized_weights
+
+        return normalized_weights
+
+
+    #    port_constraints = [{'type': 'eq', 'fun': positive_sum_only},\
+    #                        {'type': 'eq', 'fun': result_positive}]
+
+        # get_mean_variance(matrix)
+        # result = scipy.optimize.minimize(get_mean_variance, [0.5,0.5], method='TNC', options={'xtol': 1e-8, 'disp': True}, bounds = ((0, None), (0,None)))
+    #    print result
+    #    print result.x
 
 
 #    U.S. Stocks (SPY)
