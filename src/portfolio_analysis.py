@@ -20,9 +20,9 @@ logging.root.setLevel(logging.INFO)
 def run_portfolio_analysis():
 
     assets_list = ['SPY', 'EFA', 'EWJ', 'EEM', 'IYR', 'RWX', 'IEF', 'TLT', 'DBC', 'GLD']
-    assets_list = ['SPY', 'TLT', 'GLD']
+    # assets_list = ['SPY', 'TLT', 'GLD']
     # assets_list = ['TNA', 'EFA', 'EWJ', 'EEM', 'VNQ', 'RWX', 'IEF', 'TLT', 'DBC', 'SLV']
-   # assets_list = ['SPY', 'GLD']
+    # assets_list = ['SPY']
 
     in_file_name = 'list_dow_modified'
     location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
@@ -32,20 +32,6 @@ def run_portfolio_analysis():
         new_val = item.split('\r')[0]
         stock_list[k] = new_val
     in_file.close()
-
-#    assets_list = stock_list
-
-
-
-#    matrix = np.array([[0.5],[0.5]])
-#    port_constraints = [{'type': 'eq', 'fun': no_leverage},\
-#                        {'type': 'eq', 'fun': result_positive}]
-#
-#    get_mean_variance(matrix)
-#    result = scipy.optimize.minimize(get_mean_variance, [0.5,0.5], method='SLSQP', options={'xtol': 1e-8, 'disp': True}, bounds = ((0, 1), (0,1)), constraints=port_constraints)
-#    print result
-#    print result.x
-#    return
 
     mdp_port = MDPPortfolio(assets_list=assets_list)
 
@@ -57,9 +43,8 @@ def run_portfolio_analysis():
         logging.warning("Get Data returned False, Failure")
         return False
 
-    rebalance_time = 30
-    # mdp_port.weights = [ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets]
-    mdp_port.weights = [ [.99], [0.005], [0.005]]
+    mdp_port.weights = [ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets]
+    # mdp_port.weights = [ [.99], [0.005], [0.005]]
     mdp_port.weights = np.array(mdp_port.weights)
     mdp_port.normalized_weights = mdp_port.weights
 
@@ -67,11 +52,10 @@ def run_portfolio_analysis():
     current_portfolio_valuation = get_port_valuation(mdp_port, x=0)
 
     x=0
+    mdp_port.lookback = 60
+    rebalance_time = mdp_port.lookback
     previous_rebalance = 1
     while x < len(mdp_port.trimmed[mdp_port.assets[0]]):
-#        if x == 0:
-#            x += 1
-#            continue
         if not (x % rebalance_time == 0) or x == 0:
             current_portfolio_valuation = get_port_valuation(mdp_port, x=x)
             mdp_port.portfolio_valuations.append((mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation / previous_rebalance))
@@ -87,7 +71,7 @@ def run_portfolio_analysis():
             print "old weighted: ", old_weighted_valuation
 
             lookback_val = min(x, 126)
-            ### mdp_port.rebalance(x, lookback=lookback_val)
+            ### mdp_port.rebalance(x)
 
             mdp_port.x = x
             # mdp_port.optimize(x, lookback=lookback_val)
@@ -99,7 +83,12 @@ def run_portfolio_analysis():
 #            result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, method='SLSQP', options={'xtol': 1e-8, 'disp': True}, bounds = [(0,1) for z in mdp_port.assets] , constraints=port_constraints)
             result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, jac=mdp_port.optimize_derivative, method='SLSQP', options={'xtol': 1e-8, 'disp': True}, constraints=port_constraints)
             print "**************FINAL RESULT: \n", result
-            return
+            print result.x, mdp_port.normalized_weights
+            sum_result = sum(result.x)
+            normalized_weights = np.array([[z / sum_result] for z in result.x])
+            print normalized_weights
+            mdp_port.normalized_weights = normalized_weights
+
 
             current_portfolio_valuation = get_port_valuation(mdp_port, x=x)
 
@@ -152,51 +141,6 @@ def get_port_valuation(port, x=0):
 
 
 
-
-
-
-def get_mean_variance(matrix):
-
-    logging.debug('MATRIX: %s' % (matrix))
-
-    covariances = [1.2, 0.6]
-    dot_product = matrix * covariances
-    total = sum(dot_product)
-
-    total = 0 + abs(total)
-
-#    total = 0
-#    for x in xrange(0, 2):
-#        total += matrix[x]
-
-#    total = total / len(covariances)
-
-    logging.debug('Total: %s' % (total))
-    return total
-
-def no_leverage(matrix):
-    k = 1.0
-    result = k - sum(matrix)
-
-    logging.info('Constraint: %s' % (result))
-
-    return result
-
-def result_positive(matrix):
-    k = 0.0
-
-    return min(0, (k-matrix[0]))
-
-#    port_constraints = [{'type': 'eq', 'fun': positive_sum_only},\
-#                        {'type': 'eq', 'fun': result_positive}]
-
-    # get_mean_variance(matrix)
-    # result = scipy.optimize.minimize(get_mean_variance, [0.5,0.5], method='TNC', options={'xtol': 1e-8, 'disp': True}, bounds = ((0, None), (0,None)))
-#    print result
-#    print result.x
-
-
-
 def get_data(port, base_etf):
     """
     This section trims everything relative to SPY (so it will not have MORE data than SPY), but it can have less, so the
@@ -238,15 +182,12 @@ def get_data(port, base_etf):
         logging.info('%s %s %s %s %s %s' % (item, port.trimmed[item][0]['Date'], port.trimmed[item][-1]['Date'], \
                                     base_etf, port.trimmed[base_etf][0]['Date'], port.trimmed[base_etf][-1]['Date']))
 
-
     if not port.validate_portfolio():
         return False
 
     logging.info('\nData has been properly imported and validated.')
 
     return port
-
-
 
 
 class MDPPortfolio():
@@ -275,8 +216,8 @@ class MDPPortfolio():
         self.inv_cov_matrix = None
         self.transposed_volatilities_matrix = None
 
-        self.universal_lookback = 90
-        self.rebalance_time = 30
+        self.lookback = 90
+        # self.rebalance_time = 90
 
         for item in assets_list:
             self.closes[item] = []
@@ -292,7 +233,6 @@ class MDPPortfolio():
         for item in self.assets:
             if len(self.trimmed[item]) != len_data:
                 logging.info('Failed validation: %s %s %s %s' % (item, 'len trimmed', len(self.trimmed[item]), len_data))
-
                 logging.info('Failed validation: %s %s %s %s' % (item, 'len closes', len(self.closes[item]), len_data))
                 logging.info('Failed validation: %s %s %s %s' % (item, 'start dates', self.trimmed[item][0]['Date'], start_date))
                 logging.info('Failed validation: %s %s %s %s' % (item, 'end dates', self.trimmed[item][-1]['Date'], end_date))
@@ -310,23 +250,20 @@ class MDPPortfolio():
 
         return True
 
-    def rebalance(self, x, lookback=30):
+    def rebalance(self, x):
 
         current_weights = self.normalized_weights
         current_valuation = get_port_valuation(self, x)
-        new_weights = self.get_covariance_matrix(x, lookback=lookback)
+        new_weights = self.get_covariance_matrix(x)
         return True
 
-#    def optimize(self, x, lookback=30):
     def optimize(self, matrix):
-
-        lookback = 30
         x = self.x
 
         # from equation 31
         normalized_weights = np.array(self.normalized_weights)
         transposed_weights = np.matrix.transpose(normalized_weights)
-        _ = self.get_covariance_matrix(x, lookback=lookback)
+        _ = self.get_covariance_matrix(x)
         cov_matrix = self.cov_matrix
         # ret = 0.5 * transposed_weights * cov_matrix * self.normalized_weights
         r1 = np.dot(0.5, transposed_weights)
@@ -345,28 +282,21 @@ class MDPPortfolio():
         return r3[0][0]
 
     def optimize_derivative(self, weights):
-        print "\nOptimize Derivative:"
-        print "Weights: ", weights
+        logging.info('Optimization Derivative Weights: %s' % (weights))
 
-        _ = self.get_covariance_matrix(self.x, lookback=30)
+        _ = self.get_covariance_matrix(self.x)
         cov_matrix = self.cov_matrix
-        print self.cov_matrix
-
-        derivative = np.array([1, 2, 3])
-
+        
         len_data = len(weights)
         deriv_items = []
         for row in xrange(0, len_data):
             items = [ 2 * weights[x] * cov_matrix[row][x] for x in xrange(0, len_data) ]
-            print "*******ROW: ", row, items
+            logging.info('Derivative Row Items %s %s' % (row, items))
             items_sum = sum(items)
             deriv_items.append(items_sum)
 
         derivative = np.array(deriv_items)
-        print "$$$$$$$$$ FINAL DERIV ITEMS: ", derivative
-
-
-
+        logging.info('Final Derivative %s' % (derivative))
 
         return derivative
 
@@ -374,7 +304,10 @@ class MDPPortfolio():
         # normalized_weights = np.array(self.normalized_weights)
         normalized_weights = weights
         transposed_weights = np.matrix.transpose(normalized_weights)
-        _ = self.get_covariance_matrix(self.x, lookback=30)
+        _ = self.get_covariance_matrix(self.x)
+
+        logging.info('weighted_vols_equal_one: transposed_weights: %s' % (transposed_weights))
+        logging.info('weighted_vols_equal_one: volatilities_matrix: %s' % (self.volatilities_matrix))
 
         r1 = np.dot(transposed_weights, self.volatilities_matrix)
 
@@ -385,10 +318,9 @@ class MDPPortfolio():
 
         return r1[0] - 1
 
-    def get_covariance_matrix(self, x, lookback=0):
-
+    def get_covariance_matrix(self, x):
         end_index = x
-        start_index = x - lookback
+        start_index = x - self.lookback
 
 #        if lookback == 0:
 #            lookback = len(self.trimmed[self.assets[0]])
@@ -414,7 +346,6 @@ class MDPPortfolio():
         self.inv_cov_matrix = scipy.linalg.inv(self.cov_matrix)
         self.transposed_volatilities_matrix = np.matrix.transpose(self.volatilities_matrix)
 
-
     #    print "\nCOV MATRIX: \n", self.cov_matrix
     #    print "\nINVERSE COV MATRIX: \n", self.inv_cov_matrix
     #    print "\nVolatilties: \n", self.volatilities_matrix
@@ -435,21 +366,11 @@ class MDPPortfolio():
 
         self.normalized_weights = np.divide(self.weights, total_sum)
 
-
         printed_weights = '\n'.join([ (str(a) + '\t' + str(self.normalized_weights[i][0])) for i, a in enumerate(self.assets)])
         print "\nNormalized Weights:\n", printed_weights
         print "\nSum of normalized: \n", sum(self.normalized_weights)[0]
 
         return self.normalized_weights
-
-
-    #    port_constraints = [{'type': 'eq', 'fun': positive_sum_only},\
-    #                        {'type': 'eq', 'fun': result_positive}]
-
-        # get_mean_variance(matrix)
-        # result = scipy.optimize.minimize(get_mean_variance, [0.5,0.5], method='TNC', options={'xtol': 1e-8, 'disp': True}, bounds = ((0, None), (0,None)))
-    #    print result
-    #    print result.x
 
 
 #    U.S. Stocks (SPY)
