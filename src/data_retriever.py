@@ -189,6 +189,7 @@ def load_redis(stock_list='do_all', db_number=99, file_location='tmp/', dict_siz
     validation_file = ''
     failed_symbols = []
     no_data_symbols = []
+    data_in_csv_empty = []
     
     for k, symbol in enumerate(symbols):
         try:
@@ -201,8 +202,11 @@ def load_redis(stock_list='do_all', db_number=99, file_location='tmp/', dict_siz
         days = all_data.split('\n')
 
         #this removes the header title information
-        if len(days) > 0:
+        if len(days) > 0 and days[0] != '':
             del days[0]
+        else:
+            data_in_csv_empty.append(symbol)
+            continue
 
         stock_price_set = []
         for day in days:
@@ -245,6 +249,7 @@ def load_redis(stock_list='do_all', db_number=99, file_location='tmp/', dict_siz
 
     end_time = datetime.datetime.now()
     time_required = end_time - start_time
+    print "\nData In CSV Is Empty: ", data_in_csv_empty
     print "\nFailed Validation Symbols: ", failed_symbols
     print "\nNumber of validation failures: ", len(failed_symbols)
     print "\nNo Data Symbols: ", no_data_symbols
