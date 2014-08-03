@@ -23,6 +23,8 @@ def run_portfolio_analysis():
     # assets_list = ['SPY', 'TLT', 'GLD']
     # assets_list = ['TNA', 'EFA', 'EWJ', 'EEM', 'VNQ', 'RWX', 'IEF', 'TLT', 'DBC', 'SLV']
     # assets_list = ['SPY']
+    # assets_list = ['SPXL', 'TYD', 'DRN', 'UGLD']
+    # assets_list = ['SPY', 'IEF', 'VNQ', 'GLD']
 
     in_file_name = 'list_dow_modified'
     location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
@@ -52,7 +54,7 @@ def run_portfolio_analysis():
     current_portfolio_valuation = get_port_valuation(mdp_port, x=0)
 
     x=0
-    mdp_port.lookback = 60
+    mdp_port.lookback = 50
     rebalance_time = mdp_port.lookback
     previous_rebalance = 1
     while x < len(mdp_port.trimmed[mdp_port.assets[0]]):
@@ -66,32 +68,83 @@ def run_portfolio_analysis():
             # When calculating the rebalance ratio, we first assume we used the old weights for today's valuation. Then
             # we calculate new weights for today, value the portfolio for today, then find the ratio for today if we
             # had used the old weights for today
-
             old_weighted_valuation = get_port_valuation(mdp_port, x=x) / previous_rebalance
-            print "old weighted: ", old_weighted_valuation
-
-            lookback_val = min(x, 126)
-            ### mdp_port.rebalance(x)
-
+            # This is the portfolio value today, IF we had been using the previous weighting
+            print "Today's value @ old weighting: ", old_weighted_valuation
             mdp_port.x = x
-            # mdp_port.optimize(x, lookback=lookback_val)
-            port_constraints = [{'type': 'eq',
-                                 'fun': mdp_port.weighted_vols_equal_one,
-                                 # 'jac':
-                               }]
+            
+#            port_constraints = [{'type': 'eq',
+#                                 'fun': mdp_port.weighted_vols_equal_one,
+#                                 'jac': mdp_port.weighted_vols_equal_one_jacobian},
+#                                 {'type': 'eq',
+#                                 'fun': mdp_port.no_negative_weights,
+##                                 'jac': mdp_port.no_negative_weights_jacobian
+#                               }
+#                               ]
+            
+            constraints_2 = ()#({'type':'eq', 'fun': lambda W: sum(W)-1. })
+            bounds_2 = ()# [(0.,0.05) for i in range(len(mdp_port.assets))]
+            # constraints_2 = ()
+            # bounds_2 = []
 
-#            result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, method='SLSQP', options={'xtol': 1e-8, 'disp': True}, bounds = [(0,1) for z in mdp_port.assets] , constraints=port_constraints)
-            result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, jac=mdp_port.optimize_derivative, method='SLSQP', options={'xtol': 1e-8, 'disp': True}, constraints=port_constraints)
-            print "**************FINAL RESULT: \n", result
-            print result.x, mdp_port.normalized_weights
+#            result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, jac=mdp_port.optimize_jacobian, method='SLSQP', options={'xtol': 1e-8, 'disp': True}, bounds = [(0,1) for z in mdp_port.assets] , constraints=port_constraints)
+#            result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, jac=mdp_port.optimize_jacobian, method='SLSQP', options={'xtol': 1e-8, 'disp': True}, constraints=port_constraints)
+
+
+
+            # result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, jac=mdp_port.optimize_jacobian, method='SLSQP', options={'xtol': 1e-8, 'disp': True})
+            # result = scipy.optimize.basinhopping(mdp_port.optimize, mdp_port.weights, niter=1004, T=1e2, stepsize=1e2)
+
+            
+
+            # result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, method='SLSQP', constraints=constraints_2, bounds=bounds_2)
+
+            # result = scipy.optimize.basinhopping(mdp_port.optimize, mdp_port.weights, niter=50, T=1, stepsize=1, disp=True)
+            # result = scipy.optimize.brute(mdp_port.optimize, [(0,1) for z in mdp_port.assets], Ns=4, full_output=False)
+
+            nw = mdp_port.normalized_weights
+            _ = mdp_port.get_covariance_matrix(x)
+            cm = mdp_port.cov_matrix
+            assets = mdp_port.assets
+            # result = scipy.optimize.minimize(optimize, nw, (cm,), method='SLSQP', constraints=constraints_2, bounds=bounds_2)
+
+
+            # result = scipy.optimize.brute(optimize, [(0,1) for z in assets], (cm,), Ns=11, full_output=False)
+
+            mk = {'args':(cm,)}
+            result = scipy.optimize.basinhopping(optimize, nw, niter=101, T=5e2, stepsize=5e2, disp=True, minimizer_kwargs=mk)
+
+
+            print result
+
+            # print "Optimize Result: ", result.status, result.success
+            print "Theoretical Result: \n", mdp_port.normalized_weights
+            print "weighted vols equal one check: ", mdp_port.weighted_vols_equal_one(mdp_port.normalized_weights)
+
+            ### Execute this if doing brute force
+#            sum_result = sum(result)
+#            normalized_weights = np.array([[round(z / sum_result, 6)] for z in result])
+#            print result[0], sum_result
+            ###
+
+            ### Execute this if doing basinhopping / slsqp
             sum_result = sum(result.x)
-            normalized_weights = np.array([[z / sum_result] for z in result.x])
-            print normalized_weights
+            normalized_weights = np.array([[round(z / sum_result, 6)] for z in result.x])
+            ###
+
+            mdp_port.rebalance(x)
+
+            ###
+            # Letting this code executes overrides the optimization and uses the theoretical values for port analysis
+            # normalized_weights = mdp_port.normalized_weights
+            ###
+
+            print "Constrained (+) Result: \n", normalized_weights
+            print "weighted vols equal one check: ", mdp_port.weighted_vols_equal_one(normalized_weights)
             mdp_port.normalized_weights = normalized_weights
 
-
             current_portfolio_valuation = get_port_valuation(mdp_port, x=x)
-
+            print "Current Portfolio New Valuation: ", current_portfolio_valuation
             previous_rebalance = current_portfolio_valuation / old_weighted_valuation
             print "Previous Rebalance: ", previous_rebalance
 
@@ -260,12 +313,11 @@ class MDPPortfolio():
     def optimize(self, matrix):
         x = self.x
 
-        # from equation 31
+        # from equation 31:
         normalized_weights = np.array(self.normalized_weights)
         transposed_weights = np.matrix.transpose(normalized_weights)
         _ = self.get_covariance_matrix(x)
         cov_matrix = self.cov_matrix
-        # ret = 0.5 * transposed_weights * cov_matrix * self.normalized_weights
         r1 = np.dot(0.5, transposed_weights)
         r2 = np.dot(r1, cov_matrix)
         r3 = np.dot(r2, normalized_weights)
@@ -277,12 +329,34 @@ class MDPPortfolio():
 
         # print r1
         # print r2
-        print "OPTIMIZE RESULT: \n", r3
+        # logging.info('Optimize function value: %s' % (str(r3)))
 
-        return r3[0][0]
+        # return r3[0][0]
 
-    def optimize_derivative(self, weights):
-        logging.info('Optimization Derivative Weights: %s' % (weights))
+        ### Add in constraints here, make them positive and additive
+        # print "R3: ", r3
+        # print normalized_weights
+        # print sum(normalized_weights)
+        w = (abs((sum(normalized_weights) - 1)) + 1) **6    # This should get very large if the sum is <<1 or >>1
+
+        neg_weights = abs(sum( [ a[0] for a in normalized_weights if a < 0 ] ))
+
+        neg_weights = (1 + neg_weights) ** 4
+        print "neg: ", neg_weights
+
+        n = neg_weights if neg_weights else 0
+
+        # print "n: ", n
+
+
+        r3 = r3[0][0] + w + n
+
+        # print "final R3: ", r3
+
+        return r3
+
+    def optimize_jacobian(self, weights):
+        # logging.info('Optimization Derivative Weights: %s' % (weights))
 
         _ = self.get_covariance_matrix(self.x)
         cov_matrix = self.cov_matrix
@@ -291,12 +365,12 @@ class MDPPortfolio():
         deriv_items = []
         for row in xrange(0, len_data):
             items = [ 2 * weights[x] * cov_matrix[row][x] for x in xrange(0, len_data) ]
-            logging.info('Derivative Row Items %s %s' % (row, items))
+            # logging.info('Derivative Row Items %s %s' % (row, items))
             items_sum = sum(items)
             deriv_items.append(items_sum)
 
         derivative = np.array(deriv_items)
-        logging.info('Final Derivative %s' % (derivative))
+        # logging.info('Final Derivative %s' % (derivative))
 
         return derivative
 
@@ -306,17 +380,42 @@ class MDPPortfolio():
         transposed_weights = np.matrix.transpose(normalized_weights)
         _ = self.get_covariance_matrix(self.x)
 
-        logging.info('weighted_vols_equal_one: transposed_weights: %s' % (transposed_weights))
-        logging.info('weighted_vols_equal_one: volatilities_matrix: %s' % (self.volatilities_matrix))
+        # logging.info('weighted_vols_equal_one: transposed_weights: %s' % (transposed_weights))
+        # logging.info('weighted_vols_equal_one: volatilities_matrix: %s' % (self.volatilities_matrix))
 
         r1 = np.dot(transposed_weights, self.volatilities_matrix)
+        # logging.info('Weighted Vols Value: %s' % (r1))
 
         # print transposed_weights, self.volatilities_matrix
-        print weights, '\n', self.volatilities_matrix
+        # print weights, '\n', self.volatilities_matrix
         print "#### R1: \n", r1
 
 
-        return r1[0] - 1
+        return np.array([r1[0] - 1])
+
+    def weighted_vols_equal_one_jacobian(self, weights):
+        len_weights = len(weights)
+        ret = len_weights * [1]
+        # logging.info('Weighted vols equal one jac: %s' % (ret))
+        ret = np.array(ret)
+        return ret
+
+    def no_negative_weights(self, weights):
+
+        negative_sum = sum([ x for x in weights if x < 0 ])
+        if negative_sum > 0:
+            raise Exception('Negative Sum is greater than zero: %s' % (str(negative_sum)))
+        logging.info("Negative Sum: %s" % (str(negative_sum)))
+
+        return negative_sum
+
+    def no_negative_weights_jacobian(self, weights):
+        len_weights = len(weights)
+        ret = len_weights * [1]
+        logging.info('No negative weights jac: %s' % (ret))
+        return ret
+
+
 
     def get_covariance_matrix(self, x):
         end_index = x
@@ -367,8 +466,8 @@ class MDPPortfolio():
         self.normalized_weights = np.divide(self.weights, total_sum)
 
         printed_weights = '\n'.join([ (str(a) + '\t' + str(self.normalized_weights[i][0])) for i, a in enumerate(self.assets)])
-        print "\nNormalized Weights:\n", printed_weights
-        print "\nSum of normalized: \n", sum(self.normalized_weights)[0]
+        ### print "\nNormalized Weights:\n", printed_weights
+        ### print "\nSum of normalized: \n", sum(self.normalized_weights)[0]
 
         return self.normalized_weights
 
@@ -383,3 +482,55 @@ class MDPPortfolio():
 #    U.S. Long-term Treasuries (TLT)
 #    Commodities (DBC)
 #    Gold (GLD)
+
+
+
+def optimize(normalized_weights, cov_matrix):
+    # print "NW, CM: ", normalized_weights, cov_matrix
+
+    # x = port.x
+
+    # from equation 31:
+    # normalized_weights = np.array(port.normalized_weights)
+    transposed_weights = np.matrix.transpose(normalized_weights)
+    # _ = port.get_covariance_matrix(x)
+    cov_matrix = cov_matrix
+    r1 = np.dot(0.5, transposed_weights)
+    r2 = np.dot(r1, cov_matrix)
+    r3 = np.dot(r2, normalized_weights)
+
+    # print "HERE: "
+    # print normalized_weights
+    # print transposed_weights
+    # print cov_matrix
+
+    # print r1
+    # print r2
+    # logging.info('Optimize function value: %s' % (str(r3)))
+
+    # return r3[0][0]
+
+    ### Add in constraints here, make them positive and additive
+    # print "R3: ", r3
+    # print normalized_weights
+    # print sum(normalized_weights)
+    w = (abs((sum(normalized_weights) - 1)) + 1) **6    # This should get very large if the sum is <<1 or >>1
+
+    neg_weights = abs(sum( [ a for a in normalized_weights if a < 0 ] ))
+
+    neg_weights = (1 + neg_weights) ** 4
+    if neg_weights != 1:
+        # print "neg: ", neg_weights
+        pass
+
+    n = neg_weights if neg_weights else 0
+
+    # print "n: ", n
+
+
+    # print "R3: ", r3
+    r3 = r3 + w + n
+
+    # print "final R3: ", r3
+
+    return r3
