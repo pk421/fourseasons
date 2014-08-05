@@ -22,9 +22,8 @@ def run_portfolio_analysis():
     assets_list = ['SPY', 'EFA', 'EWJ', 'EEM', 'IYR', 'RWX', 'IEF', 'TLT', 'DBC', 'GLD']
     # assets_list = ['SPY', 'TLT', 'GLD']
     # assets_list = ['TNA', 'EFA', 'EWJ', 'EEM', 'VNQ', 'RWX', 'IEF', 'TLT', 'DBC', 'SLV']
-    # assets_list = ['SPY']
     # assets_list = ['SPXL', 'TYD', 'DRN', 'UGLD']
-    # assets_list = ['SPY', 'IEF', 'VNQ', 'GLD']
+    assets_list = ['SPY', 'IEF', 'VNQ', 'GLD']
 
     in_file_name = 'list_dow_modified'
     location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
@@ -38,7 +37,6 @@ def run_portfolio_analysis():
     mdp_port = MDPPortfolio(assets_list=assets_list)
 
     logging.debug(str(mdp_port.assets))
-#    stock_1_data = manage_redis.parse_fast_data(mdp_port.assets[0], db_to_use=0)
     mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0])
 
     if not mdp_port:
@@ -46,19 +44,17 @@ def run_portfolio_analysis():
         return False
 
     mdp_port.weights = [ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets]
-    # mdp_port.weights = [ [.99], [0.005], [0.005]]
     mdp_port.weights = np.array(mdp_port.weights)
     mdp_port.normalized_weights = mdp_port.weights
 
-
-    current_portfolio_valuation = get_port_valuation(mdp_port, x=0)
-
     x=0
-    mdp_port.lookback = 50
-    rebalance_time = mdp_port.lookback
+    mdp_port.x = x
+    mdp_port.lookback = 84
+    mdp_port.rebalance_time = 42
     previous_rebalance = 1
     while x < len(mdp_port.trimmed[mdp_port.assets[0]]):
-        if not (x % rebalance_time == 0) or x == 0:
+        if not (x % mdp_port.rebalance_time == 0) or x == 0:
+            mdp_port.x = x
             current_portfolio_valuation = get_port_valuation(mdp_port, x=x)
             mdp_port.portfolio_valuations.append((mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation / previous_rebalance))
             print x, mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation / previous_rebalance
@@ -81,39 +77,17 @@ def run_portfolio_analysis():
 ##                                 'jac': mdp_port.no_negative_weights_jacobian
 #                               }
 #                               ]
-            
-            constraints_2 = ()#({'type':'eq', 'fun': lambda W: sum(W)-1. })
-            bounds_2 = ()# [(0.,0.05) for i in range(len(mdp_port.assets))]
-            # constraints_2 = ()
-            # bounds_2 = []
 
 #            result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, jac=mdp_port.optimize_jacobian, method='SLSQP', options={'xtol': 1e-8, 'disp': True}, bounds = [(0,1) for z in mdp_port.assets] , constraints=port_constraints)
-#            result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, jac=mdp_port.optimize_jacobian, method='SLSQP', options={'xtol': 1e-8, 'disp': True}, constraints=port_constraints)
-
-
-
-            # result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, jac=mdp_port.optimize_jacobian, method='SLSQP', options={'xtol': 1e-8, 'disp': True})
-            # result = scipy.optimize.basinhopping(mdp_port.optimize, mdp_port.weights, niter=1004, T=1e2, stepsize=1e2)
-
-            
-
-            # result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, method='SLSQP', constraints=constraints_2, bounds=bounds_2)
-
-            # result = scipy.optimize.basinhopping(mdp_port.optimize, mdp_port.weights, niter=50, T=1, stepsize=1, disp=True)
-            # result = scipy.optimize.brute(mdp_port.optimize, [(0,1) for z in mdp_port.assets], Ns=4, full_output=False)
 
             nw = mdp_port.normalized_weights
             _ = mdp_port.get_covariance_matrix(x)
             cm = mdp_port.cov_matrix
             assets = mdp_port.assets
-            # result = scipy.optimize.minimize(optimize, nw, (cm,), method='SLSQP', constraints=constraints_2, bounds=bounds_2)
-
-
-            # result = scipy.optimize.brute(optimize, [(0,1) for z in assets], (cm,), Ns=11, full_output=False)
+            result = scipy.optimize.brute(optimize, [(0,1) for z in assets], (cm,), Ns=11, full_output=False)
 
             mk = {'args':(cm,)}
-            result = scipy.optimize.basinhopping(optimize, nw, niter=101, T=5e2, stepsize=5e2, disp=True, minimizer_kwargs=mk)
-
+            # result = scipy.optimize.basinhopping(optimize, nw, niter=2, T=5e2, stepsize=5e2, disp=True, minimizer_kwargs=mk)
 
             print result
 
@@ -122,22 +96,37 @@ def run_portfolio_analysis():
             print "weighted vols equal one check: ", mdp_port.weighted_vols_equal_one(mdp_port.normalized_weights)
 
             ### Execute this if doing brute force
-#            sum_result = sum(result)
-#            normalized_weights = np.array([[round(z / sum_result, 6)] for z in result])
-#            print result[0], sum_result
-            ###
+            sum_result = sum(result)
+            normalized_weights = np.array([[round(z / sum_result, 6)] for z in result])
+            print result[0], sum_result
+            ##
 
             ### Execute this if doing basinhopping / slsqp
-            sum_result = sum(result.x)
-            normalized_weights = np.array([[round(z / sum_result, 6)] for z in result.x])
+#            sum_result = sum(result.x)
+#            normalized_weights = np.array([[round(z / sum_result, 6)] for z in result.x])
             ###
-
-            mdp_port.rebalance(x)
 
             ###
             # Letting this code executes overrides the optimization and uses the theoretical values for port analysis
             # normalized_weights = mdp_port.normalized_weights
             ###
+
+            trailing_diversification_ratio = mdp_port.get_diversification_ratio()
+            print "Trailing Diversification Ratio: ", trailing_diversification_ratio
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
 
             print "Constrained (+) Result: \n", normalized_weights
             print "weighted vols equal one check: ", mdp_port.weighted_vols_equal_one(normalized_weights)
@@ -152,9 +141,10 @@ def run_portfolio_analysis():
             print x, mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation / previous_rebalance
             x+=1
 
-    print "len: ", len(mdp_port.trimmed[mdp_port.assets[0]]), len(mdp_port.portfolio_valuations)
+    if len(mdp_port.trimmed[mdp_port.assets[0]]) != len(mdp_port.portfolio_valuations):
+        raise Exception('Length of asset list data does not match length of valuations data.')
 
-    print mdp_port.trimmed[mdp_port.assets[0]][0], mdp_port.trimmed[mdp_port.assets[0]][-1]
+    # print mdp_port.trimmed[mdp_port.assets[0]][0], mdp_port.trimmed[mdp_port.assets[0]][-1]
     print '\n', mdp_port.portfolio_valuations[0], mdp_port.portfolio_valuations[-1]
 
     sharpe_price_list = []
@@ -171,14 +161,9 @@ def run_portfolio_analysis():
     print 'Sharpe: \t', round(ssharpe, 6)
     print 'Sortino: \t', round(ssortino, 6)
 
-
-
-#    normalized_weights = mdp_port.get_covariance_matrix(x=len(mdp_port.trimmed[mdp_port.assets[0]]), lookback=50)
-
     return
 
 def get_port_valuation(port, x=0):
-
     ### TODO: accept a parameter for rebalance ratio so that it is not divided everywhere else
 
     weights = port.normalized_weights
@@ -187,12 +172,9 @@ def get_port_valuation(port, x=0):
     for k, v in enumerate(port.assets):
         total_valuation += weights[k][0] * port.closes[v][x]
         # print k, v, weights[k], port.closes[v][x], weights[k][0] * port.closes[v][x]
-
     logging.debug('%s %s %s' % (x, port.trimmed[port.assets[0]][x]['Date'], total_valuation))
 
     return total_valuation
-
-
 
 def get_data(port, base_etf):
     """
@@ -234,14 +216,11 @@ def get_data(port, base_etf):
 
         logging.info('%s %s %s %s %s %s' % (item, port.trimmed[item][0]['Date'], port.trimmed[item][-1]['Date'], \
                                     base_etf, port.trimmed[base_etf][0]['Date'], port.trimmed[base_etf][-1]['Date']))
-
     if not port.validate_portfolio():
         return False
-
     logging.info('\nData has been properly imported and validated.')
 
     return port
-
 
 class MDPPortfolio():
 
@@ -269,8 +248,8 @@ class MDPPortfolio():
         self.inv_cov_matrix = None
         self.transposed_volatilities_matrix = None
 
-        self.lookback = 90
-        # self.rebalance_time = 90
+        self.lookback = 50
+        self.rebalance_time = 50
 
         for item in assets_list:
             self.closes[item] = []
@@ -303,13 +282,6 @@ class MDPPortfolio():
 
         return True
 
-    def rebalance(self, x):
-
-        current_weights = self.normalized_weights
-        current_valuation = get_port_valuation(self, x)
-        new_weights = self.get_covariance_matrix(x)
-        return True
-
     def optimize(self, matrix):
         x = self.x
 
@@ -322,42 +294,25 @@ class MDPPortfolio():
         r2 = np.dot(r1, cov_matrix)
         r3 = np.dot(r2, normalized_weights)
 
-        # print "HERE: "
-        # print normalized_weights
-        # print transposed_weights
-        # print cov_matrix
-
-        # print r1
-        # print r2
         # logging.info('Optimize function value: %s' % (str(r3)))
 
         # return r3[0][0]
 
         ### Add in constraints here, make them positive and additive
-        # print "R3: ", r3
-        # print normalized_weights
-        # print sum(normalized_weights)
-        w = (abs((sum(normalized_weights) - 1)) + 1) **6    # This should get very large if the sum is <<1 or >>1
+        w = (abs((sum(normalized_weights) - 1)) + 1) ** 4    # This should get very large if the sum is <<1 or >>1
 
         neg_weights = abs(sum( [ a[0] for a in normalized_weights if a < 0 ] ))
 
         neg_weights = (1 + neg_weights) ** 4
-        print "neg: ", neg_weights
 
         n = neg_weights if neg_weights else 0
 
-        # print "n: ", n
-
-
         r3 = r3[0][0] + w + n
-
-        # print "final R3: ", r3
 
         return r3
 
     def optimize_jacobian(self, weights):
         # logging.info('Optimization Derivative Weights: %s' % (weights))
-
         _ = self.get_covariance_matrix(self.x)
         cov_matrix = self.cov_matrix
         
@@ -390,7 +345,6 @@ class MDPPortfolio():
         # print weights, '\n', self.volatilities_matrix
         print "#### R1: \n", r1
 
-
         return np.array([r1[0] - 1])
 
     def weighted_vols_equal_one_jacobian(self, weights):
@@ -415,11 +369,9 @@ class MDPPortfolio():
         logging.info('No negative weights jac: %s' % (ret))
         return ret
 
-
-
     def get_covariance_matrix(self, x):
         end_index = x
-        start_index = x - self.lookback
+        start_index = max(0, x - self.lookback)
 
 #        if lookback == 0:
 #            lookback = len(self.trimmed[self.assets[0]])
@@ -472,23 +424,8 @@ class MDPPortfolio():
         return self.normalized_weights
 
 
-#    U.S. Stocks (SPY)
-#    European Stocks (EFA)
-#    Japanese Stocks (EWJ)
-#    Emerging Market Stocks (EEM)
-#    U.S. REITs (IYR)
-#    International REITs (RWX)
-#    U.S. Mid-term Treasuries (IEF)
-#    U.S. Long-term Treasuries (TLT)
-#    Commodities (DBC)
-#    Gold (GLD)
-
-
-
 def optimize(normalized_weights, cov_matrix):
     # print "NW, CM: ", normalized_weights, cov_matrix
-
-    # x = port.x
 
     # from equation 31:
     # normalized_weights = np.array(port.normalized_weights)
@@ -499,21 +436,9 @@ def optimize(normalized_weights, cov_matrix):
     r2 = np.dot(r1, cov_matrix)
     r3 = np.dot(r2, normalized_weights)
 
-    # print "HERE: "
-    # print normalized_weights
-    # print transposed_weights
-    # print cov_matrix
-
-    # print r1
-    # print r2
     # logging.info('Optimize function value: %s' % (str(r3)))
 
-    # return r3[0][0]
-
     ### Add in constraints here, make them positive and additive
-    # print "R3: ", r3
-    # print normalized_weights
-    # print sum(normalized_weights)
     w = (abs((sum(normalized_weights) - 1)) + 1) **6    # This should get very large if the sum is <<1 or >>1
 
     neg_weights = abs(sum( [ a for a in normalized_weights if a < 0 ] ))
@@ -525,12 +450,19 @@ def optimize(normalized_weights, cov_matrix):
 
     n = neg_weights if neg_weights else 0
 
-    # print "n: ", n
-
-
-    # print "R3: ", r3
     r3 = r3 + w + n
 
-    # print "final R3: ", r3
-
     return r3
+
+
+
+#    U.S. Stocks (SPY)
+#    European Stocks (EFA)
+#    Japanese Stocks (EWJ)
+#    Emerging Market Stocks (EEM)
+#    U.S. REITs (IYR)
+#    International REITs (RWX)
+#    U.S. Mid-term Treasuries (IEF)
+#    U.S. Long-term Treasuries (TLT)
+#    Commodities (DBC)
+#    Gold (GLD)
