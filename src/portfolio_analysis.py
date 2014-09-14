@@ -21,11 +21,18 @@ logging.root.setLevel(logging.INFO)
 
 def run_portfolio_analysis():
 
+    # Brute Force Calcs = # nodes ^ # assets
     assets_list = ['SPY', 'EFA', 'EWJ', 'EEM', 'IYR', 'RWX', 'IEF', 'TLT', 'DBC', 'GLD']
-    assets_list = ['SPY', 'TLT', 'GLD']
     # assets_list = ['TNA', 'EFA', 'EWJ', 'EEM', 'VNQ', 'RWX', 'IEF', 'TLT', 'DBC', 'SLV']
-    ##assets_list = ['SPXL', 'TYD', 'DRN', 'DGP', 'EDC']
-    # assets_list = ['SPY', 'IEF', 'VNQ', 'GLD', 'EEM']
+#    assets_list = ['SPXL', 'TYD', 'DRN', 'DGP', 'EDC']
+#    assets_list = ['SPY', 'IEF', 'VNQ', 'GLD', 'EEM']
+
+    # 401k
+    # Note: VBMPX has a shorter duration and is actually less volatile than VIPIX
+    # VEMPX is small caps basically but has not done as well in this portfolio compared to VIIIX
+    # The five asset list here is less volatile and better diversified, but has a lower return
+    # assets_list = ['VIIIX', 'VEMPX', 'VTPSX', 'VIPIX', 'VBMPX']
+    # assets_list = ['VIIIX', 'VTPSX', 'VIPIX']
 
     in_file_name = 'list_dow_modified'
     location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
@@ -39,7 +46,7 @@ def run_portfolio_analysis():
     mdp_port = MDPPortfolio(assets_list=assets_list)
 
     logging.debug(str(mdp_port.assets))
-    mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0])
+    mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=0)
 
     if not mdp_port:
         logging.warning("Get Data returned False, Failure")
@@ -51,8 +58,8 @@ def run_portfolio_analysis():
 
     x=0
     mdp_port.x = x
-    mdp_port.lookback = 84
-    mdp_port.rebalance_time = 84
+    mdp_port.lookback = 63
+    mdp_port.rebalance_time = 63
     mdp_port.rebalance_counter = 0
     previous_rebalance = 1
     while x < len(mdp_port.trimmed[mdp_port.assets[0]]):
@@ -60,7 +67,7 @@ def run_portfolio_analysis():
 
             mdp_port.x = x
             current_portfolio_valuation = get_port_valuation(mdp_port, x=x)
-            mdp_port.portfolio_valuations.append((mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation / previous_rebalance))
+            mdp_port.portfolio_valuations.append([mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation / previous_rebalance])
             print x, mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation / previous_rebalance
             mdp_port.rebalance_counter += 1
 
@@ -72,7 +79,7 @@ def run_portfolio_analysis():
                 print "Trailing DR: ", x, trailing_diversification_ratio
 
                 # Disable this if block to revert to previous behavior
-                if trailing_diversification_ratio < 1.5 and mdp_port.rebalance_counter > 42:
+                if trailing_diversification_ratio < 1.5 and mdp_port.rebalance_counter > (mdp_port.rebalance_time / 2):
                     # Force the update to occur if the div ratio is low and we've waited a minimum time since last rebal
                     mdp_port.rebalance_counter = mdp_port.rebalance_time
             x += 1
@@ -88,7 +95,8 @@ def run_portfolio_analysis():
             mdp_port.x = x
 
             ###
-            mdp_port, normalized_weights = do_optimization(mdp_port, x, method='brute')
+            mdp_port, normalized_weights = do_optimization(mdp_port, x, method='basinhopping')
+            # mdp_port, normalized_weights = do_optimization(mdp_port, x, method='brute')
             ###
 
             trailing_diversification_ratio = mdp_port.get_diversification_ratio()
@@ -104,9 +112,16 @@ def run_portfolio_analysis():
             previous_rebalance = current_portfolio_valuation / old_weighted_valuation
             print "Previous Rebalance: ", previous_rebalance
 
-            mdp_port.portfolio_valuations.append((mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation / previous_rebalance))
+            mdp_port.portfolio_valuations.append([mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation / previous_rebalance])
             print x, mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation / previous_rebalance
             x+=1
+
+
+    for i, p in enumerate(mdp_port.portfolio_valuations):
+        if i == 0:
+            starting_value = p[1]
+        mdp_port.portfolio_valuations[i][1] = mdp_port.portfolio_valuations[i][1] / starting_value
+
 
     if len(mdp_port.trimmed[mdp_port.assets[0]]) != len(mdp_port.portfolio_valuations):
         raise Exception('Length of asset list data does not match length of valuations data.')
@@ -139,6 +154,23 @@ def run_portfolio_analysis():
     print 'Sharpe: \t', round(ssharpe, 6)
     print 'Sortino: \t', round(ssortino, 6)
 
+
+    ref_log = []
+    spy_price_list = mdp_port.closes[mdp_port.assets[0]]
+    for val in spy_price_list:
+        ref_log.append(('existing_trade', 'long', val))
+
+    smean, sstd, sneg_std, spos_std, ssharpe, ssortino, savg_loser, savg_winner, spct_losers = get_sharpe_ratio(ref_log)
+
+    print '\t\tReference:'
+    print 'ArithMu: \t', round(smean, 6)
+    print 'Sigma: \t\t', round(sstd, 6)
+    print 'NegSigma: \t', round(sneg_std, 6)
+    print 'NegSigma/Tot: \t', round((sneg_std/sstd), 6)
+    print 'Sharpe: \t', round(ssharpe, 6)
+    print 'Sortino: \t', round(ssortino, 6)
+
+
     print "\nFinished: "
     print "File Written: ", out_file_name.split('/')[-1]
 
@@ -150,29 +182,29 @@ def do_optimization(mdp_port, x, method='basinhopping'):
 
     nw = mdp_port.normalized_weights
     # This updates the covariance matrix using the current volatilities, so we can optimize based on that
-    _ = mdp_port.get_covariance_matrix(x)
+    theoretical_weights = mdp_port.get_covariance_matrix(x)
     cm = mdp_port.cov_matrix
     assets = mdp_port.assets
 
     if method == 'brute':
         result = scipy.optimize.brute(optimize, [(0,1) for z in assets], (cm,), Ns=21, full_output=False)
         sum_result = sum(result)
-        normalized_weights = np.array([[round(z / sum_result, 6)] for z in result])
+        normalized_weights = np.array([[round(z / sum_result, 4)] for z in result])
         print result[0], sum_result
 
 
     if method == 'basinhopping':
         mk = {'args':(cm,)}
         
-        result = scipy.optimize.basinhopping(optimize, nw, niter=50, disp=True, minimizer_kwargs=mk)
+        result = scipy.optimize.basinhopping(optimize, nw, niter=20, disp=True, minimizer_kwargs=mk)
         # result = scipy.optimize.basinhopping(optimize, nw, niter=50, T=5e-2, stepsize=5e-2, disp=True, minimizer_kwargs=mk)
 
         sum_result = sum(result.x)
-        normalized_weights = np.array([[round(z / sum_result, 6)] for z in result.x])
+        normalized_weights = np.array([[round(z / sum_result, 4)] for z in result.x])
 
     print result
 
-    print "Theoretical Result: \n", mdp_port.normalized_weights
+    print "Theoretical Result: \n", theoretical_weights
     print "weighted vols equal one check: ", mdp_port.weighted_vols_equal_one(mdp_port.normalized_weights)
 
     ###
@@ -202,7 +234,7 @@ def update_trade_log(port, x):
 
     return trade_log
 
-def get_data(port, base_etf):
+def get_data(port, base_etf, last_x_days = 0):
     """
     This section trims everything relative to SPY (so it will not have MORE data than SPY), but it can have less, so the
     lengths of the data are still not consistent yet.
@@ -248,6 +280,18 @@ def get_data(port, base_etf):
 
         logging.info('%s %s %s %s %s %s' % (item, port.trimmed[item][0]['Date'], port.trimmed[item][-1]['Date'], \
                                     base_etf, port.trimmed[base_etf][0]['Date'], port.trimmed[base_etf][-1]['Date']))
+
+
+    ### Optional section that allows us to look at only the latest x days of data (faster to get a snapshot)
+    if last_x_days != 0 and last_x_days < len(port.trimmed[port.assets[0]]):
+        for item in port.assets:
+            logging.debug(item)
+            trimmed = port.trimmed[item][-last_x_days:]
+            closes = port.closes[item][-last_x_days:]
+            port.trimmed[item] = trimmed
+            port.closes[item] = closes
+
+
     if not port.validate_portfolio():
         return False
     logging.info('\nData has been properly imported and validated.')
@@ -281,8 +325,8 @@ class MDPPortfolio():
         self.inv_cov_matrix = None
         self.transposed_volatilities_matrix = None
 
-        self.lookback = 50
-        self.rebalance_time = 50
+        self.lookback = None
+        self.rebalance_time = None
 
         for item in assets_list:
             self.closes[item] = []
@@ -401,12 +445,6 @@ class MDPPortfolio():
         self.inv_cov_matrix = scipy.linalg.inv(self.cov_matrix)
         self.transposed_volatilities_matrix = np.matrix.transpose(self.volatilities_matrix)
 
-    #    print "\nCOV MATRIX: \n", self.cov_matrix
-    #    print "\nINVERSE COV MATRIX: \n", self.inv_cov_matrix
-    #    print "\nVolatilties: \n", self.volatilities_matrix
-    #    print "\nTransposed Volatilities: \n", self.transposed_volatilities_matrix
-    #    print "\n"
-
         # This basically re-creates equation 30.1 from the white paper
         numerator = np.dot(self.inv_cov_matrix, self.volatilities_matrix)
         denominator_a = np.dot(self.transposed_volatilities_matrix, self.inv_cov_matrix)
@@ -439,7 +477,7 @@ class MDPPortfolio():
 
         d1 = np.dot(transposed_weights, self.cov_matrix)
         d2 = np.dot(d1, self.normalized_weights)
-        d3 = math.sqrt(d2)
+        d3 = math.sqrt(abs(d2))
 
         ret = (numerator / d3)[0][0]
 
@@ -463,11 +501,11 @@ def optimize(normalized_weights, cov_matrix):
     # logging.info('Optimize function value: %s' % (str(r3)))
 
     ### Add in constraints here, make them positive and additive
-    w = (abs((sum(normalized_weights) - 1)) + 1) **6    # This should get very large if the sum is <<1 or >>1
+    w = (abs((sum(normalized_weights) - 1)) + 1) ** 6    # This should get very large if the sum is <<1 or >>1
 
     neg_weights = abs(sum( [ a for a in normalized_weights if a < 0 ] ))
 
-    neg_weights = (1 + neg_weights) ** 4
+    neg_weights = (1 + neg_weights) ** 6
     if neg_weights != 1:
         # print "neg: ", neg_weights
         pass
