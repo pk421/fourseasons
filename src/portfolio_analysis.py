@@ -19,13 +19,26 @@ from math_tools import get_returns
 import logging
 logging.root.setLevel(logging.INFO)
 
+USE_THEORETICAL = 'theoretical'
+USE_BRUTE = False
+
+
 def run_portfolio_analysis():
 
     # Brute Force Calcs = # nodes ^ # assets
     assets_list = ['SPY', 'EFA', 'EWJ', 'EEM', 'IYR', 'RWX', 'IEF', 'TLT', 'DBC', 'GLD']
     # assets_list = ['TNA', 'EFA', 'EWJ', 'EEM', 'VNQ', 'RWX', 'IEF', 'TLT', 'DBC', 'SLV']
-#    assets_list = ['SPXL', 'TYD', 'DRN', 'DGP', 'EDC']
-#    assets_list = ['SPY', 'IEF', 'VNQ', 'GLD', 'EEM']
+    assets_list = ['SPXL', 'TYD', 'DRN', 'DGP', 'EDC']
+    # assets_list = ['VTI', 'IEF', 'VNQ', 'GLD', 'EEM']
+
+    # TSP: G, C, F, S, I - (consider the G fund cash since it can't go down)
+    # assets_list = ['SPY', 'AGG', 'FSEMX', 'EFA']
+
+    # IRA: Fidelity Commission Free:
+    # S&P 500, US Small Cap, Short Term Treasury Bonds, Total US Bond Market, Dow Jones Real Estate, EAFE, BRICS, Emerging Markets, Gold Miners
+    # assets_list = ['IVV', 'IJR', 'SHY', 'AGG', 'IYR', 'IEFA', 'BKF', 'IEMG', 'RING']
+    # assets_list = ['IYR', 'IEFA', 'IEMG']
+    # assets_list = ['IYR', 'IEFA', 'IEMG', 'AGG']
 
     # 401k
     # Note: VBMPX has a shorter duration and is actually less volatile than VIPIX
@@ -33,6 +46,12 @@ def run_portfolio_analysis():
     # The five asset list here is less volatile and better diversified, but has a lower return
     # assets_list = ['VIIIX', 'VEMPX', 'VTPSX', 'VIPIX', 'VBMPX']
     # assets_list = ['VIIIX', 'VTPSX', 'VIPIX']
+
+    # IRA + 401k + Outside Invs
+    # assets_list = ['IYR', 'IEFA', 'IEMG', 'VIIIX', 'VTPSX', 'VIPIX', 'AGG', 'GLD']
+
+
+    # assets_list = ['VTI', 'VGK', 'VWO', 'GLD', 'VNQ', 'TIP', 'TLT', 'AGG', 'LQD']
 
     in_file_name = 'list_dow_modified'
     location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
@@ -61,9 +80,11 @@ def run_portfolio_analysis():
     mdp_port.lookback = 63
     mdp_port.rebalance_time = 63
     mdp_port.rebalance_counter = 0
+    mdp_port.rebalance_now = False
     previous_rebalance = 1
     while x < len(mdp_port.trimmed[mdp_port.assets[0]]):
-        if mdp_port.rebalance_counter < mdp_port.rebalance_time:
+        # if mdp_port.rebalance_counter < mdp_port.rebalance_time:
+        if not mdp_port.rebalance_now:
 
             mdp_port.x = x
             current_portfolio_valuation = get_port_valuation(mdp_port, x=x)
@@ -76,16 +97,21 @@ def run_portfolio_analysis():
                 # It also affects overall program flow and the end result
                 _ = mdp_port.get_covariance_matrix(x)
                 trailing_diversification_ratio = mdp_port.get_diversification_ratio()
-                print "Trailing DR: ", x, trailing_diversification_ratio
+                print "Trailing DR: ", x, trailing_diversification_ratio, mdp_port.rebalance_counter
 
-                # Disable this if block to revert to previous behavior
-                if trailing_diversification_ratio < 1.5 and mdp_port.rebalance_counter > (mdp_port.rebalance_time / 2):
-                    # Force the update to occur if the div ratio is low and we've waited a minimum time since last rebal
-                    mdp_port.rebalance_counter = mdp_port.rebalance_time
+                # Only consider a rebalance after rebalance_time, if div ratio is low, rebalance. If it's high, wait
+                # another rebalance_time to check again
+                if mdp_port.rebalance_counter >= mdp_port.rebalance_time and trailing_diversification_ratio < 2.0:
+                    mdp_port.rebalance_now = True
+                elif mdp_port.rebalance_counter >= mdp_port.rebalance_time and trailing_diversification_ratio >= 2.0:
+                    mdp_port.rebalance_now = False
+                    mdp_port.rebalance_counter = 0
+                
             x += 1
             continue
         else:
             mdp_port.rebalance_counter = 0
+            mdp_port.rebalance_now = False
             # When calculating the rebalance ratio, we first assume we used the old weights for today's valuation. Then
             # we calculate new weights for today, value the portfolio for today, then find the ratio for today if we
             # had used the old weights for today
@@ -94,10 +120,7 @@ def run_portfolio_analysis():
             print "Today's value @ old weighting: ", old_weighted_valuation
             mdp_port.x = x
 
-            ###
-            mdp_port, normalized_weights = do_optimization(mdp_port, x, method='basinhopping')
-            # mdp_port, normalized_weights = do_optimization(mdp_port, x, method='brute')
-            ###
+            mdp_port, normalized_weights, theoretical_weights = do_optimization(mdp_port, x)
 
             trailing_diversification_ratio = mdp_port.get_diversification_ratio()
             mdp_port.trailing_DRs.append(trailing_diversification_ratio)
@@ -105,7 +128,20 @@ def run_portfolio_analysis():
 
             print "Constrained (+) Result: \n", normalized_weights
             print "weighted vols equal one check: ", mdp_port.weighted_vols_equal_one(normalized_weights)
-            mdp_port.set_normalized_weights(normalized_weights)
+
+            ###
+            if USE_THEORETICAL == 'theoretical':
+                mdp_port.set_normalized_weights(theoretical_weights)
+            elif USE_THEORETICAL == 'optimized':
+                mdp_port.set_normalized_weights(normalized_weights)
+            # In this case, use the theoretical iff they are all positive and sum to 1
+            elif USE_THEORETICAL == 'hybrid':
+                negative_weights = [ w for w in theoretical_weights if w < 0 ]
+                if len(negative_weights) == 0:
+                    mdp_port.set_normalized_weights(theoretical_weights)
+                else:
+                    mdp_port.set_normalized_weights(normalized_weights)
+            ###
 
             current_portfolio_valuation = get_port_valuation(mdp_port, x=x)
             print "Current Portfolio New Valuation: ", current_portfolio_valuation
@@ -144,6 +180,8 @@ def run_portfolio_analysis():
     with open(out_file_name, 'w') as f:
         f.write(output_string)
 
+    total_years_in = len(sharpe_price_list) / 252.0
+    system_annualized_return = math.pow(mdp_port.portfolio_valuations[-1][1], (1.0/total_years_in))
 
     print "Mean Diversification Ratio: ", np.mean(mdp_port.trailing_DRs), len(mdp_port.trailing_DRs)
     print '\t\tSystem:'
@@ -153,7 +191,7 @@ def run_portfolio_analysis():
     print 'NegSigma/Tot: \t', round((sneg_std/sstd), 6)
     print 'Sharpe: \t', round(ssharpe, 6)
     print 'Sortino: \t', round(ssortino, 6)
-
+    print 'Ann. Return: \t', round(system_annualized_return, 6)
 
     ref_log = []
     spy_price_list = mdp_port.closes[mdp_port.assets[0]]
@@ -162,13 +200,17 @@ def run_portfolio_analysis():
 
     smean, sstd, sneg_std, spos_std, ssharpe, ssortino, savg_loser, savg_winner, spct_losers = get_sharpe_ratio(ref_log)
 
-    print '\t\tReference:'
+    ref_total_return = ref_log[-1][2] / ref_log[0][2]
+    ref_annualized_return = math.pow(ref_total_return, (1.0/total_years_in))
+
+    print '\n\t\tReference:'
     print 'ArithMu: \t', round(smean, 6)
     print 'Sigma: \t\t', round(sstd, 6)
     print 'NegSigma: \t', round(sneg_std, 6)
     print 'NegSigma/Tot: \t', round((sneg_std/sstd), 6)
     print 'Sharpe: \t', round(ssharpe, 6)
     print 'Sortino: \t', round(ssortino, 6)
+    print 'Ann. Return: \t', round(ref_annualized_return, 6)
 
 
     print "\nFinished: "
@@ -176,7 +218,7 @@ def run_portfolio_analysis():
 
     return
 
-def do_optimization(mdp_port, x, method='basinhopping'):
+def do_optimization(mdp_port, x):
 
 #   result = scipy.optimize.minimize(mdp_port.optimize, mdp_port.weights, jac=mdp_port.optimize_jacobian, method='SLSQP', options={'xtol': 1e-8, 'disp': True}, bounds = [(0,1) for z in mdp_port.assets] , constraints=port_constraints)
 
@@ -186,17 +228,20 @@ def do_optimization(mdp_port, x, method='basinhopping'):
     cm = mdp_port.cov_matrix
     assets = mdp_port.assets
 
-    if method == 'brute':
-        result = scipy.optimize.brute(optimize, [(0,1) for z in assets], (cm,), Ns=21, full_output=False)
+    if USE_BRUTE:
+        result = scipy.optimize.brute(optimize, [(0,1) for z in assets], (cm,), Ns=11, full_output=False)
         sum_result = sum(result)
         normalized_weights = np.array([[round(z / sum_result, 4)] for z in result])
         print result[0], sum_result
 
 
-    if method == 'basinhopping':
-        mk = {'args':(cm,)}
+    else:
+        mk = {'args':(cm,), "method":"L-BFGS-B"}
         
+
+        # myBounds = MyBounds()
         result = scipy.optimize.basinhopping(optimize, nw, niter=20, disp=True, minimizer_kwargs=mk)
+        # result = scipy.optimize.basinhopping(optimize, nw, niter=1000, disp=True, minimizer_kwargs=mk, accept_test=myBounds)
         # result = scipy.optimize.basinhopping(optimize, nw, niter=50, T=5e-2, stepsize=5e-2, disp=True, minimizer_kwargs=mk)
 
         sum_result = sum(result.x)
@@ -207,12 +252,20 @@ def do_optimization(mdp_port, x, method='basinhopping'):
     print "Theoretical Result: \n", theoretical_weights
     print "weighted vols equal one check: ", mdp_port.weighted_vols_equal_one(mdp_port.normalized_weights)
 
-    ###
-    # Letting this code executes overrides the optimization and uses the theoretical values for port analysis
-    # normalized_weights = mdp_port.normalized_weights
-    ###
 
-    return mdp_port, normalized_weights
+    return mdp_port, normalized_weights, theoretical_weights
+
+class MyBounds(object):
+    def __init__(self, xmax=[1.0], xmin=[-0.5]):
+        self.xmax = np.array(xmax)
+        self.xmin = np.array(xmin)
+
+    def __call__(self, **kwargs):
+        x = kwargs["x_new"]
+        tmax = bool(np.all(x <= self.xmax))
+        tmin = bool(np.all(x >= self.xmin))
+        return tmax and tmin
+
 
 
 def get_port_valuation(port, x=0):
@@ -501,11 +554,11 @@ def optimize(normalized_weights, cov_matrix):
     # logging.info('Optimize function value: %s' % (str(r3)))
 
     ### Add in constraints here, make them positive and additive
-    w = (abs((sum(normalized_weights) - 1)) + 1) ** 6    # This should get very large if the sum is <<1 or >>1
+    w = (abs((sum(normalized_weights) - 1)) + 1) ** 10    # This should get very large if the sum is <<1 or >>1
 
     neg_weights = abs(sum( [ a for a in normalized_weights if a < 0 ] ))
 
-    neg_weights = (1 + neg_weights) ** 6
+    neg_weights = (1 + neg_weights) ** 10
     if neg_weights != 1:
         # print "neg: ", neg_weights
         pass
