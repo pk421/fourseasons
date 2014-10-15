@@ -36,7 +36,7 @@ def run_portfolio_analysis():
     # assets_list = ['VTI', 'TLT', 'VNQ', 'VWO', 'GLD']
     # assets_list = ['VTI', 'TMF', 'VNQ', 'VWO', 'GLD']
     # assets_list = ['VTI', 'TYD', 'DRN', 'VWO', 'DGP'] # Leveraged Version
-    assets_list = ['VTI', 'TLT', 'VNQ', 'VWO', 'GLD']
+    assets_list = ['IWM', 'TLT', 'VNQ', 'VWO', 'GLD']
 
     # Mom's:
     # assets_list = ['VTI', 'IEF', 'REK', 'VWO']
@@ -64,24 +64,29 @@ def run_portfolio_analysis():
 
     # assets_list = ['VTI', 'VGK', 'VWO', 'GLD', 'VNQ', 'TIP', 'TLT', 'AGG', 'LQD']
 
-    in_file_name = 'list_dow_modified'
-    location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
-    in_file = open(location, 'r')
-    stock_list = in_file.read().split('\n')
-    for k, item in enumerate(stock_list):
-        new_val = item.split('\r')[0]
-        stock_list[k] = new_val
-    in_file.close()
+#    in_file_name = 'list_dow_modified'
+#    location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
+#    in_file = open(location, 'r')
+#    stock_list = in_file.read().split('\n')
+#    for k, item in enumerate(stock_list):
+#        new_val = item.split('\r')[0]
+#        stock_list[k] = new_val
+#    in_file.close()
 
     mdp_port = MDPPortfolio(assets_list=assets_list)
     logging.debug(str(mdp_port.assets))
     mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=0)
 
     mdp_port.weights = [ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets]
-    ### mdp_port.weights = [ [0.72], [0.14], [0.14] ]
+     ### mdp_port.weights = [ [0.72], [0.14], [0.14] ]
 
+    # Start with 1000 dollars and buy appropriate number of shares in each item
+    mdp_port.starting_valuation = 1000
+    mdp_port.shares = [ (mdp_port.starting_valuation * mdp_port.weights[k][0] / mdp_port.closes[v][0]) for k, v in enumerate(mdp_port.assets) ]
+    mdp_port.current_entry_prices = [ mdp_port.closes[v][0] for k, v in enumerate(mdp_port.assets) ]
     mdp_port.weights = np.array(mdp_port.weights)
     mdp_port.normalized_weights = mdp_port.weights
+    mdp_port.current_weights = mdp_port.weights
 
     x=0
     mdp_port.x = x
@@ -90,10 +95,13 @@ def run_portfolio_analysis():
     mdp_port.rebalance_counter = 0
     mdp_port.rebalance_now = False
     previous_rebalance = 1
+    # The previous rebalance remains necessary because it is only set when a rebalance is done. The way that shorts are
+    # handled in the valuation function is that they are subtracted from the portfolio. A new valuation could end up
+    # subtracting a large dollar value of shorts from the portfolio after revaluing, unless the portfolio is normalized
+    # first.
 
     rebalance_log = []
     while x < len(mdp_port.trimmed[mdp_port.assets[0]]):
-        # if mdp_port.rebalance_counter < mdp_port.rebalance_time:
         if not mdp_port.rebalance_now:
 
             mdp_port.x = x
@@ -107,15 +115,16 @@ def run_portfolio_analysis():
                 # It also affects overall program flow and the end result
                 _ = mdp_port.get_covariance_matrix(x)
                 trailing_diversification_ratio = mdp_port.get_diversification_ratio()
+                mdp_port.trailing_DRs.append(trailing_diversification_ratio)
                 rebalance_date = mdp_port.trimmed[mdp_port.assets[0]][x]['Date']
                 rebalance_old_div_ratio = trailing_diversification_ratio
                 print "Trailing DR: ", x, trailing_diversification_ratio
 
                 # Only consider a rebalance after rebalance_time, if div ratio is low, rebalance. If it's high, wait
                 # another rebalance_time to check again
-                if mdp_port.rebalance_counter >= mdp_port.rebalance_time and trailing_diversification_ratio < 2.0:
+                if mdp_port.rebalance_counter >= mdp_port.rebalance_time and trailing_diversification_ratio < 10.0:
                     mdp_port.rebalance_now = True
-                elif mdp_port.rebalance_counter >= mdp_port.rebalance_time and trailing_diversification_ratio >= 2.0:
+                elif mdp_port.rebalance_counter >= mdp_port.rebalance_time and trailing_diversification_ratio >= 10.0:
                     mdp_port.rebalance_now = False
                     # mdp_port.rebalance_counter = 0
             x += 1
@@ -145,19 +154,20 @@ def run_portfolio_analysis():
 
             ###
             if USE_THEORETICAL == 'theoretical':
-                mdp_port.set_normalized_weights(theoretical_weights)
+                mdp_port.set_normalized_weights(theoretical_weights, x)
             elif USE_THEORETICAL == 'optimized':
-                mdp_port.set_normalized_weights(normalized_weights)
+                mdp_port.set_normalized_weights(normalized_weights, x)
             # In this case, use the theoretical iff they are all positive and sum to 1
             elif USE_THEORETICAL == 'hybrid':
                 negative_weights = [ w for w in theoretical_weights if w < 0 ]
                 if len(negative_weights) == 0:
-                    mdp_port.set_normalized_weights(theoretical_weights)
+                    mdp_port.set_normalized_weights(theoretical_weights, x)
                 else:
-                    mdp_port.set_normalized_weights(normalized_weights)
+                    mdp_port.set_normalized_weights(normalized_weights, x)
             ###
 
             current_portfolio_valuation = get_port_valuation(mdp_port, x=x)
+            mdp_port.starting_valuation = current_portfolio_valuation
             print "Current Portfolio New Valuation: ", current_portfolio_valuation
             previous_rebalance = current_portfolio_valuation / old_weighted_valuation
             print "Previous Rebalance: ", previous_rebalance
@@ -210,7 +220,7 @@ def run_portfolio_analysis():
     total_years_in = len(sharpe_price_list) / 252.0
     system_annualized_return = math.pow(mdp_port.portfolio_valuations[-1][1], (1.0/total_years_in))
 
-    print "Mean Diversification Ratio: ", np.mean(mdp_port.trailing_DRs), len(mdp_port.trailing_DRs)
+    print "Mean Diversification Ratio: ", np.mean(mdp_port.trailing_DRs), len(rebalance_log)
     print '\t\tSystem:'
     print 'ArithMu: \t', round(smean, 6)
     print 'Sigma: \t\t', round(sstd, 6)
@@ -293,15 +303,27 @@ class MyBounds(object):
 def get_port_valuation(port, x=0):
     ### TODO: accept a parameter for rebalance ratio so that it is not divided everywhere else
 
-    weights = port.normalized_weights
+    total_delta = 0
     total_valuation = 0
 
+    # print "\nENTRIES: ", port.current_entry_prices
     for k, v in enumerate(port.assets):
-        total_valuation += weights[k][0] * port.closes[v][x]
-        print k, v, weights[k], port.closes[v][x], weights[k][0] * port.closes[v][x]
-    logging.debug('%s %s %s' % (x, port.trimmed[port.assets[0]][x]['Date'], total_valuation))
+        # total_valuation += weights[k][0] * port.closes[v][x]
+        total_delta += port.shares[k] * (port.closes[v][x] - port.current_entry_prices[k])
+        total_valuation += abs(port.shares[k] * port.closes[v][x])
 
-    return total_valuation
+    for k, v in enumerate(port.assets):
+        this_delta = port.shares[k] * (port.closes[v][x] - port.current_entry_prices[k])
+        this_valuation = abs(port.shares[k] * port.closes[v][x])
+        port.current_weights[k] = this_valuation / total_valuation
+
+        # print k, v, port.normalized_weights[k], round(port.shares[k], 4), '\t', round(port.closes[v][x], 4), '\t', \
+            # round(this_delta, 4), '\t', round(port.current_weights[k], 4)
+
+    # print "Total Delta: ", total_delta
+    logging.debug('%s %s %s' % (x, port.trimmed[port.assets[0]][x]['Date'], total_delta))
+
+    return total_delta + port.starting_valuation
 
 def get_drawdown(closes):
 
@@ -376,9 +398,6 @@ def get_data(port, base_etf, last_x_days = 0):
                 if k == 0:
                     continue
                 new_val = ((1 + (multiplier*v)) * port.closes[item][k-1])
-
-                if item == 'TLT':
-                    print "DATA: ", port.trimmed[item][k]['Date'], port.closes[item][k-1], (1 + (multiplier*v)), new_val, new_val / port.closes[item][k-1]
 
                 port.closes[item][k] = round(new_val, 6)
                 port.trimmed[item][k]['AdjClose'] = round(new_val, 6)
@@ -528,14 +547,19 @@ class MDPPortfolio():
 
         return normalized_weights
 
-    def set_normalized_weights(self, weights):
+    def set_normalized_weights(self, weights, x):
         self.normalized_weights = weights
+        self.current_entry_prices = [ self.closes[v][x] for k, v in enumerate(self.assets)]
+        self.shares = [ (1000 * self.normalized_weights[k][0] / self.closes[v][x]) for k, v in enumerate(self.assets) ]
+
+        
 
     def get_diversification_ratio(self):
 
         lookback = self.rebalance_time
 
-        transposed_weights = np.matrix.transpose(self.normalized_weights)
+        # transposed_weights = np.matrix.transpose(self.normalized_weights)
+        transposed_weights = np.matrix.transpose(self.current_weights)
         numerator = np.dot(transposed_weights, self.volatilities_matrix)
 
         d1 = np.dot(transposed_weights, self.cov_matrix)
