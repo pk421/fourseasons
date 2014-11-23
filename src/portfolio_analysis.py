@@ -33,10 +33,13 @@ def run_portfolio_analysis():
     # assets_list = ['SPXL', 'TYD', 'DRN', 'DGP', 'EDC']
 
     # Setting IEF simulates a 3x fund, use TYD to actually get 3x, TLT has more data and TMF (3x) is more liquid, it works well
-    # assets_list = ['VTI', 'TLT', 'VNQ', 'VWO', 'GLD']
-    # assets_list = ['VTI', 'TMF', 'VNQ', 'VWO', 'GLD']
     # assets_list = ['VTI', 'TYD', 'DRN', 'VWO', 'DGP'] # Leveraged Version
-    assets_list = ['IWM', 'TLT', 'VNQ', 'VWO', 'GLD']
+    # assets_list = ['IWM', 'EFA', 'VWO', 'GLD', 'VNQ', 'TLT']
+    assets_list = ['TNA', 'EURL', 'EDC', 'UGLD', 'DRN', 'TMF']
+    assets_list = ['SPY', 'IEF', 'TLT', 'DBC', 'GLD']
+
+    # Dividend Payers:
+    # assets_list = ['T', 'MCD', 'CVX', 'TGT', 'KO', 'PG', 'KMB', 'CINF', 'MMM']
 
     # assets_list = ['VNQ', 'XLF', 'XLK', 'XLE', 'XLV', 'XLI', 'XLP', 'XLU', 'XLY', 'XLB', 'IBB', 'TLT', 'GLD']
     # assets_list = ['VNQ', 'XLF', 'XLK', 'XLE', 'XLV', 'XLI', 'XLP', 'XLU', 'XLY', 'XLB', 'IBB', 'TLT', 'GLD']
@@ -61,7 +64,7 @@ def run_portfolio_analysis():
     # VIIIX=SPY, VBMPX=AGG, VTPSX=VEU
     # assets_list = ['VIIIX', 'VEMPX', 'VTPSX', 'VIPIX', 'VBMPX']
     # assets_list = ['VIIIX', 'VEU', 'LAG']
-    # assets_list = ['VIIIX', 'VTPSX', 'VBMPX']
+    # assets_list = ['VIIIX', 'VTPSX', 'VIPSX']
     # assets_list = ['SPY', 'VEU', 'AGG']
 
     # IRA + 401k + Outside Invs
@@ -82,7 +85,7 @@ def run_portfolio_analysis():
 
     mdp_port = MDPPortfolio(assets_list=assets_list)
     logging.debug(str(mdp_port.assets))
-    mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=0)
+    mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=0, get_new_data=True)
 
     mdp_port.weights = [ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets]
      ### mdp_port.weights = [ [0.72], [0.14], [0.14] ]
@@ -203,33 +206,42 @@ def run_portfolio_analysis():
         sharpe_price_list.append(('existing_trade', 'long', val[1]))
         sys_closes.append(val[1])
         if k < 200:
-            system_dma.append(0)
+            system_dma.append(1)
         else:
-            system_dma.append(np.mean([n[1] for n in mdp_port.portfolio_valuations[k-200:k]]))
-        if val[1] < system_dma[-1]:
+            system_dma.append(np.mean([n[1] for n in mdp_port.portfolio_valuations[k-200:k+1]]))
+        print "K, Date, Valuation, DMA, Diff: ", k, mdp_port.trimmed[mdp_port.assets[0]][k]['Date'], val[1], system_dma[-1], val[1] - system_dma[-1]
+#        if val[1] < system_dma[-1]:
+#            trade_days_skipped.append(k)
+        if mdp_port.portfolio_valuations[k-1][1] < system_dma[k-1]:
             trade_days_skipped.append(k)
+#        if k > 2:
+#            if system_dma[k-1] < system_dma[k-2]:
+#                trade_days_skipped.append(k)
 
 
-    dma_valuations = [1]
-    dma_rets = [1]
-    for k, val in enumerate(mdp_port.portfolio_valuations):
-        if k == 0:
-            continue
-        if k in trade_days_skipped:
-            dma_rets.append(1)
-        else:
-            dma_rets.append(sys_closes[k] / sys_closes[k-1])
 
-    # print dma_rets
-    for k, val in enumerate(dma_rets):
-        if k == 0:
-            continue
-        v = sys_closes[k-1] * dma_rets[k]
-        sys_closes[k] = v
-        sharpe_price_list[k] = ('existing_trade', 'long', v)
-        mdp_port.portfolio_valuations[k] = (mdp_port.portfolio_valuations[k][0], v)
+    ###### Executing this code will modify the returns to trade off of a 200 DMA system
+#    dma_rets = [1]
+#    for k, val in enumerate(mdp_port.portfolio_valuations):
+#        if k == 0:
+#            continue
+#        if k in trade_days_skipped:
+#            dma_rets.append(1)
+#        else:
+#            dma_rets.append(sys_closes[k] / sys_closes[k-1])
+#
+#    # print dma_rets
+#    for k, val in enumerate(dma_rets):
+#        if k == 0:
+#            continue
+#        v = sys_closes[k-1] * dma_rets[k]
+#        sys_closes[k] = v
+#        sharpe_price_list[k] = ('existing_trade', 'long', v)
+#        mdp_port.portfolio_valuations[k] = (mdp_port.portfolio_valuations[k][0], v)
+#
+#    print "# DAYS SKIPPED: ", len(trade_days_skipped)
+    ######
 
-    print "# DAYS SKIPPED: ", len(trade_days_skipped)
 
     print '\n', mdp_port.portfolio_valuations[0], mdp_port.portfolio_valuations[-1]
     
@@ -380,7 +392,7 @@ def get_drawdown(closes):
 
     return drawdown
 
-def get_data(port, base_etf, last_x_days = 0):
+def get_data(port, base_etf, last_x_days = 0, get_new_data=True):
     """
     This section trims everything relative to SPY (so it will not have MORE data than SPY), but it can have less, so the
     lengths of the data are still not consistent yet.
@@ -388,9 +400,10 @@ def get_data(port, base_etf, last_x_days = 0):
     print "start downloading"
     # The sort in data_retriever.py would corrupt the order of the asset list if it is not copied here
     asset_list = copy.deepcopy(port.assets)
-    multithread_yahoo_download(thread_count=20, update_check=False, \
-                               new_only=False, store_location = 'data/portfolio_analysis/', use_list=asset_list)
-    load_redis(stock_list='tda_free_etfs.csv', db_number=1, file_location='data/portfolio_analysis/', dict_size=3, use_list=asset_list)
+    if get_new_data:
+        multithread_yahoo_download(thread_count=20, update_check=False, \
+                                       new_only=False, store_location = 'data/portfolio_analysis/', use_list=asset_list)
+        load_redis(stock_list='tda_free_etfs.csv', db_number=1, file_location='data/portfolio_analysis/', dict_size=3, use_list=asset_list)
     stock_1_data = manage_redis.parse_fast_data(base_etf, db_to_use=1)
     logging.info('Loading Data...')
     logging.info('Base Start/End Dates: %s %s %s' % (base_etf, stock_1_data[0]['Date'],stock_1_data[-1]['Date']))
@@ -429,10 +442,12 @@ def get_data(port, base_etf, last_x_days = 0):
         multiplier = 1
         if item in ['IEF', 'TLT']:
             multiplier = 3
+        elif item in ['IWM', 'DIA', 'SPY']:
+            multiplier = 3
         elif item in ['VNQ', 'IYR']:
             multiplier = 1
-        elif item in ['GLD']:
-            multiplier = 1
+        elif item in ['GLD', 'DBC']:
+            multiplier = 3
 
         if multiplier != 1:
             r = get_returns(stock_2_close)
