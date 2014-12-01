@@ -34,9 +34,12 @@ def run_portfolio_analysis():
 
     # Setting IEF simulates a 3x fund, use TYD to actually get 3x, TLT has more data and TMF (3x) is more liquid, it works well
     # assets_list = ['VTI', 'TYD', 'DRN', 'VWO', 'DGP'] # Leveraged Version
-    # assets_list = ['IWM', 'EFA', 'VWO', 'GLD', 'VNQ', 'TLT']
-    assets_list = ['TNA', 'EURL', 'EDC', 'UGLD', 'DRN', 'TMF']
-    assets_list = ['SPY', 'IEF', 'TLT', 'DBC', 'GLD']
+    assets_list = ['IWM', 'EFA', 'VWO', 'GLD', 'VNQ', 'TLT']
+    # assets_list = ['TNA', 'EURL', 'EDC', 'UGLD', 'DRN', 'TMF']
+    # assets_list = ['SPY', 'IEF', 'TLT', 'DBC', 'GLD']
+
+    # Dalio's All Weather
+    # assets_list = ['SPY', 'IEF', 'TLT', 'GLD', 'DBC']
 
     # Dividend Payers:
     # assets_list = ['T', 'MCD', 'CVX', 'TGT', 'KO', 'PG', 'KMB', 'CINF', 'MMM']
@@ -44,9 +47,6 @@ def run_portfolio_analysis():
     # assets_list = ['VNQ', 'XLF', 'XLK', 'XLE', 'XLV', 'XLI', 'XLP', 'XLU', 'XLY', 'XLB', 'IBB', 'TLT', 'GLD']
     # assets_list = ['VNQ', 'XLF', 'XLK', 'XLE', 'XLV', 'XLI', 'XLP', 'XLU', 'XLY', 'XLB', 'IBB', 'TLT', 'GLD']
     # assets_list = ['TNA', 'TLT', 'GLD', 'UCD', 'FAS', 'TECL', 'YINN', 'LBJ', 'TQQQ', 'CURE', 'UDOW']
-
-    # Mom's:
-    # assets_list = ['VTI', 'IEF', 'REK', 'VWO']
 
     # TSP: G | C, F, S, I - (consider the G fund cash since it can't go down)
     # assets_list = ['SPY', 'AGG', 'FSEMX', 'EFA']
@@ -67,11 +67,6 @@ def run_portfolio_analysis():
     # assets_list = ['VIIIX', 'VTPSX', 'VIPSX']
     # assets_list = ['SPY', 'VEU', 'AGG']
 
-    # IRA + 401k + Outside Invs
-    # assets_list = ['IYR', 'IEFA', 'IEMG', 'VIIIX', 'VTPSX', 'VIPIX', 'AGG', 'GLD']
-
-
-    # assets_list = ['VTI', 'VGK', 'VWO', 'GLD', 'VNQ', 'TIP', 'TLT', 'AGG', 'LQD']
 
 #    in_file_name = 'list_dow_modified'
 #    location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
@@ -209,7 +204,7 @@ def run_portfolio_analysis():
             system_dma.append(1)
         else:
             system_dma.append(np.mean([n[1] for n in mdp_port.portfolio_valuations[k-200:k+1]]))
-        print "K, Date, Valuation, DMA, Diff: ", k, mdp_port.trimmed[mdp_port.assets[0]][k]['Date'], val[1], system_dma[-1], val[1] - system_dma[-1]
+        # print "K, Date, Valuation, DMA, Diff: ", k, mdp_port.trimmed[mdp_port.assets[0]][k]['Date'], val[1], system_dma[-1], val[1] - system_dma[-1]
 #        if val[1] < system_dma[-1]:
 #            trade_days_skipped.append(k)
         if mdp_port.portfolio_valuations[k-1][1] < system_dma[k-1]:
@@ -309,7 +304,10 @@ def do_optimization(mdp_port, x):
 
     nw = mdp_port.normalized_weights
     # This updates the covariance matrix using the current volatilities, so we can optimize based on that
+    #XXX
     theoretical_weights = mdp_port.get_covariance_matrix(x)
+    # Use to hardcode weights to "reset" the rebalance
+    # theoretical_weights = np.array([ [0.3], [0.15], [0.40], [0.075], [0.075] ])
     # theoretical_weights = mdp_port.optimize_sharpe_ratio(x)
     cm = mdp_port.cov_matrix
     assets = mdp_port.assets
@@ -367,6 +365,8 @@ def get_port_valuation(port, x=0):
         total_valuation += abs(port.shares[k] * port.closes[v][x])
 
     for k, v in enumerate(port.assets):
+        # This loop is used to get current weights that are evaluated in real-time each day, rather than static
+        # only every rebalance as the normalized weights are
         this_delta = port.shares[k] * (port.closes[v][x] - port.current_entry_prices[k])
         this_valuation = abs(port.shares[k] * port.closes[v][x])
         port.current_weights[k] = this_valuation / total_valuation
@@ -441,13 +441,13 @@ def get_data(port, base_etf, last_x_days = 0, get_new_data=True):
 
         multiplier = 1
         if item in ['IEF', 'TLT']:
-            multiplier = 3
-        elif item in ['IWM', 'DIA', 'SPY']:
-            multiplier = 3
+            multiplier = 1
+        elif item in ['IWM', 'DIA', 'SPY', 'EFA', 'VWO']:
+            multiplier = 1
         elif item in ['VNQ', 'IYR']:
             multiplier = 1
         elif item in ['GLD', 'DBC']:
-            multiplier = 3
+            multiplier = 1
 
         if multiplier != 1:
             r = get_returns(stock_2_close)
@@ -541,9 +541,9 @@ class MDPPortfolio():
         # normalized_weights = np.array(self.normalized_weights)
         normalized_weights = weights
         transposed_weights = np.matrix.transpose(normalized_weights)
-        weights = self.get_covariance_matrix(self.x)
+        # weights = self.get_covariance_matrix(self.x)
         # weights = self.optimize_sharpe_ratio(self.x)
-        self.normalized_weights = weights
+        # self.normalized_weights = weights
 
         # logging.info('weighted_vols_equal_one: transposed_weights: %s' % (transposed_weights))
         # logging.info('weighted_vols_equal_one: volatilities_matrix: %s' % (self.volatilities_matrix))
@@ -595,88 +595,91 @@ class MDPPortfolio():
 
         normalized_weights = np.divide(self.weights, total_sum)
 
-        printed_weights = '\n'.join([ (str(a) + '\t' + str(normalized_weights[i][0])) for i, a in enumerate(self.assets)])
+        # printed_weights = '\n'.join([ (str(a) + '\t' + str(normalized_weights[i][0])) for i, a in enumerate(self.assets)])
         ### print "\nNormalized Weights:\n", printed_weights
         ### print "\nSum of normalized: \n", sum(self.normalized_weights)[0]
 
         return normalized_weights
 
-    def optimize_sharpe_ratio(self, x):
-        end_index = x
-        start_index = max(0, x - self.lookback)
-
-#        if lookback == 0:
-#            lookback = len(self.trimmed[self.assets[0]])
-#        logging.info('Lookback Length: ' + str(lookback))
-
-        self.mean_past_returns = {}
-        for item in self.assets:
-            closes = self.closes[item][start_index:end_index]
-            self.past_returns[item] = get_returns(closes)
-            self.mean_past_returns[item] = np.mean(self.past_returns[item])
-            self.volatilities[item] = np.std(self.past_returns[item])
-
-        # using (lookback-1) cuts out a leading zero that appears on day 1, since there is no return yet
-        self.past_returns_matrix = np.array([self.past_returns[item] for item in self.assets])
-        self.mean_past_returns_matrix = np.array([ [self.mean_past_returns[item]] for item in self.assets])
-        # print "\nRETURNS: \n", self.mean_past_returns_matrix
-
-        one_matrix = np.array([ [1] for item in self.assets])
-
-        self.volatilities_matrix = np.array( [ [self.volatilities[z]] for z in self.assets ] )
-        self.cov_matrix = np.cov(self.past_returns_matrix)
-        # print"Vols/cov matrix: \n", self.volatilities_matrix, '\n', self.cov_matrix
-
-        self.inv_cov_matrix = scipy.linalg.inv(self.cov_matrix)
-        # self.transposed_volatilities_matrix = np.matrix.transpose(self.volatilities_matrix)
-
-        # This basically re-creates equation 30.1 from the white paper
-        numerator = np.dot(self.inv_cov_matrix, self.mean_past_returns_matrix)
-        transposed_identity_matrix = np.matrix.transpose(np.identity(len(self.assets)))
-        transposed_one_matrix = np.matrix.transpose(one_matrix)
-
-        denominator_a = np.dot(transposed_one_matrix, self.inv_cov_matrix)
-        denominator = np.dot(denominator_a, self.mean_past_returns_matrix)
-        self.weights = np.divide(numerator, denominator)
-
-        # print "\n\nNum, Denom A, Denom, weights: \n", numerator, '\n\n', denominator_a, '\n\n', denominator, '\n\n', self.weights
-
-        total_sum = sum(self.weights)[0]
-        total_sum = sum([abs(n) for n in self.weights])[0]
-
-        # print "\nSUM: ", total_sum, self.weights
-
-        normalized_weights = np.divide(self.weights, total_sum)
-
-        printed_weights = '\n'.join([ (str(a) + '\t' + str(normalized_weights[i][0])) for i, a in enumerate(self.assets)])
-        # print "\nNormalized Weights:\n", printed_weights
-        # print "\nSum of normalized: \n", sum(self.normalized_weights)[0]
-
-        return normalized_weights
+#    def optimize_sharpe_ratio(self, x):
+#        end_index = x
+#        start_index = max(0, x - self.lookback)
+#
+##        if lookback == 0:
+##            lookback = len(self.trimmed[self.assets[0]])
+##        logging.info('Lookback Length: ' + str(lookback))
+#
+#        self.mean_past_returns = {}
+#        self.mean_volatilities = {}
+#        for item in self.assets:
+#            closes = self.closes[item][start_index:end_index]
+#            self.past_returns[item] = get_returns(closes)
+#            self.mean_past_returns[item] = np.mean(self.past_returns[item])
+#            self.volatilities[item] = np.std(self.past_returns[item])
+#            self.mean_volatilities[item] = np.mean(self.volatilities[item])
+#
+#        # using (lookback-1) cuts out a leading zero that appears on day 1, since there is no return yet
+#        self.past_returns_matrix = np.array([self.past_returns[item] for item in self.assets])
+#        self.mean_past_returns_matrix = np.array([ [self.mean_past_returns[item]] for item in self.assets])
+#        # print "\nRETURNS: \n", self.mean_past_returns_matrix
+#
+#        self.volatilities_matrix = np.array([self.volatilities[item] for item in self.assets])
+#        self.mean_volatilities_matrix = np.array([ [self.mean_volatilities[item]] for item in self.assets])
+#
+#        one_matrix = np.array([ [1] for item in self.assets])
+#
+#        self.volatilities_matrix = np.array( [ [self.volatilities[z]] for z in self.assets ] )
+#        self.cov_matrix = np.cov(self.past_returns_matrix)
+#        # print"Vols/cov matrix: \n", self.volatilities_matrix, '\n', self.cov_matrix
+#
+#        self.inv_cov_matrix = scipy.linalg.inv(self.cov_matrix)
+#        # self.transposed_volatilities_matrix = np.matrix.transpose(self.volatilities_matrix)
+#
+#        # This basically re-creates equation 30.1 from the white paper
+#        numerator = np.dot(self.inv_cov_matrix, self.mean_past_returns_matrix)
+#        # numerator = np.dot(self.inv_cov_matrix, self.mean_volatilities_matrix)
+#        transposed_identity_matrix = np.matrix.transpose(np.identity(len(self.assets)))
+#        transposed_one_matrix = np.matrix.transpose(one_matrix)
+#
+#        denominator_a = np.dot(transposed_one_matrix, self.inv_cov_matrix)
+#        denominator = np.dot(denominator_a, self.mean_past_returns_matrix)
+#        # denominator = np.dot(denominator_a, self.mean_volatilities_matrix)
+#        self.weights = np.divide(numerator, denominator)
+#
+#        # print "\n\nNum, Denom A, Denom, weights: \n", numerator, '\n\n', denominator_a, '\n\n', denominator, '\n\n', self.weights
+#
+#        total_sum = sum(self.weights)[0]
+#        total_sum = sum([abs(n) for n in self.weights])[0]
+#
+#        # print "\nSUM: ", total_sum, self.weights
+#
+#        normalized_weights = np.divide(self.weights, total_sum)
+#
+#        printed_weights = '\n'.join([ (str(a) + '\t' + str(normalized_weights[i][0])) for i, a in enumerate(self.assets)])
+#        # print "\nNormalized Weights:\n", printed_weights
+#        # print "\nSum of normalized: \n", sum(self.normalized_weights)[0]
+#
+#        return normalized_weights
 
     def set_normalized_weights(self, weights, x):
         self.normalized_weights = weights
         self.current_entry_prices = [ self.closes[v][x] for k, v in enumerate(self.assets)]
         self.shares = [ (1000 * self.normalized_weights[k][0] / self.closes[v][x]) for k, v in enumerate(self.assets) ]
 
-        
-
     def get_diversification_ratio(self):
 
-        lookback = self.rebalance_time
+        lookback = self.lookback
 
-        # transposed_weights = np.matrix.transpose(self.normalized_weights)
         transposed_weights = np.matrix.transpose(self.current_weights)
         numerator = np.dot(transposed_weights, self.volatilities_matrix)
 
         d1 = np.dot(transposed_weights, self.cov_matrix)
-        d2 = np.dot(d1, self.normalized_weights)
-        d3 = math.sqrt(abs(d2))
+        d2 = np.dot(d1, self.current_weights)
+        d3 = math.sqrt(d2)
 
         ret = (numerator / d3)[0][0]
 
         self.diversification_ratio = ret
-
         return ret
 
 
