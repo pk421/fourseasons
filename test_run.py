@@ -10,7 +10,7 @@ try:
     from src.correlations import run_correlations
     from src.data_retriever import *
     from src.poll_realtime_data import *
-    from src.portfolio_analysis import run_portfolio_analysis
+    from src.portfolio_analysis.portfolio_analysis import run_portfolio_analysis
     from src.harding_seasonality import run_harding_seasonality
     from src.indicator_system import run_indicator_system
     from src.returns_analyzer import run_returns_analyzer

@@ -1,0 +1,75 @@
+New Ideas:
+
+System:
+1.	Find day of cross and then find # of sigma below cross day's close (assuming RSI was in zone whole time). Disregard how many days to get there.
+
+3.	Similar to #1, but ignore the crossing day. Simply see if yesterday we were in RSI buy zone (regardless of cross) and today intraday we are down x sigma in the single day, then buy.
+
+****4.	Pure sigma indicator that breaks down moves by consequetive sigma moves. E.g. indicator(5 days) would show how many of the daily sigmas (sig / p) the price has moved over the course of 5 days. Buy if this move is extreme (e.g. 10th percentile), sell if the move is normalized (e.g. 60th percentile).
+
+5.	Gary's 2/3 day sma cross system...long shot
+
+7) use a pure sigma exit: exit when up 1.0 sig/p relative to purchase price, etc.
+8) create a moving average of the system performance across ALL trades (not just those taken). If we see the % of losers increasing, maybe we should stand aside. Also, the trader (me) should have discretion: if we have taken recent losses in Biotech for example, don't enter another Biotech trade now - stay out. Our goal should be diversity across regions, industries and asset classes, but with some knowledge of recent performance. We want to gravitate towards areas where the system is working well!
+
+- sigma system really should be normalized (divided by the start of the window to show the percentage change)
+
+- add a moving average system that tracks the recent returns of the system in a sector by sector, then asset class way: e.g. every major sector, currencies, RE, commodities, bonds, etc. ONLY trade the asset classes that are showing recent success in the system. or track a moving average of the system's returns for various asset classes. If the account value for a given asset class falls below the MA for that asset class, don't trade it
+
+UTIL:
+1) conversion system for daily to weekly/monthly data
+2) create a function that can detect stocks that might have splits, and then that can read in split info from a csv file and make the corrections to data after it is in the database. the function would run at the end of a load-redis operation
+4) save a copy of code in separate file with "code" prefix - so it can easily be reloaded next to the csv of results. Also a later function could read in the previous trade logs to calculate stats on them, find the best one, and then refer me to the code that was used to generate the system
+
+- the primary advantages of the sigma span system are that it allows higher geom_mean returns even when we cut out low-volume, illiquid stocks. The RSI system has much worse returns when we do this. The disadvantage of the sigma span system is that it is much more complex and does not allow exits without the system. If live, it would require us to have a "solver" function that could solve for price levels that would generate an exit so that we could exit based solely on price. Sigma span also allows us to enter less volatile trades so the volatility overall is reduced. Must better understand how the iterative std dev is actually working on it.
+
+-get gox data
+-save code and screenshot of the running system
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-Set pc loss to zero - exit at any loss, max at 4 days
+xxx - does not improve sortino, does not really lower sigma at all
+
+
+-Do full mkt on 1 day exit
+xxx - has a high sortino, but is less than for etfs. geom return is similar. sharpe ratio is a bit less than etfs. But still a winner overall.
+
+
+-Existing system but exit if cross below 200 dma
+xxx - on a 4 day trade timeframe, enabling this has a significant impact:
+1) it reduces geometric mean return from approx 2.0% to 1.0% - huge!
+2) sortino goes from 0.23 to 0.29 - big jump, sharpe 0.14 to 0.19
+3) arithmetic mean return goes up a lot, but sigmas don't change much - this explains jump in sortino/sharpe
+ 
+
+-Test seasonality but use a cross system for entry only and set SL to 4percent
+
+- try entering system on ANY time stock is below a sigma span boundary - this would only have an impact on the backtest,
+beacuse within a single stock it would mostly just enter at the cross
+
+- Test by using a sigma span value for exit, e.g. -0.8, etc.
+--try this with a 1 percent abs stop loss
+
+Really it's not vol we want so much as sig/p combined w/mean reverting properties.
+-Run a DF test on mkt for timeframes of 5, 10, 15 days. Find the best mean reverters that are also furthest removed from their means (in terms of sigma), then trade the reversion directly
+
+
+
+#################################################################################################################################
+BUGS
+#################################################################################################################################
+- new target sigma span is not getting multiplied by volatility at all
+- must add % drawdown measure
+
