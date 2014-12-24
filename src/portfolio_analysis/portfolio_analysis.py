@@ -14,11 +14,7 @@ import logging
 logging.root.setLevel(logging.INFO)
 
 def do_optimization(mdp_port, x):
-    # This updates the covariance matrix using the current volatilities, so we can optimize based on that
-
     theoretical_weights = mdp_port.get_tangency_weights(x)
-
-    # theoretical_weights = mdp_port.optimize_sharpe_ratio(x)
 
     # theoretical_weights = np.array([ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets])
     # theoretical_weights = np.array([ [0.30], [0.15], [0.40], [0.075], [0.075] ])
@@ -116,7 +112,6 @@ def run_portfolio_analysis():
                 trailing_diversification_ratio = mdp_port.get_diversification_ratio(weights='current')
                 mdp_port.trailing_DRs.append(trailing_diversification_ratio)
                 rebalance_date = mdp_port.trimmed[mdp_port.assets[0]][x]['Date']
-                rebalance_old_div_ratio = trailing_diversification_ratio
                 print "Trailing DR: ", x, trailing_diversification_ratio
 
                 # Only consider a rebalance after rebalance_time, if div ratio is low, rebalance. If it's high, wait
@@ -137,8 +132,10 @@ def run_portfolio_analysis():
             old_weighted_valuation = get_port_valuation(mdp_port, x=x)
             mdp_port.x = x
 
-            mdp_port, theoretical_weights = do_optimization(mdp_port, x)
+            rebalance_old_div_ratio = mdp_port.get_diversification_ratio(weights='current')
 
+            mdp_port, theoretical_weights = do_optimization(mdp_port, x)
+            
             ###
             print "\n\n\nTheoretical Weights: ", str(theoretical_weights)
             mdp_port.set_normalized_weights(theoretical_weights, old_weighted_valuation, x)
