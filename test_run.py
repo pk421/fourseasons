@@ -11,6 +11,7 @@ try:
     from src.data_retriever import *
     from src.poll_realtime_data import *
     from src.portfolio_analysis.portfolio_analysis import run_portfolio_analysis
+    from src.portfolio_analysis.portfolio_analysis import run_live_portfolio_analysis
     from src.harding_seasonality import run_harding_seasonality
     from src.indicator_system import run_indicator_system
     from src.returns_analyzer import run_returns_analyzer
@@ -55,6 +56,10 @@ parser.add_argument("--indicator_system",
 
 parser.add_argument("--live_monitor",
                     help="Run the live monitor and email system.",
+                    action="store_true")
+
+parser.add_argument("--live_portfolio_analysis",
+                    help="run live portfolio analysis",
                     action="store_true")
 
 parser.add_argument("--load_redis",
@@ -119,6 +124,9 @@ if args.indicator_system:
 
 if args.live_monitor:
     run_live_monitor()
+
+if args.live_portfolio_analysis:
+    run_live_portfolio_analysis()
 
 if args.load_redis:
     load_redis(stock_list='do_all', db_number=0, file_location='tmp/', dict_size=6)

@@ -64,6 +64,9 @@ indicator_system:
 live_monitor:
 	python test_run.py --live_monitor
 
+live_portfolio_analysis:
+	python test_run.py --live_portfolio_analysis
+
 load_redis:
 	python test_run.py --load_redis
 

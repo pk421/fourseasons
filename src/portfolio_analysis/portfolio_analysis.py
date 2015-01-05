@@ -78,7 +78,7 @@ def run_portfolio_analysis():
 
     mdp_port = MDPPortfolio(assets_list=assets_list)
     logging.debug(str(mdp_port.assets))
-    mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=0, get_new_data=False)
+    mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=0, get_new_data=True)
 
     mdp_port.normalized_weights = np.array([ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets])
     mdp_port.current_weights = mdp_port.normalized_weights
@@ -462,5 +462,46 @@ class TradeLog(object):
         self.Mean_Vol = None
         self.Weighted_Mean_Vol = None
         self.IsRebalanced = None
+
+
+def run_live_portfolio_analysis():
+
+    vault = [('TNA',473), ('TMF',809), ('UCD',655), ('UGLD',804)]
+    vault_cash = 580.87
+
+    all_portfolios = [vault]
+
+    for account in all_portfolios:
+
+        assets = [ n[0] for n in vault ]
+        shares = [ n[1] for n in vault ]
+
+        print assets
+
+        port = MDPPortfolio(assets)
+
+        port = get_data(port, base_etf=port.assets[0], last_x_days=0, get_new_data=True)
+
+        port.shares = shares
+        port.current_entry_prices = [ 0 for n in port.assets ]
+        port.current_weights = [ 0 for n in port.assets ]
+        port.lookback = 63
+
+        max_index = len(port.closes[port.assets[0]]) - 1
+
+        tangency_weights = port.get_tangency_weights(x=max_index)
+        print "tangency: ", tangency_weights
+
+        valuation = get_port_valuation(port, x=max_index) + vault_cash
+        port.current_weights = np.array([ [n] for n in port.current_weights] )
+        div_ratio = port.get_diversification_ratio(weights='current')
+
+        print "value: ", valuation
+        print "weight: ", port.current_weights
+        print "div ratio: ", div_ratio
+
+
+
+    return
 
 
