@@ -466,17 +466,23 @@ class TradeLog(object):
 
 def run_live_portfolio_analysis():
 
-    vault = [('TNA',473), ('TMF',809), ('UCD',655), ('UGLD',804)]
+    vault = [('TNA',473), ('TMF',809), ('UCD',655), ('UGLD',804), ('EURL', 336)]
     vault_cash = 580.87
 
-    all_portfolios = [vault]
+    roth_ira = [('TNA',106), ('DRN',4), ('TMF',176), ('EURL',336), ('UGLD',180)]
+    roth_401k = [('VIIIX',44.176), ('VTPSX',13.703),  ('VBMPX',2357.188)]
+
+    #####['TNA', 'EURL', 'EDC', 'UGLD', 'DRN', 'TMF']
+    designated_benificiary = [('TNA',1455), ('TMF',1767), ('UCD',3695), ('UGLD',2099)]
+    c_roth_ira = [('TNA',190), ('DRN',7), ('TMF',315), ('EURL',605), ('UGLD',327)]
+
+    all_portfolios = [c_roth_ira]
 
     for account in all_portfolios:
+        cash = 0
 
-        assets = [ n[0] for n in vault ]
-        shares = [ n[1] for n in vault ]
-
-        print assets
+        assets = [ n[0] for n in account ]
+        shares = [ n[1] for n in account ]
 
         port = MDPPortfolio(assets)
 
@@ -487,20 +493,22 @@ def run_live_portfolio_analysis():
         port.current_weights = [ 0 for n in port.assets ]
         port.lookback = 63
 
+        # print [ port.closes[v] for k, v in enumerate(port.assets) ]
+
         max_index = len(port.closes[port.assets[0]]) - 1
 
         tangency_weights = port.get_tangency_weights(x=max_index)
-        print "tangency: ", tangency_weights
 
-        valuation = get_port_valuation(port, x=max_index) + vault_cash
+        # get_port_valuation() should be setting the current_weights
+        valuation = get_port_valuation(port, x=max_index) + cash
         port.current_weights = np.array([ [n] for n in port.current_weights] )
         div_ratio = port.get_diversification_ratio(weights='current')
 
-        print "value: ", valuation
-        print "weight: ", port.current_weights
-        print "div ratio: ", div_ratio
-
-
+        print "Assets: \t", assets
+        print "Tangency: \t", [ round(n[0], 6) for n in tangency_weights ]
+        print "Act. Weights: \t", [ round(n[0], 6) for n in port.current_weights ]
+        print "Value: \t\t", valuation
+        print "Div Ratio: \t", div_ratio
 
     return
 
