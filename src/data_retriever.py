@@ -212,9 +212,13 @@ def load_redis(stock_list='do_all', db_number=99, file_location='tmp/', dict_siz
         for day in days:
             day_items = day.split(',')
             day_dict = {}
+
+            # By cutting out the dash, the dates can be compared as ints, much faster than using datetime lib
+            simplified_date = str(day_items[0]).replace('-', '')
+
             try:
                 day_dict['Symbol'] = str(symbol)
-                day_dict['Date'] = str(day_items[0])
+                day_dict['Date'] = str(simplified_date)
                 day_dict['Open'] = float(day_items[1])
                 day_dict['High'] = float(day_items[2])
                 day_dict['Low'] = float(day_items[3])

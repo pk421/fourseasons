@@ -16,7 +16,6 @@ def get_data(port, base_etf, last_x_days = 0, get_new_data=True):
     This section trims everything relative to SPY (so it will not have MORE data than SPY), but it can have less, so the
     lengths of the data are still not consistent yet.
     """
-    print "start downloading"
     # The sort in data_retriever.py would corrupt the order of the asset list if it is not copied here
     asset_list = copy.deepcopy(port.assets)
     if get_new_data:
@@ -59,16 +58,16 @@ def get_data(port, base_etf, last_x_days = 0, get_new_data=True):
                                     base_etf, port.trimmed[base_etf][0]['Date'], port.trimmed[base_etf][-1]['Date']))
 
         multiplier = 1
-        if item in ['IEF', 'TLT']:
-            multiplier = 3
-        elif item in ['IWM', 'DIA', 'SPY', 'EFA', 'VWO']:
-            multiplier = 3
-        elif item in ['VNQ', 'IYR']:
-            multiplier = 3
-        elif item in ['GLD', 'SLV', 'OIL']:
-            multiplier = 3
-        elif item in ['DBC']:
-            multiplier = 2
+#        if item in ['IEF', 'TLT']:
+#            multiplier = 3
+#        elif item in ['IWM', 'DIA', 'SPY', 'EFA', 'VWO']:
+#            multiplier = 3
+#        elif item in ['VNQ', 'IYR']:
+#            multiplier = 3
+#        elif item in ['GLD', 'SLV', 'OIL']:
+#            multiplier = 3
+#        elif item in ['DBC']:
+#            multiplier = 2
 
         if multiplier != 1:
             r = get_returns(stock_2_close)

@@ -22,6 +22,7 @@ ext_modules = [
               ## Technical / Math
               Extension('src.toolsx', ['src/toolsx.pyx']),
               Extension('src.math_tools', ['src/math_tools.pyx']),
+              # Extension('src.portfolio_analysis.portfolio_analysis', ['src/portfolio_analysis/portfolio_analysis.pyx'])
               ]
 
 setup(

@@ -40,10 +40,10 @@ def trim_data(stock_1_data, stock_2_data):
     missing, it raises an exception.
     """
 
-    stock_1_start = datetime.datetime.strptime(stock_1_data[0]['Date'], '%Y-%m-%d').date()
-    stock_2_start = datetime.datetime.strptime(stock_2_data[0]['Date'], '%Y-%m-%d').date()
-    stock_1_end = datetime.datetime.strptime(stock_1_data[-1]['Date'], '%Y-%m-%d').date()
-    stock_2_end = datetime.datetime.strptime(stock_2_data[-1]['Date'], '%Y-%m-%d').date()
+    stock_1_start = datetime.datetime.strptime(stock_1_data[0]['Date'], '%Y%m%d').date()
+    stock_2_start = datetime.datetime.strptime(stock_2_data[0]['Date'], '%Y%m%d').date()
+    stock_1_end = datetime.datetime.strptime(stock_1_data[-1]['Date'], '%Y%m%d').date()
+    stock_2_end = datetime.datetime.strptime(stock_2_data[-1]['Date'], '%Y%m%d').date()
 
     if stock_1_start < stock_2_start:
         for x in xrange(0, len(stock_1_data)):
@@ -133,14 +133,14 @@ def propagate_on_fly(stock_1_data, stock_2_data):
         logger.debug('%s %s' % (stock_1_data[x]['Date'], stock_1_data[x]['Date']))
 
         if stock_1_data[x]['Date'] != stock_2_data[x]['Date']:
-            if datetime.datetime.strptime(stock_1_data[x]['Date'], '%Y-%m-%d').date() > \
-                datetime.datetime.strptime(stock_2_data[x]['Date'], '%Y-%m-%d').date():
+            if datetime.datetime.strptime(stock_1_data[x]['Date'], '%Y%m%d').date() > \
+                datetime.datetime.strptime(stock_2_data[x]['Date'], '%Y%m%d').date():
                 temp = copy.deepcopy(stock_1_data[x-1])
                 temp['Date'] = copy.deepcopy(stock_2_data[x]['Date'])
                 stock_1_data.insert(x, temp)
 
-            elif datetime.datetime.strptime(stock_2_data[x]['Date'], '%Y-%m-%d').date() > \
-                datetime.datetime.strptime(stock_1_data[x]['Date'], '%Y-%m-%d').date():
+            elif datetime.datetime.strptime(stock_2_data[x]['Date'], '%Y%m%d').date() > \
+                datetime.datetime.strptime(stock_1_data[x]['Date'], '%Y%m%d').date():
                 temp = copy.deepcopy(stock_2_data[x-1])
                 temp['Date'] = copy.deepcopy(stock_1_data[x]['Date'])
                 stock_2_data.insert(x, temp)
