@@ -129,7 +129,7 @@ if args.live_portfolio_analysis:
     run_live_portfolio_analysis()
 
 if args.load_redis:
-    load_redis(stock_list='do_all', db_number=0, file_location='tmp/', dict_size=6)
+    load_redis(stock_list='etfs_etns.csv', db_number=1, file_location='tmp/', dict_size=3)
 
 if args.poll_realtime_data:
     query_realtime_data()

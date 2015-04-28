@@ -550,6 +550,7 @@ def run_live_portfolio_analysis(assets=None):
         # get_port_valuation() should be setting the current_weights
         valuation = get_port_valuation(port, x=max_index) + cash
         port.current_weights = np.array([ [n] for n in port.current_weights] )
+        original_weights = port.current_weights
         div_ratio = port.get_diversification_ratio(weights='current')
 
         port.current_weights = tangency_weights
@@ -557,7 +558,7 @@ def run_live_portfolio_analysis(assets=None):
 
         print "Assets: \t", assets
         print "Tangency: \t", [ round(n[0], 6) for n in tangency_weights ]
-        print "Act. Weights: \t", [ round(n[0], 6) for n in port.current_weights ]
+        print "Act. Weights: \t", [ round(n[0], 6) for n in original_weights ]
         print "Value: \t\t", valuation
         print "Div Ratio: \t", div_ratio
         print "Possible Div Ratio: \t", possible_div_ratio
