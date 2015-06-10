@@ -14,7 +14,31 @@ from src.portfolio_analysis.portfolio_constants     import custom_assets_list, l
 from src.math_tools                                 import get_returns, get_ln_returns
 
 import logging
+
+# determine whether to download new data from the internet
+UPDATE_DATA=True
 logging.root.setLevel(logging.INFO)
+
+# from multiprocessing import Process, Lock
+# def run_one_iteration(items, lock):
+#     system_stats = do_analysis(items, write_to_file=False)
+#     # all_stats_list.append(system_stats)
+#
+#     print "Items: ", k, ' of ', len(combinations), \
+#           "AnnRet: ", round(system_stats['annualized_return'], 6), \
+#           "Sigma: ", round(system_stats['sigma'], 6), \
+#           "Mu DR: ", round(system_stats['mean_diversification_ratio'], 6)
+#           ## "Sharpe: ", round(system_stats['sharpe'], 6), \
+#
+#     output_string = ""
+#
+#     output_string += str(round(system_stats['annualized_return'], 6)) + ','
+#     output_string += str(round(system_stats['sharpe'], 6)) + ','
+#     output_string += str(round(system_stats['sigma'], 6)) + ','
+#     output_string += str(round(system_stats['mean_diversification_ratio'], 6)) + ','
+#     output_string += ','.join([str(a) for a in items])
+#     output_string += '\n'
+#     return system_stats, output_string
 
 def do_optimization(mdp_port, x):
     theoretical_weights = mdp_port.get_tangency_weights(x)
@@ -36,37 +60,45 @@ def do_optimization(mdp_port, x):
 
     # Turn this on to fix the weights of at each rebalance
     ### HACK:
-    # normalized_theoretical_weights = np.array([[0.3], [0.15], [0.4], [0.075], [0.075]])
-    # normalized_theoretical_weights = np.array([[0.23], [0.27], [0.29], [0.08], [0.13]])
+    normalized_theoretical_weights = np.array([[0.3], [0.15], [0.4], [0.075], [0.075]])
+
+    # MDP Optimized For 2338/2339 historical days single rebalance
+    # normalized_theoretical_weights = np.array([[0.25], [0.28], [0.29], [0.08], [0.10]])
+
+    # Naive Risk Parity Optimized for 2338/2339 historical days single rebalance
+    # normalized_theoretical_weights = np.array([[0.14], [0.40], [0.19], [0.13], [0.14]])
 
     return mdp_port, normalized_theoretical_weights
 
 def run_portfolio_analysis():
 
-    system_stats = do_analysis(custom_assets_list)
+    system_stats = do_analysis(custom_assets_list, write_to_file=True)
 
-    # assets = custom_assets_list
-    #
     # stock_list = open('/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + 'etfs_for_sweep.csv', 'r')
     # assets = stock_list.read().rstrip().split('\n')
-    #
+
+    # assets = custom_assets_list
     # combinations = []
-    # combos = itertools.combinations(assets, 5)
-    # try:
-    #     while True:
-    #         c = combos.next()
-    #         cleaned_c = [b.strip() for b in c]
-    #         combinations.append(cleaned_c)
-    # except:
-    #     pass
+    # # combos = [ itertools.combinations(assets, 5), itertools.combinations(assets, 4), itertools.combinations(assets, 6)]
+    # combos = [ itertools.combinations(assets, 5) ]
+    #
+    # for combo in combos:
+    #     try:
+    #         while True:
+    #             c = combo.next()
+    #             cleaned_c = [b.strip() for b in c]
+    #             combinations.append(cleaned_c)
+    #     except:
+    #         pass
     #
     # # print combinations
     # print "Total Combinations: ", len(combinations)
     #
     # all_stats_list = []
     # output_string = 'Ann Return, Sharpe Ratio, Sigma\n'
+    #
     # for k, items in enumerate(combinations):
-    #     system_stats = do_analysis(items)
+    #     system_stats = do_analysis(items, write_to_file=False)
     #     all_stats_list.append(system_stats)
     #
     #     print "Items: ", k, ' of ', len(combinations), \
@@ -91,13 +123,13 @@ def run_portfolio_analysis():
 
     return
 
-def do_analysis(assets=None):
+def do_analysis(assets=None, write_to_file=True):
 
     assets_list = assets if assets else custom_assets_list
 
     mdp_port = MDPPortfolio(assets_list=assets_list)
     logging.debug(str(mdp_port.assets))
-    mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=0, get_new_data=False)
+    mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=0, get_new_data=UPDATE_DATA)
 
     mdp_port.normalized_weights = np.array([ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets])
     mdp_port.current_weights = mdp_port.normalized_weights
@@ -199,11 +231,11 @@ def do_analysis(assets=None):
     if len(mdp_port.trimmed[mdp_port.assets[0]]) != len(mdp_port.portfolio_valuations):
         raise Exception('Length of asset list data does not match length of valuations data.')
 
-    system_results = aggregate_statistics(mdp_port)
+    system_results = aggregate_statistics(mdp_port, write_to_file=write_to_file)
     return system_results
 
 
-def aggregate_statistics(mdp_port, write_to_file=False):
+def aggregate_statistics(mdp_port, write_to_file=True):
 
     if logging.root.level < 25:
         print '\n'.join([str(r) for r in mdp_port.rebalance_log])
@@ -233,7 +265,7 @@ def aggregate_statistics(mdp_port, write_to_file=False):
 
     # add the other ETF here so that the data for SPY will be validated against it, but we won't use it directly
     ref_port = MDPPortfolio(assets_list=['IWM', 'TLT'])
-    ref_port = get_data(ref_port, base_etf=ref_port.assets[0], last_x_days=0, get_new_data=False)
+    ref_port = get_data(ref_port, base_etf=ref_port.assets[0], last_x_days=0, get_new_data=UPDATE_DATA)
     ref_price_list = ref_port.trimmed[ref_port.assets[0]]
 
     # first_date = datetime.datetime.strptime(mdp_port.portfolio_valuations[0][0], '%Y-%m-%d')
@@ -260,7 +292,9 @@ def aggregate_statistics(mdp_port, write_to_file=False):
     if write_to_file:
         output_fields = ('Date', 'Valuation', 'DR', 'Mean_Vol', 'Weighted_Mean_Vol', 'IsRebalanced')
 
-        output_string = '\n'.join( [(str(n[0]) + ',' + str(n[1]) + ',' + str(ref_log[k][2]/ref_log[0][2]) +\
+        # We must add back in dashes into the date so Excel handles this properly
+        output_string = '\n'.join( [(str(n[0][0:4]) + '-' + str(n[0][4:6]) + '-' + str(n[0][6:8])
+                                     + ',' + str(n[1]) + ',' + str(ref_log[k][2]/ref_log[0][2]) +\
                                      ',' + str(system_stats['drawdown'][k]) + ',' + str(ref_stats['drawdown'][k]) +\
                                      ',' + str(system_dma[k]) +\
                                      ',' + str(mdp_port.trailing_DRs[k])
@@ -467,7 +501,7 @@ class MDPPortfolio():
         B = np.dot(np.dot(self.transposed_volatilities_matrix, scipy.linalg.inv(self.cov_matrix)), volatilities_matrix)
         # print "B is: ", B
 
-        C = np.dot(np.dot(np.matrix.transpose(volatilities_matrix), scipy.linalg.inv(self.cov_matrix)), volatilities_matrix)
+        C = np.dot(np.dot(self.transposed_volatilities_matrix, scipy.linalg.inv(self.cov_matrix)), volatilities_matrix)
         # print "C is: ", C
 
         #D = (A * C) - (B^2)
@@ -476,6 +510,9 @@ class MDPPortfolio():
         numerator = np.dot(scipy.linalg.inv(self.cov_matrix), volatilities_matrix)
         denominator = B
         tangency_weights = np.divide(numerator, denominator)
+
+        # This is akin (though possibly not identical) to the "naive" risk parity optimization.
+        ### tangency_weights = np.divide(unity_vector, self.volatilities_matrix)
 
         total_sum = sum([abs(n) for n in tangency_weights])[0]
         normalized_weights = np.divide(tangency_weights, total_sum)
@@ -534,7 +571,7 @@ def run_live_portfolio_analysis(assets=None):
 
         port = MDPPortfolio(assets)
 
-        port = get_data(port, base_etf=port.assets[0], last_x_days=0, get_new_data=True)
+        port = get_data(port, base_etf=port.assets[0], last_x_days=0, get_new_data=UPDATE_DATA)
 
         port.shares = shares
         port.current_entry_prices = [ 0 for n in port.assets ]
@@ -560,8 +597,8 @@ def run_live_portfolio_analysis(assets=None):
         print "Tangency: \t", [ round(n[0], 6) for n in tangency_weights ]
         print "Act. Weights: \t", [ round(n[0], 6) for n in original_weights ]
         print "Value: \t\t", valuation
-        print "Div Ratio: \t", div_ratio
-        print "Possible Div Ratio: \t", possible_div_ratio
+        print "Act Div Ratio: \t", div_ratio
+        print "Tan Div Ratio: \t", possible_div_ratio
 
     return
 

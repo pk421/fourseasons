@@ -16,7 +16,7 @@ custom_assets_list = ['IWM', 'EFA', 'VWO', 'GLD', 'VNQ', 'TLT']
 # custom_assets_list = ['SPY', 'TLT', 'GLD', 'DBC']
 
 # Dalio's All Weather
-# custom_assets_list = ['SDY', 'IEF', 'TLT', 'GLD', 'DBC']
+dalio_all_weather = ['SPY', 'IEF', 'TLT', 'GLD', 'DBC']
 
 # Dividend Payers:
 # custom_assets_list = ['T', 'MCD', 'CVX', 'TGT', 'KO', 'PG', 'KMB', 'CINF', 'MMM']
@@ -45,18 +45,33 @@ custom_assets_list = ['IWM', 'EFA', 'VWO', 'GLD', 'VNQ', 'TLT']
 # custom_assets_list = ['SPY', 'VEU', 'AGG']
 
 
+spy_sectors = ['XLF', 'XLK', 'XLE', 'XLV', 'XLI', 'XLP', 'XLU', 'XLY', 'XLB', 'IBB']
+countries_regions = ['EWJ', 'EFA', 'ILF', 'EEM', 'IYR', 'RWX', 'VWO']
+other = ['VNQ']
+us_stocks = ['SPY', 'IWM', 'SDY', 'DIA']
+safe_havens = ['TLT', 'IEF', 'AGG']
+commodities = ['DBC', 'GLD', 'SLV']
+
+
+full_list_of_possibilities = spy_sectors + countries_regions + other + us_stocks + safe_havens + commodities
+
+
+custom_assets_list = dalio_all_weather
+
+
 ##########################
 
-vault = [('TNA',473), ('TMF',809), ('UCD',825), ('UGLD',890)]
+m_ib = [('TNA',473), ('TMF', 809), ('TLT',491), ('IEF', 528),('UCD', 206), ('GLD', 270)]
 vault_cash = 580.87
 
 # roth_ira = [('TNA',106), ('DRN',4), ('TMF',176), ('EURL',336), ('UGLD',180)]
-roth_ira = [('TNA',132), ('TMF',106), ('DBC', 836), ('UGLD',337)]
+roth_ira = [('TNA',132), ('TMF',106), ('DBC', 836), ('UGLD',337), ('EURL', 0), ('EDC', 0), ('DRN', 0)]
 roth_401k = [('VIIIX',44.176), ('VTPSX',13.703),  ('VBMPX',2357.188)]
 
 #####['TNA', 'EURL', 'EDC', 'UGLD', 'DRN', 'TMF']
-designated_benificiary = [('TNA',1455), ('TMF',2017), ('UCD',3695), ('UGLD',2612)]
+c_ib = [('TNA',1455), ('TLT',3488), ('IEF', 1500), ('DBC',4365), ('UGLD',2612)]
 # c_roth_ira = [('TNA',190), ('DRN',7), ('TMF',315), ('EURL',605), ('UGLD',327)]
-c_roth_ira = [('TNA',237), ('TMF',190), ('DBC',1503), ('UGLD',605)]
+c_roth_ira = [('TNA',237), ('TMF',190), ('DBC',1503), ('UGLD',605), ('EURL', 0), ('EDC', 0), ('DRN', 0)]
+c_trad_ira = [('SDY',0), ('TLT',0), ('DBC',0), ('GLD',0), ('EFA', 0), ('VWO', 0), ('VNQ', 0)]
 
-live_portfolio = [c_roth_ira]
+live_portfolio = [c_trad_ira]
