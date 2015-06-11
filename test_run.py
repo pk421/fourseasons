@@ -12,6 +12,7 @@ try:
     from src.poll_realtime_data import *
     from src.portfolio_analysis.portfolio_analysis import run_portfolio_analysis
     from src.portfolio_analysis.portfolio_analysis import run_live_portfolio_analysis
+    from src.portfolio_analysis.sweep_portfolios import run_sweep_portfolios
     from src.harding_seasonality import run_harding_seasonality
     from src.indicator_system import run_indicator_system
     from src.returns_analyzer import run_returns_analyzer
@@ -86,6 +87,10 @@ parser.add_argument("--stock_analyzer",
                     help="run the analysis backend for some securities",
                     action="store_true")
 
+parser.add_argument("--sweep_portfolios",
+                    help="Similar to portfolio_analysis, but allows sweeping over many asset groupings.",
+                    action="store_true")
+
 parser.add_argument("--vol_analyzer",
                     help="run the volatility analysis backend for some securities",
                     action="store_true")
@@ -145,6 +150,14 @@ if args.returns_analyzer:
 
 if args.stock_analyzer:
     run_stock_analyzer()
+
+"""
+This module is similar to portfolio_analysis, but it is aimed at sweeping over many different groupings of assets to
+find which group has the best DR at a given point in time. The eventual goal would be a full simulation, where assets
+can effectively be swapped in and out.
+"""
+if args.sweep_portfolios:
+    run_sweep_portfolios()
 
 if args.vol_analyzer:
     for x in xrange(0, 1):

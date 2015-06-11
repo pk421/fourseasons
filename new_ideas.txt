@@ -38,7 +38,6 @@ UTIL:
 
 
 
-
 -Set pc loss to zero - exit at any loss, max at 4 days
 xxx - does not improve sortino, does not really lower sigma at all
 
@@ -73,3 +72,13 @@ BUGS
 - new target sigma span is not getting multiplied by volatility at all
 - must add % drawdown measure
 
+
+
+2015-06-09
+Todo:
+-- 1) make a new project for a sweeper of the portfolio
+-- 2) speed up the calls for get_data by avoiding repeated calls to parse
+3) solve the issue of swapping assets in and out in the middle of a simulation
+4) add AI Suite and speed up fan
+5) add multithreading
+6) add a daily routine that monitors port for DRs that drop below: 1.5 - test this to find the right value

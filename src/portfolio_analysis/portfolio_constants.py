@@ -2,7 +2,7 @@ __author__ = 'Mike'
 
 
 # Brute Force Calcs = # nodes ^ # assets
-# custom_assets_list = ['SPY', 'EFA', 'EWJ', 'EEM', 'IYR', 'RWX', 'IEF', 'TLT', 'DBC', 'GLD']
+custom_assets_list = ['SPY', 'EFA', 'EWJ', 'EEM', 'IYR', 'RWX', 'IEF', 'TLT', 'DBC', 'GLD']
 # custom_assets_list = ['SPY', 'EFA', 'EWJ', 'EEM', 'IYR', 'RWX', 'IEF', 'TLT', 'DBC', 'GLD', 'JNK', 'RSX', 'ILF']
 # custom_assets_list = ['TNA', 'EFA', 'EWJ', 'EEM', 'VNQ', 'RWX', 'IEF', 'TLT', 'DBC', 'SLV']
 # custom_assets_list = ['VTI', 'EFA', 'EWJ', 'EEM', 'VNQ', 'RWX', 'IEF', 'TLT', 'DBC', 'GLD']
@@ -10,7 +10,7 @@ __author__ = 'Mike'
 
 # Setting IEF simulates a 3x fund, use TYD to actually get 3x, TLT has more data and TMF (3x) is more liquid, it works well
 # custom_assets_list = ['VTI', 'TYD', 'DRN', 'VWO', 'DGP'] # Leveraged Version
-custom_assets_list = ['IWM', 'EFA', 'VWO', 'GLD', 'VNQ', 'TLT']
+### custom_assets_list = ['IWM', 'EFA', 'VWO', 'GLD', 'VNQ', 'TLT']
 ## custom_assets_list = ['IWM', 'TLT', 'GLD']
 # custom_assets_list = ['TNA', 'EURL', 'EDC', 'UGLD', 'DRN', 'TMF']
 # custom_assets_list = ['SPY', 'TLT', 'GLD', 'DBC']
@@ -56,7 +56,7 @@ commodities = ['DBC', 'GLD', 'SLV']
 full_list_of_possibilities = spy_sectors + countries_regions + other + us_stocks + safe_havens + commodities
 
 
-custom_assets_list = dalio_all_weather
+custom_assets_list = full_list_of_possibilities
 
 
 ##########################

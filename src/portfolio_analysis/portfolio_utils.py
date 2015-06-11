@@ -11,10 +11,11 @@ from src.cointegrations_data    import get_paired_stock_list, get_corrected_data
 from src.math_tools             import get_returns, get_ln_returns
 
 
-def get_data(port, base_etf, last_x_days = 0, get_new_data=True):
+def get_data(port, base_etf, last_x_days = 0, get_new_data=True, historical_data={}):
     """
     This section trims everything relative to SPY (so it will not have MORE data than SPY), but it can have less, so the
     lengths of the data are still not consistent yet.
+    historical_data parameter is used by sweeper so that the data here is not re-parsed many times
     """
     # The sort in data_retriever.py would corrupt the order of the asset list if it is not copied here
     asset_list = copy.deepcopy(port.assets)
@@ -22,12 +23,12 @@ def get_data(port, base_etf, last_x_days = 0, get_new_data=True):
         multithread_yahoo_download(thread_count=20, update_check=False, \
                                        new_only=False, store_location = 'data/portfolio_analysis/', use_list=asset_list)
         load_redis(stock_list='tda_free_etfs.csv', db_number=1, file_location='data/portfolio_analysis/', dict_size=3, use_list=asset_list)
-    stock_1_data = manage_redis.parse_fast_data(base_etf, db_to_use=1)
+    stock_1_data = historical_data.get(base_etf) or manage_redis.parse_fast_data(base_etf, db_to_use=1)
     logging.info('Loading Data...')
     logging.info('Base Start/End Dates: %s %s %s' % (base_etf, stock_1_data[0]['Date'],stock_1_data[-1]['Date']))
     for item in port.assets:
         logging.debug(item)
-        stock_2_data = manage_redis.parse_fast_data(item, db_to_use=1)
+        stock_2_data = historical_data.get(item) or manage_redis.parse_fast_data(item, db_to_use=1)
         logging.info('Base Start/End Dates: %s %s %s' % (item, stock_2_data[0]['Date'], stock_2_data[-1]['Date']))
         stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
         port.closes[base_etf] = stock_1_close

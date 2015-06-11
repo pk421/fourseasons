@@ -7,6 +7,10 @@ import itertools
 
 import src.toolsx as tools
 
+from data.redis                                     import manage_redis
+from src.data_retriever                             import load_redis
+from src.data_retriever                             import multithread_yahoo_download
+
 from src.indicator_system                           import get_sharpe_ratio
 from src.portfolio_analysis.portfolio_utils         import get_data
 from src.portfolio_analysis.portfolio_constants     import custom_assets_list, live_portfolio
@@ -16,8 +20,8 @@ from src.math_tools                                 import get_returns, get_ln_r
 import logging
 
 # determine whether to download new data from the internet
-UPDATE_DATA=True
-logging.root.setLevel(logging.INFO)
+UPDATE_DATA=False
+logging.root.setLevel(logging.CRITICAL)
 
 def do_optimization(mdp_port, x):
     theoretical_weights = mdp_port.get_tangency_weights(x)
@@ -39,7 +43,7 @@ def do_optimization(mdp_port, x):
 
     # Turn this on to fix the weights of at each rebalance
     ### HACK:
-    normalized_theoretical_weights = np.array([[0.3], [0.15], [0.4], [0.075], [0.075]])
+    # normalized_theoretical_weights = np.array([[0.3], [0.15], [0.4], [0.075], [0.075]])
 
     # MDP Optimized For 2338/2339 historical days single rebalance
     # normalized_theoretical_weights = np.array([[0.25], [0.28], [0.29], [0.08], [0.10]])
@@ -49,17 +53,79 @@ def do_optimization(mdp_port, x):
 
     return mdp_port, normalized_theoretical_weights
 
-def run_portfolio_analysis():
-    do_analysis(assets=custom_assets_list, write_to_file=True)
+def run_sweep_portfolios():
+
+    # system_stats = do_analysis(custom_assets_list, write_to_file=True)
+
+    # stock_list = open('/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + 'etfs_for_sweep.csv', 'r')
+    # assets = stock_list.read().rstrip().split('\n')
+
+    assets = custom_assets_list
+
+    # add these two assets just for the purpose of retrieving data. They are used for the "reference" system
+    additional_assets = ['IWM', 'TLT']
+    modified_assets = list(set(assets + additional_assets))
+
+    multithread_yahoo_download(thread_count=20, update_check=False, \
+                               new_only=False, store_location = 'data/portfolio_analysis/', use_list=modified_assets)
+    load_redis(stock_list='tda_free_etfs.csv', db_number=1, file_location='data/portfolio_analysis/', dict_size=3, use_list=modified_assets)
+    redis_historical_data_dict = {}
+    for item in modified_assets:
+        redis_historical_data_dict[item] = manage_redis.parse_fast_data(item, db_to_use=1)
+        # print item
+
+    combinations = []
+    combos = [ itertools.combinations(assets, 5), itertools.combinations(assets, 4), itertools.combinations(assets, 6)]
+    # combos = [ itertools.combinations(assets, 5) ]
+
+    for combo in combos:
+        try:
+            while True:
+                c = combo.next()
+                cleaned_c = [b.strip() for b in c]
+                combinations.append(cleaned_c)
+        except:
+            pass
+
+    # print combinations
+    print "Total Combinations: ", len(combinations)
+
+    all_stats_list = []
+    output_string = 'Ann Return, Sharpe Ratio, Sigma\n'
+
+    for k, items in enumerate(combinations):
+        system_stats = do_analysis(items, write_to_file=False, historical_data_dict=redis_historical_data_dict)
+        all_stats_list.append(system_stats)
+
+        print "Items: ", k, ' of ', len(combinations), \
+              "AnnRet: ", round(system_stats['annualized_return'], 6), \
+              "Sigma: ", round(system_stats['sigma'], 6), \
+              "Mu DR: ", round(system_stats['mean_diversification_ratio'], 6)
+              ## "Sharpe: ", round(system_stats['sharpe'], 6), \
+
+        output_string += str(round(system_stats['annualized_return'], 6)) + ','
+        output_string += str(round(system_stats['sharpe'], 6)) + ','
+        output_string += str(round(system_stats['sigma'], 6)) + ','
+        output_string += str(round(system_stats['mean_diversification_ratio'], 6)) + ','
+        output_string += ','.join([str(a) for a in items])
+        output_string += '\n'
+
+
+    current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+    out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/sweep_portfolio_analysis' + '_' + str(current_time) +'.csv'
+    with open(out_file_name, 'w') as f:
+        f.write(output_string)
+    print "File Written: ", out_file_name.split('/')[-1]
+
     return
 
-def do_analysis(assets=None, write_to_file=True):
+def do_analysis(assets=None, write_to_file=True, historical_data_dict={}):
 
     assets_list = assets
 
     mdp_port = MDPPortfolio(assets_list=assets_list)
     logging.debug(str(mdp_port.assets))
-    mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=0, get_new_data=UPDATE_DATA)
+    mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=64, get_new_data=UPDATE_DATA, historical_data=historical_data_dict)
 
     mdp_port.normalized_weights = np.array([ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets])
     mdp_port.current_weights = mdp_port.normalized_weights
@@ -132,6 +198,9 @@ def do_analysis(assets=None, write_to_file=True):
             _ = get_port_valuation(mdp_port, x=x)
             for k, asset in enumerate(mdp_port.assets):
                 if round(mdp_port.normalized_weights[k], 6) != round(mdp_port.current_weights[k], 6):
+                    print "\n", mdp_port.assets
+                    print "\n", mdp_port.normalized_weights
+                    print "\n", mdp_port.current_weights
                     raise Exception("Normalized weights do not equal the current weights after setting normalized.")
 
             trailing_diversification_ratio = mdp_port.get_diversification_ratio(weights='normalized')
@@ -161,11 +230,11 @@ def do_analysis(assets=None, write_to_file=True):
     if len(mdp_port.trimmed[mdp_port.assets[0]]) != len(mdp_port.portfolio_valuations):
         raise Exception('Length of asset list data does not match length of valuations data.')
 
-    system_results = aggregate_statistics(mdp_port, write_to_file=write_to_file)
+    system_results = aggregate_statistics(mdp_port, write_to_file=write_to_file, historical_data=historical_data_dict)
     return system_results
 
 
-def aggregate_statistics(mdp_port, write_to_file=True):
+def aggregate_statistics(mdp_port, write_to_file=True, historical_data={}):
 
     if logging.root.level < 25:
         print '\n'.join([str(r) for r in mdp_port.rebalance_log])
@@ -195,7 +264,7 @@ def aggregate_statistics(mdp_port, write_to_file=True):
 
     # add the other ETF here so that the data for SPY will be validated against it, but we won't use it directly
     ref_port = MDPPortfolio(assets_list=['IWM', 'TLT'])
-    ref_port = get_data(ref_port, base_etf=ref_port.assets[0], last_x_days=0, get_new_data=UPDATE_DATA)
+    ref_port = get_data(ref_port, base_etf=ref_port.assets[0], last_x_days=0, get_new_data=UPDATE_DATA, historical_data=historical_data)
     ref_price_list = ref_port.trimmed[ref_port.assets[0]]
 
     # first_date = datetime.datetime.strptime(mdp_port.portfolio_valuations[0][0], '%Y-%m-%d')
@@ -533,3 +602,23 @@ def run_live_portfolio_analysis(assets=None):
     return
 
 
+# from multiprocessing import Process, Lock
+# def run_one_iteration(items, lock):
+#     system_stats = do_analysis(items, write_to_file=False)
+#     # all_stats_list.append(system_stats)
+#
+#     print "Items: ", k, ' of ', len(combinations), \
+#           "AnnRet: ", round(system_stats['annualized_return'], 6), \
+#           "Sigma: ", round(system_stats['sigma'], 6), \
+#           "Mu DR: ", round(system_stats['mean_diversification_ratio'], 6)
+#           ## "Sharpe: ", round(system_stats['sharpe'], 6), \
+#
+#     output_string = ""
+#
+#     output_string += str(round(system_stats['annualized_return'], 6)) + ','
+#     output_string += str(round(system_stats['sharpe'], 6)) + ','
+#     output_string += str(round(system_stats['sigma'], 6)) + ','
+#     output_string += str(round(system_stats['mean_diversification_ratio'], 6)) + ','
+#     output_string += ','.join([str(a) for a in items])
+#     output_string += '\n'
+#     return system_stats, output_string
