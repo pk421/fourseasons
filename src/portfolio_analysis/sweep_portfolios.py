@@ -12,10 +12,14 @@ from src.data_retriever                             import load_redis
 from src.data_retriever                             import multithread_yahoo_download
 
 from src.indicator_system                           import get_sharpe_ratio
-from src.portfolio_analysis.portfolio_utils         import get_data
+from src.portfolio_analysis.portfolio_utils         import get_data, get_sweep_data
 from src.portfolio_analysis.portfolio_constants     import custom_assets_list, live_portfolio
 
 from src.math_tools                                 import get_returns, get_ln_returns
+
+import multiprocessing
+import Queue
+import sys
 
 import logging
 
@@ -53,30 +57,81 @@ def do_optimization(mdp_port, x):
 
     return mdp_port, normalized_theoretical_weights
 
-def run_sweep_portfolios():
+def worker_do_analysis_no_sharing(input_combos, dates_dict, y, lock, redis_historical_data_dict, stream_out):
+    """
+    Does not share data between threads. The resulting data is dumped in a csv file and concatenated at the end. Much
+    more efficient than attempting to share data between threads.
+    """
+    results_dict = {'output_string':'', 'all_stats_list':[]}
+    for x in xrange(0, len(input_combos)):
+        assets = input_combos[x]
 
-    # system_stats = do_analysis(custom_assets_list, write_to_file=True)
+        # start_date = 20050101
+        end_date = 20150612
+        start_date = end_date - 64
+
+        skip_iter = False
+        for item in assets:
+            if int(dates_dict[item]['start_date']) > start_date or int(dates_dict[item]['end_date']) < end_date:
+                skip_iter = True
+                break
+        if skip_iter:
+            with lock:
+                stream_out.write('\nItems Left: ' + str(len(input_combos) - x) + ' Dates skipping: ' + str(assets))
+            continue
+
+        system_stats = do_analysis(assets, write_to_file=False, historical_data_dict=redis_historical_data_dict)
+        with lock:
+            results_dict['all_stats_list'].append(system_stats)
+            # "Items: ", k, ' of ', len(combinations), \
+            screen_output =   "\nItems Left: " + str(len(input_combos) - x) + \
+                              " AnnRet: " + str(round(system_stats['annualized_return'], 6)) + \
+                              " Sigma: " + str(round(system_stats['sigma'], 6)) + \
+                              " Mu DR: " + str(round(system_stats['mean_diversification_ratio'], 6))
+                              # "Sharpe: ", round(system_stats['sharpe'], 6), \
+            stream_out.write(screen_output)
+
+            results_dict['output_string'] += str(round(system_stats['annualized_return'], 6)) + ','
+            results_dict['output_string'] += str(round(system_stats['sharpe'], 6)) + ','
+            results_dict['output_string'] += str(round(system_stats['sigma'], 6)) + ','
+            results_dict['output_string'] += str(round(system_stats['mean_diversification_ratio'], 6)) + ','
+            results_dict['output_string'] += ','.join([str(a) for a in assets])
+            results_dict['output_string'] += '\n'
+
+    out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/worker_temp' + '_' + str(y) +'.csv'
+    with open(out_file_name, 'w') as f:
+        f.write(results_dict['output_string'])
+
+def run_sweep_portfolios():
 
     # stock_list = open('/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + 'etfs_for_sweep.csv', 'r')
     # assets = stock_list.read().rstrip().split('\n')
 
     assets = custom_assets_list
 
+    # This section basically essentially caches the data rather than calling a get_data and re-parsing each time in
+    # portfolio_utils
     # add these two assets just for the purpose of retrieving data. They are used for the "reference" system
     additional_assets = ['IWM', 'TLT']
     modified_assets = list(set(assets + additional_assets))
 
-    multithread_yahoo_download(thread_count=20, update_check=False, \
-                               new_only=False, store_location = 'data/portfolio_analysis/', use_list=modified_assets)
-    load_redis(stock_list='tda_free_etfs.csv', db_number=1, file_location='data/portfolio_analysis/', dict_size=3, use_list=modified_assets)
+    # multithread_yahoo_download(thread_count=20, update_check=False, \
+    #                            new_only=False, store_location = 'data/portfolio_analysis/', use_list=modified_assets)
+    # load_redis(stock_list='tda_free_etfs.csv', db_number=1, file_location='data/portfolio_analysis/', dict_size=3, use_list=modified_assets)
     redis_historical_data_dict = {}
+    dates_dict = {}
     for item in modified_assets:
         redis_historical_data_dict[item] = manage_redis.parse_fast_data(item, db_to_use=1)
-        # print item
+
+        start_date = redis_historical_data_dict[item][0]['Date']
+        end_date = redis_historical_data_dict[item][-1]['Date']
+        dates_dict[item] = {'start_date': start_date, 'end_date': end_date}
+
+        print "Asset, StartDate, EndDate: ", item, '\t', start_date, '\t', end_date
 
     combinations = []
-    combos = [ itertools.combinations(assets, 5), itertools.combinations(assets, 4), itertools.combinations(assets, 6)]
-    # combos = [ itertools.combinations(assets, 5) ]
+    combos = [ itertools.combinations(assets, 6), itertools.combinations(assets, 5), itertools.combinations(assets, 4)]
+    # combos = [ itertools.combinations(assets, 3) ]
 
     for combo in combos:
         try:
@@ -87,35 +142,39 @@ def run_sweep_portfolios():
         except:
             pass
 
-    # print combinations
     print "Total Combinations: ", len(combinations)
 
-    all_stats_list = []
-    output_string = 'Ann Return, Sharpe Ratio, Sigma\n'
+    output_string = 'Ann Return, Sharpe Ratio, Sigma, DR, Assets\n'
 
-    for k, items in enumerate(combinations):
-        system_stats = do_analysis(items, write_to_file=False, historical_data_dict=redis_historical_data_dict)
-        all_stats_list.append(system_stats)
+    lock = multiprocessing.Lock()
 
-        print "Items: ", k, ' of ', len(combinations), \
-              "AnnRet: ", round(system_stats['annualized_return'], 6), \
-              "Sigma: ", round(system_stats['sigma'], 6), \
-              "Mu DR: ", round(system_stats['mean_diversification_ratio'], 6)
-              ## "Sharpe: ", round(system_stats['sharpe'], 6), \
+    num_threads = 5
+    process_list = []
 
-        output_string += str(round(system_stats['annualized_return'], 6)) + ','
-        output_string += str(round(system_stats['sharpe'], 6)) + ','
-        output_string += str(round(system_stats['sigma'], 6)) + ','
-        output_string += str(round(system_stats['mean_diversification_ratio'], 6)) + ','
-        output_string += ','.join([str(a) for a in items])
-        output_string += '\n'
+    work = []
+    work_breaks = int(len(combinations) / num_threads)
+
+    for x in xrange(0, (num_threads-1)):
+        work.append(combinations[x*work_breaks:(x+1)*work_breaks])
+    work.append(combinations[(num_threads-1)*work_breaks:])
+    for x in xrange(0, num_threads):
+        process_list.append(multiprocessing.Process(target=worker_do_analysis_no_sharing, args=(work[x], dates_dict, x, lock, redis_historical_data_dict, sys.stdout)))
+    for x in xrange(0, num_threads):
+        process_list[x].start()
+    for x in xrange(0, num_threads):
+        process_list[x].join()
+
+    for x in xrange(num_threads):
+        worker_file = '/home/wilmott/Desktop/fourseasons/fourseasons/results/worker_temp' + '_' + str(x) +'.csv'
+        with open(worker_file, 'r') as f:
+            output_string += f.read()
 
 
     current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
     out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/sweep_portfolio_analysis' + '_' + str(current_time) +'.csv'
     with open(out_file_name, 'w') as f:
         f.write(output_string)
-    print "File Written: ", out_file_name.split('/')[-1]
+    print "\n\nFile Written: ", out_file_name.split('/')[-1]
 
     return
 
@@ -125,7 +184,7 @@ def do_analysis(assets=None, write_to_file=True, historical_data_dict={}):
 
     mdp_port = MDPPortfolio(assets_list=assets_list)
     logging.debug(str(mdp_port.assets))
-    mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=64, get_new_data=UPDATE_DATA, historical_data=historical_data_dict)
+    mdp_port = get_sweep_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=64, get_new_data=UPDATE_DATA, historical_data=historical_data_dict)
 
     mdp_port.normalized_weights = np.array([ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets])
     mdp_port.current_weights = mdp_port.normalized_weights
@@ -602,23 +661,50 @@ def run_live_portfolio_analysis(assets=None):
     return
 
 
-# from multiprocessing import Process, Lock
-# def run_one_iteration(items, lock):
-#     system_stats = do_analysis(items, write_to_file=False)
-#     # all_stats_list.append(system_stats)
+    # for x in xrange(0, num_threads):
+    #     process_list.append(multiprocessing.Process(target=worker_do_analysis, args=(queue, mgr_dict, mgr_list, lock, redis_historical_data_dict, sys.stdout)))
+
+    # for x in xrange(0, num_threads):
+    #     process_list[x].start()
+
+    # p1.start()
+    # p2.start()
+
+    # queue.close()
+    # queue.join_thread()
+
+    # p1.join()
+    # p2.join()
+    # output_string += mgr_dict['output_string']
+
+
+
+
+
+# def worker_do_analysis(q, mgr_dict, mgr_list, lock, redis_historical_data_dict, stream_out):
+#     # while True:
+#     # val = q.get()
+#     while True:
+#         try:
+#             val = mgr_list.pop()
+#         except:
+#             return
+#         system_stats = do_analysis(val, write_to_file=False, historical_data_dict=redis_historical_data_dict)
+#         with lock:
+#             mgr_dict['all_stats_list'].append(system_stats)
+#             # "Items: ", k, ' of ', len(combinations), \
+#             screen_output =   "\nItems Left: " + str(len(mgr_list)) + \
+#                               " AnnRet: " + str(round(system_stats['annualized_return'], 6)) + \
+#                               " Sigma: " + str(round(system_stats['sigma'], 6)) + \
+#                               " Mu DR: " + str(round(system_stats['mean_diversification_ratio'], 6))
+#                               # "Sharpe: ", round(system_stats['sharpe'], 6), \
 #
-#     print "Items: ", k, ' of ', len(combinations), \
-#           "AnnRet: ", round(system_stats['annualized_return'], 6), \
-#           "Sigma: ", round(system_stats['sigma'], 6), \
-#           "Mu DR: ", round(system_stats['mean_diversification_ratio'], 6)
-#           ## "Sharpe: ", round(system_stats['sharpe'], 6), \
+#             stream_out.write(screen_output)
 #
-#     output_string = ""
-#
-#     output_string += str(round(system_stats['annualized_return'], 6)) + ','
-#     output_string += str(round(system_stats['sharpe'], 6)) + ','
-#     output_string += str(round(system_stats['sigma'], 6)) + ','
-#     output_string += str(round(system_stats['mean_diversification_ratio'], 6)) + ','
-#     output_string += ','.join([str(a) for a in items])
-#     output_string += '\n'
-#     return system_stats, output_string
+#             mgr_dict['output_string'] += str(round(system_stats['annualized_return'], 6)) + ','
+#             mgr_dict['output_string'] += str(round(system_stats['sharpe'], 6)) + ','
+#             mgr_dict['output_string'] += str(round(system_stats['sigma'], 6)) + ','
+#             mgr_dict['output_string'] += str(round(system_stats['mean_diversification_ratio'], 6)) + ','
+#             mgr_dict['output_string'] += ','.join([str(a) for a in val])
+#             mgr_dict['output_string'] += '\n'
+#         # q.task_done()
