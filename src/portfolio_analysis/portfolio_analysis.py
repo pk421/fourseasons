@@ -1,6 +1,8 @@
 import numpy as np
 import scipy as scipy
 import datetime
+import copy
+import sys
 
 import math
 import itertools
@@ -9,7 +11,7 @@ import src.toolsx as tools
 
 from src.indicator_system                           import get_sharpe_ratio
 from src.portfolio_analysis.portfolio_utils         import get_data
-from src.portfolio_analysis.portfolio_constants     import custom_assets_list, live_portfolio
+from src.portfolio_analysis.portfolio_constants     import custom_assets_list, live_portfolio, stocks_to_test
 
 from src.math_tools                                 import get_returns, get_ln_returns
 
@@ -37,9 +39,18 @@ def do_optimization(mdp_port, x):
 
     normalized_theoretical_weights = np.array([ n * weight_ratio for n in theoretical_weights])
 
+    # Use this to equal weight all or a portion of the portfolio
+    # equal_weighted_value = [1.0 / (len(theoretical_weights))]
+    # normalized_theoretical_weights = np.array([ equal_weighted_value for n in theoretical_weights])
+
     # Turn this on to fix the weights of at each rebalance
     ### HACK:
-    normalized_theoretical_weights = np.array([[0.3], [0.15], [0.4], [0.075], [0.075]])
+
+    normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
+    # normalized_theoretical_weights = np.array([[0.35], [0.18], [0.47]])
+
+    # modified_mdp optimized for 2008 days, single rebalance
+    # normalized_theoretical_weights = np.array([[0.23], [0.41], [0.17], [0.09], [0.10]])
 
     # MDP Optimized For 2338/2339 historical days single rebalance
     # normalized_theoretical_weights = np.array([[0.25], [0.28], [0.29], [0.08], [0.10]])
@@ -50,6 +61,7 @@ def do_optimization(mdp_port, x):
     return mdp_port, normalized_theoretical_weights
 
 def run_portfolio_analysis():
+    logging.root.setLevel(logging.INFO)
     do_analysis(assets=custom_assets_list, write_to_file=True)
     return
 
@@ -175,7 +187,7 @@ def aggregate_statistics(mdp_port, write_to_file=True):
     sharpe_price_list = []
     sys_closes = []
     system_dma = []
-    trade_days_skipped = []
+    # trade_days_skipped = []
     for k, val in enumerate(mdp_port.portfolio_valuations):
         sharpe_price_list.append(('existing_trade', 'long', val[1]))
         sys_closes.append(val[1])
@@ -183,8 +195,8 @@ def aggregate_statistics(mdp_port, write_to_file=True):
             system_dma.append(1)
         else:
             system_dma.append(np.mean([n[1] for n in mdp_port.portfolio_valuations[k-200:k+1]]))
-        if mdp_port.portfolio_valuations[k-1][1] < system_dma[k-1]:
-            trade_days_skipped.append(k)
+        # if mdp_port.portfolio_valuations[k-1][1] < system_dma[k-1]:
+        #     trade_days_skipped.append(k)
 
     ### Show starting and ending valuation (after potentially adding a moving average filter)
     if logging.root.level < 25:
@@ -194,7 +206,7 @@ def aggregate_statistics(mdp_port, write_to_file=True):
     ref_log = []
 
     # add the other ETF here so that the data for SPY will be validated against it, but we won't use it directly
-    ref_port = MDPPortfolio(assets_list=['IWM', 'TLT'])
+    ref_port = MDPPortfolio(assets_list=['SPY', 'TLT'])
     ref_port = get_data(ref_port, base_etf=ref_port.assets[0], last_x_days=0, get_new_data=UPDATE_DATA)
     ref_price_list = ref_port.trimmed[ref_port.assets[0]]
 
@@ -220,7 +232,7 @@ def aggregate_statistics(mdp_port, write_to_file=True):
         system_stats['pct_losers'] = get_sharpe_ratio(sharpe_price_list)
 
     if write_to_file:
-        output_fields = ('Date', 'Valuation', 'DR', 'Mean_Vol', 'Weighted_Mean_Vol', 'IsRebalanced')
+        output_fields = ('Date', 'Port Valuation', 'Ref Valuation', 'Port DD', 'Ref DD', 'Port MA', 'Port DRs')
 
         # We must add back in dashes into the date so Excel handles this properly
         output_string = '\n'.join( [(str(n[0][0:4]) + '-' + str(n[0][4:6]) + '-' + str(n[0][6:8])
@@ -238,14 +250,14 @@ def aggregate_statistics(mdp_port, write_to_file=True):
     system_stats['total_years_in'] = len(sharpe_price_list) / 252.0
     system_stats['annualized_return'] = math.pow(mdp_port.portfolio_valuations[-1][1], (1.0/system_stats['total_years_in']))
 
-    # system_stats['mean_diversification_ratio'] = np.mean([ n for n in mdp_port.trailing_DRs if n != 0.0 ])
-    historical_trailing_DRs = np.mean( [ n[1] for n in mdp_port.rebalance_log ])
-    system_stats['mean_diversification_ratio'] = historical_trailing_DRs
+    system_stats['mean_diversification_ratio'] = np.mean([ n for n in mdp_port.trailing_DRs if n != 0.0 ])
+    #historical_trailing_DRs = np.mean( [ n[1] for n in mdp_port.rebalance_log ])
+    #system_stats['mean_diversification_ratio'] = historical_trailing_DRs
     system_stats['number_of_rebals'] = len(mdp_port.rebalance_log)
 
     # We added leading zeroes to trailing_DRs, don't include them in the mean
     if logging.root.level < 25:
-        print "Mean Diversification Ratio: ", system_stats['mean_diversification_ratio'], system_stats['number_of_rebals']
+        print "Mean Daily Diversification Ratio: ", system_stats['mean_diversification_ratio'], len(mdp_port.trailing_DRs)
         print '\t\tSystem:'
         print 'ArithMu: \t', round(system_stats['arith_mean'], 6)
         print 'Sigma: \t\t', round(system_stats['sigma'], 6)
@@ -460,6 +472,7 @@ class MDPPortfolio():
 
     def get_diversification_ratio(self, weights=None):
 
+        # Current weights are the weights at a given instant, normalized weights are the weights at the last rebalance
         if weights == 'current':
             weights_to_use = self.current_weights
         elif weights == 'normalized':
@@ -491,6 +504,143 @@ class TradeLog(object):
 
 
 def run_live_portfolio_analysis(assets=None):
+
+    # base_assets = live_portfolio
+    #
+    # # TODO: Simply used to get latest prices - this way we can choose to add x # of USD to the portfolio
+    # # TODO: make it easier to toggle this "addition" mode on and off
+    # # port = get_data(port, base_etf=port.assets[0], last_x_days=64, get_new_data=update_data)
+    # # import pdb; pdb.set_trace()
+    #
+    # assets_to_check = ['HCP', 'VGK', 'VNQ', 'TLT', 'IEF', 'PAA']
+    # asset_amounts = [200, 400, 600, 800, 1000, 1200, 1600, 1800, 2000]
+    #
+    # import itertools
+    # new_asset_combos = [ (a,) for a in assets_to_check ]
+    # for combo in itertools.combinations(assets_to_check, 2):
+    #     new_asset_combos.append(combo)
+    #
+    # print "ASSET COMBOS: ", new_asset_combos
+    #
+    # new_valuation_combos = [ (a,) for a in asset_amounts]
+    # for combo in itertools.permutations(asset_amounts, 2):
+    #     new_valuation_combos.append(combo)
+    #
+    # print "VALUATION PERMUTATIONS: ", new_valuation_combos
+    #
+    # # now, mesh the asset combos with the amount combos
+    # combinations = []
+    # for assets in new_asset_combos:
+    #     for valuations in new_valuation_combos:
+    #         if len(valuations) == len(assets):
+    #             combo = []
+    #             for k, a in enumerate(assets):
+    #                 combo.append((assets[k], valuations[k]))
+    #             combinations.append(combo)
+    #
+    # final_input_list = base_assets
+    # stocks_in_base_assets = [ s[0] for s in base_assets[0] ]
+    # for combo in combinations:
+    #     for item in combo:
+    #         print "ITEM: ", item, stocks_in_base_assets
+    #         this_input_item = copy.deepcopy(base_assets[0])
+    #         if item[0] in stocks_in_base_assets:
+    #             new_input_item = []
+    #             for j in this_input_item:
+    #                 if j[0] != item[0]:
+    #                     new_input_item.append(j)
+    #                 else:
+    #                     new_value = item[1] + j[1]
+    #                     new_input_item.append((j[0], new_value))
+    #             this_input_item = new_input_item
+    #         else:
+    #             this_input_item.append(item)
+    #     final_input_list.append(this_input_item)
+    #
+    # print "LEN INPUTS: ", len(final_input_list)
+
+    ## ret = inner_run_live_portfolio_analysis(assets=base_assets)
+
+    # orig_std_out = sys.stdout
+    # output_ret = []
+    # for k, input in enumerate(final_input_list):
+    #     # TODO: add the quantity to the asset if it's already in the port
+    #     sys.stdout = open('temp_file', 'w')
+    #     ret = inner_run_live_portfolio_analysis(assets=[input], update_data=False)
+    #     output_ret.append(ret)
+    #     sys.stdout = orig_std_out
+    #     print k, ret['actual_sigma'], ret['actual_div_ratio']
+    #
+    # output_str = ''
+    # for item in output_ret:
+    #     output_str += str(item['assets']).replace(',','_')
+    #     output_str += ','
+    #     output_str += str(item['actual_sigma'])
+    #     output_str += ','
+    #     output_str += str(item['actual_div_ratio'])
+    #     output_str += ','
+    #     output_str += str(item['actual_weights']).replace(',','_')
+    #     output_str += ','
+    #     output_str += str(item['valuation'])
+    #     output_str += '\n'
+    #
+    # current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+    # out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/make_addition' + '_' + str(current_time) +'.csv'
+    # with open(out_file_name, 'w') as f:
+    #     f.write(output_str)
+
+
+
+
+    # port_ret = live_portfolio_analysis(assets=live_portfolio, update_data=True)
+    # return
+
+
+    input = live_portfolio[0] + stocks_to_test
+
+    port_ret = live_portfolio_analysis(assets=live_portfolio, update_data=False)
+    port_prices_only = [ n[2] for n in port_ret['sharpe_price_list'] ]
+    port_pct_rets_only = [1.0]
+    for k, x in enumerate(port_prices_only):
+        if k > 0:
+            port_pct_rets_only.append( ( x -  port_prices_only[k-1]) / port_prices_only[k-1] )
+
+    print '\n\n'
+
+    ### return
+
+
+    output_data = []
+    for stock_tuple in input:
+
+        stock_ret = live_portfolio_analysis(assets= [[stock_tuple]], update_data=False)
+
+        stock_prices_only = [ n[2] for n in stock_ret['sharpe_price_list'] ]
+        stock_pct_rets_only = [0.0]
+        for k, x in enumerate(stock_prices_only):
+            if k > 0:
+                stock_pct_rets_only.append( ( x -  stock_prices_only[k-1]) / stock_prices_only[k-1] )
+
+
+        # cov_matrix_input = np.array( [stock_pct_rets_only, port_pct_rets_only] )
+        cov_matrix_input = np.array( [stock_pct_rets_only, port_pct_rets_only] )
+
+        cov_matrix = np.cov(cov_matrix_input)
+        variance = np.var(port_pct_rets_only)
+        beta = cov_matrix[0][1] / variance
+        sigma = np.sqrt(np.var(stock_pct_rets_only))
+        output_data.append( (stock_tuple[0], 100 * beta, sigma) )
+
+        print "Beta: ", stock_tuple[0], '\t', 100.0 * beta, '\t\t', np.sqrt(np.var(stock_pct_rets_only))
+
+    print '\n\n\n\n'
+    for item in sorted(output_data, key=lambda tup: tup[1], reverse=False):
+        print "Beta: ", item[0], '\t', item[1], '\t\t', item[2]
+
+    return
+
+
+def live_portfolio_analysis(assets=None, update_data=True):
     all_portfolios=assets if assets else live_portfolio
 
     for account in all_portfolios:
@@ -501,7 +651,7 @@ def run_live_portfolio_analysis(assets=None):
 
         port = MDPPortfolio(assets)
 
-        port = get_data(port, base_etf=port.assets[0], last_x_days=0, get_new_data=UPDATE_DATA)
+        port = get_data(port, base_etf=port.assets[0], last_x_days=64, get_new_data=update_data)
 
         port.shares = shares
         port.current_entry_prices = [ 0 for n in port.assets ]
@@ -512,24 +662,59 @@ def run_live_portfolio_analysis(assets=None):
 
         max_index = len(port.closes[port.assets[0]]) - 1
 
-        tangency_weights = port.get_tangency_weights(x=max_index)
+        # We can ONLY do this if we have multiple assets to re-weight, otherwise, the weight is always fixed at 1.0.
+        # This would be the case if we are only interested in the returns stats of a given asset
+        if len(assets) > 1:
+            tangency_weights = port.get_tangency_weights(x=max_index)
+        else:
+            tangency_weights = [ [1.0] ]
 
+        historical_valuations = []
+        sharpe_price_list = []
+        for x in xrange(max_index-63, max_index):
+            valuation = get_port_valuation(port, x=x)
+            historical_valuations.append(valuation)
+            sharpe_price_list.append(('existing_trade', 'long', valuation))
+        a, system_sigma, c, d, e, f, g, h, i = get_sharpe_ratio(sharpe_price_list)
         # get_port_valuation() should be setting the current_weights
         valuation = get_port_valuation(port, x=max_index) + cash
         port.current_weights = np.array([ [n] for n in port.current_weights] )
         original_weights = port.current_weights
-        div_ratio = port.get_diversification_ratio(weights='current')
 
-        port.current_weights = tangency_weights
-        possible_div_ratio = port.get_diversification_ratio(weights='current')
+        if len(assets) > 1:
+            div_ratio = port.get_diversification_ratio(weights='current')
+        else:
+            div_ratio = 1.0
 
-        print "Assets: \t", assets
-        print "Tangency: \t", [ round(n[0], 6) for n in tangency_weights ]
-        print "Act. Weights: \t", [ round(n[0], 6) for n in original_weights ]
-        print "Value: \t\t", valuation
-        print "Act Div Ratio: \t", div_ratio
-        print "Tan Div Ratio: \t", possible_div_ratio
+        if len(assets) > 1:
+            port.current_weights = tangency_weights
+        else:
+            tangency_weights = [ [1.0] ]
 
-    return
+        if len(assets) > 1:
+            possible_div_ratio = port.get_diversification_ratio(weights='current')
+        else:
+            possible_div_ratio = 1.0
+
+
+        if len(assets) > 1:
+            print port.portfolio_valuations
+            print "Assets: \t", assets
+            print "Act. Sigma: \t", round(system_sigma, 6)
+            print "Act. Weights: \t", [ round(n[0], 6) for n in original_weights ]
+            print "Tangency: \t", [ round(n[0], 6) for n in tangency_weights ]
+            print "Value: \t\t", valuation
+            print "Act Div Ratio: \t", div_ratio
+            print "Tan Div Ratio: \t", possible_div_ratio
+
+        ret_dict = {'assets': assets, 'actual_sigma': round(system_sigma, 6), \
+                'actual_weights': [ round(n[0], 6) for n in original_weights ], \
+                'tangency': [ round(n[0], 6) for n in tangency_weights ],
+                'valuation': valuation, 'actual_div_ratio': div_ratio, \
+                'tangency_div_ratio': possible_div_ratio, \
+                'sharpe_price_list': sharpe_price_list}
+
+        return ret_dict
+
 
 

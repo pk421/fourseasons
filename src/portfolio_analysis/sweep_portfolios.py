@@ -25,7 +25,7 @@ import logging
 
 # determine whether to download new data from the internet
 UPDATE_DATA=False
-logging.root.setLevel(logging.CRITICAL)
+logging.root.setLevel(logging.INFO)
 
 def do_optimization(mdp_port, x):
     theoretical_weights = mdp_port.get_tangency_weights(x)
@@ -57,7 +57,7 @@ def do_optimization(mdp_port, x):
 
     return mdp_port, normalized_theoretical_weights
 
-def worker_do_analysis_no_sharing(input_combos, dates_dict, y, lock, redis_historical_data_dict, stream_out):
+def worker_do_analysis_no_sharing(input_combos, dates_dict, worker_number, lock, redis_historical_data_dict, stream_out):
     """
     Does not share data between threads. The resulting data is dumped in a csv file and concatenated at the end. Much
     more efficient than attempting to share data between threads.
@@ -81,6 +81,7 @@ def worker_do_analysis_no_sharing(input_combos, dates_dict, y, lock, redis_histo
             continue
 
         system_stats = do_analysis(assets, write_to_file=False, historical_data_dict=redis_historical_data_dict)
+
         with lock:
             results_dict['all_stats_list'].append(system_stats)
             # "Items: ", k, ' of ', len(combinations), \
@@ -91,6 +92,8 @@ def worker_do_analysis_no_sharing(input_combos, dates_dict, y, lock, redis_histo
                               # "Sharpe: ", round(system_stats['sharpe'], 6), \
             stream_out.write(screen_output)
 
+            results_dict['output_string'] += str(system_stats['start_date']) + ','
+            results_dict['output_string'] += str(system_stats['end_date']) + ','
             results_dict['output_string'] += str(round(system_stats['annualized_return'], 6)) + ','
             results_dict['output_string'] += str(round(system_stats['sharpe'], 6)) + ','
             results_dict['output_string'] += str(round(system_stats['sigma'], 6)) + ','
@@ -98,9 +101,11 @@ def worker_do_analysis_no_sharing(input_combos, dates_dict, y, lock, redis_histo
             results_dict['output_string'] += ','.join([str(a) for a in assets])
             results_dict['output_string'] += '\n'
 
-    out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/worker_temp' + '_' + str(y) +'.csv'
+    out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/worker_temp' + '_' + str(worker_number) +'.csv'
     with open(out_file_name, 'w') as f:
         f.write(results_dict['output_string'])
+
+    return system_stats
 
 def run_sweep_portfolios():
 
@@ -122,16 +127,20 @@ def run_sweep_portfolios():
     dates_dict = {}
     for item in modified_assets:
         redis_historical_data_dict[item] = manage_redis.parse_fast_data(item, db_to_use=1)
-
         start_date = redis_historical_data_dict[item][0]['Date']
         end_date = redis_historical_data_dict[item][-1]['Date']
         dates_dict[item] = {'start_date': start_date, 'end_date': end_date}
-
-        print "Asset, StartDate, EndDate: ", item, '\t', start_date, '\t', end_date
+        # print dates_dict
+    redis_historical_data_dict['dates_dict'] = dates_dict
 
     combinations = []
     combos = [ itertools.combinations(assets, 6), itertools.combinations(assets, 5), itertools.combinations(assets, 4)]
     # combos = [ itertools.combinations(assets, 3) ]
+
+#####################
+    sweep_analysis_caller(assets=modified_assets, data_dict=redis_historical_data_dict)
+    return
+#####################
 
     for combo in combos:
         try:
@@ -144,7 +153,7 @@ def run_sweep_portfolios():
 
     print "Total Combinations: ", len(combinations)
 
-    output_string = 'Ann Return, Sharpe Ratio, Sigma, DR, Assets\n'
+    output_string = 'Start Date, End Date, Ann Return, Sharpe Ratio, Sigma, DR, Assets\n'
 
     lock = multiprocessing.Lock()
 
@@ -171,20 +180,147 @@ def run_sweep_portfolios():
 
 
     current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
-    out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/sweep_portfolio_analysis' + '_' + str(current_time) +'.csv'
+    out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/sweep_stat_history' + '_' + str(current_time) +'.csv'
     with open(out_file_name, 'w') as f:
         f.write(output_string)
     print "\n\nFile Written: ", out_file_name.split('/')[-1]
 
     return
 
-def do_analysis(assets=None, write_to_file=True, historical_data_dict={}):
+
+def get_valid_dates(historical_data_dict):
+    """
+    Finds the two assets with the earliest data start dates. Trims data and returns the data + the two assets.
+    """
+    first_start = str(sorted([ int(v['start_date']) for k, v in historical_data_dict['dates_dict'].iteritems() ])[0])
+    second_start = str(sorted([ int(v['start_date']) for k, v in historical_data_dict['dates_dict'].iteritems() ])[1])
+
+    for asset, v in historical_data_dict['dates_dict'].iteritems():
+        if v['start_date'] == first_start:
+            first_start_asset = asset
+        elif v['start_date'] == second_start:
+            second_start_asset = asset
+
+    # XXX HACK - find a way to insist that nothing is started before TLT / IWM. OR find a way to trim this better in
+    # cointegrations_data
+    first_start_asset = 'IWM'
+    second_start_asset = 'TLT'
+
+    date_port = MDPPortfolio(assets_list=[first_start_asset, second_start_asset])
+    date_port = get_sweep_data(date_port, base_etf='SPY', last_x_days=0, get_new_data=UPDATE_DATA, historical_data=historical_data_dict)
+    trimmed_dates = date_port.trimmed[first_start_asset][0]
+
+    return trimmed_dates, first_start_asset, second_start_asset
+
+
+def slice_data_for_analysis(assets, data_dict, valid_dates, today, lookback):
+
+    lookback_ago = valid_dates[ valid_dates.index(today) - (lookback) ]
+    # print "TODAY, LOOKBACK_AGO: ", today, lookback_ago
+    assets_with_data = []
+    for asset in assets:
+        # print asset, data_dict['dates_dict'][asset]['start_date'], lookback_ago, data_dict['dates_dict'][asset]['end_date'], today
+        if int(data_dict['dates_dict'][asset]['start_date']) <= int(lookback_ago) and int(data_dict['dates_dict'][asset]['end_date']) >= int(today):
+            assets_with_data.append(asset)
+
+    print "Assets with data for this date: ", today, assets_with_data
+    # This will only slice the most recent data off and leave the oldest data attached
+    sliced_data_dict = {}
+    # print today, assets_with_data
+    ret_dict = {}
+    for asset in assets_with_data:
+        # print data_dict[asset]
+        dates_available = [ d['Date'] for d in data_dict[asset] ]
+        today_index = dates_available.index(today)
+        ret_dict[asset] = data_dict[asset][0:(today_index+1)]
+        # print asset, today_index, data_dict[asset][today_index]
+
+    # for asset in assets_with_data:
+    #     print asset, ret_dict[asset][-1]
+
+    return assets_with_data, ret_dict
+
+
+def sweep_analysis_caller(assets=None, data_dict=None):
+
+    # Look at the assets and get the oldest two items to use for a date_loop
+    trimmed_dates, first_start_asset, second_start_asset = get_valid_dates(data_dict)
+
+    # Create a "valid_dates" dict based on their data
+    dates_port = MDPPortfolio(assets_list=[first_start_asset, second_start_asset])
+    dates_port = get_data(dates_port, base_etf=first_start_asset, last_x_days=0, get_new_data=UPDATE_DATA, historical_data=data_dict)
+    valid_dates = [ d['Date'] for d in dates_port.trimmed[first_start_asset] ]
+
+    # Loop over the valid dates. Gather all the assets that do have data for that data.
+
+    # here we must pass in a full 63 days of data no matter what. do_analysis() will iterate starting at the beginning
+    # of that chunk. So we must slice the data now.
+    lookback = 63
+    x = lookback
+
+    # This scheme will actually take lookback+1 days total, which is exactly what do_analysis() needs
+    while x < len(valid_dates):
+        # TODO: determine which assets have data today
+        # assets_with_data_today = ['FXI', 'ILF']
+        # In here, we can run a routine to determine which assets we would invest in.
+        # Read stored data from file.
+        # Set the assets
+        # Then Do analysis
+
+        today = valid_dates[x]
+        print "\nTODAY: ", today
+        assets_with_data, data_to_feed = slice_data_for_analysis(assets, data_dict, valid_dates, today, lookback)
+
+
+
+
+
+
+        # XXXXXXXXXXXXXXXXXXXXXXX
+        # the printouts of dates do not line up properly. We need to ensure we are aggregating stats on 63 days only and
+        # that there is no overlap. This probably requires using lookback + 2 below
+
+        # Also, when we simply call store the data in files as before we are just trying to obtain the weights.
+        # Now, we are trying to obtain the *results* of running with the weights.
+        # Since the system will not optimize until day 64, we are not running on optimized weights.
+        # Rather than lookback 126 days and run one optimization first, it is probably best to just get the optimized
+        # weights at the outset and then re-generate the portfolio valuations.
+
+        # actually, it seems we must pass in 126 days of data, then when we get the valuation numbers returned back, we
+        # must cut out the first 63 days and only consider the most recent chunk of data - post-optimization. This would
+        # need to be re-normalized to 1.0 as a starting point and then later have all of them stitched together.
+
+        # Solution: Just have the write out and store routine save the weights along with the assets, DRs, etc.
+        # Read the weights back in and just set them and run the simulation.
+
+
+
+
+
+
+        # for asset in assets_with_data:
+        #     print asset, data_to_feed[asset][-1]
+
+
+        # include a lookback parameter so that number can be synced across everything
+        current_results = do_analysis(assets=assets_with_data, write_to_file=False, historical_data_dict=data_to_feed, last_x_days=(lookback+1))
+
+
+        x += lookback+1
+
+
+
+    # store the entire port object at the end - valuations and assets
+    # Stitch together the objects and re-run aggregate stats
+
+
+def do_analysis(assets=None, write_to_file=True, historical_data_dict={}, last_x_days=None):
 
     assets_list = assets
 
     mdp_port = MDPPortfolio(assets_list=assets_list)
     logging.debug(str(mdp_port.assets))
-    mdp_port = get_sweep_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=64, get_new_data=UPDATE_DATA, historical_data=historical_data_dict)
+    mdp_port = get_sweep_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=last_x_days, get_new_data=UPDATE_DATA, historical_data=historical_data_dict)
 
     mdp_port.normalized_weights = np.array([ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets])
     mdp_port.current_weights = mdp_port.normalized_weights
@@ -290,6 +426,10 @@ def do_analysis(assets=None, write_to_file=True, historical_data_dict={}):
         raise Exception('Length of asset list data does not match length of valuations data.')
 
     system_results = aggregate_statistics(mdp_port, write_to_file=write_to_file, historical_data=historical_data_dict)
+
+    system_results['start_date'] = mdp_port.trimmed[mdp_port.assets[0]][0]['Date']
+    system_results['end_date'] = mdp_port.trimmed[mdp_port.assets[0]][-1]['Date']
+
     return system_results
 
 
