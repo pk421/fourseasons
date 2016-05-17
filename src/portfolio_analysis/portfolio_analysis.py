@@ -607,7 +607,8 @@ def run_live_portfolio_analysis(assets=None):
 
     print '\n\n'
 
-    ### return
+    ###
+    # return
 
 
     output_data = []
@@ -631,10 +632,17 @@ def run_live_portfolio_analysis(assets=None):
         sigma = np.sqrt(np.var(stock_pct_rets_only))
         output_data.append( (stock_tuple[0], 100 * beta, sigma) )
 
-        print "Beta: ", stock_tuple[0], '\t', 100.0 * beta, '\t\t', np.sqrt(np.var(stock_pct_rets_only))
+        # print "Beta: ", stock_tuple[0], '\t', 100.0 * beta, '\t\t', np.sqrt(np.var(stock_pct_rets_only))
 
-    print '\n\n\n\n'
-    for item in sorted(output_data, key=lambda tup: tup[1], reverse=False):
+    print '\n\n'
+    print '\t', 'Symbol', '\t\t', 'Beta', '\t\t\t', 'Sigma'
+
+    new_stock_output_data = output_data[len(live_portfolio[0]):]
+
+    print '\n'
+    for item in sorted(output_data[0:len(live_portfolio[0])], key=lambda tup: tup[1], reverse=False):
+        print "Beta: ", item[0], '\t', item[1], '\t\t', item[2]
+    for item in sorted(new_stock_output_data, key=lambda tup: tup[1], reverse=False):
         print "Beta: ", item[0], '\t', item[1], '\t\t', item[2]
 
     return
