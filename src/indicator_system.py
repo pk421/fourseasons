@@ -357,8 +357,10 @@ def get_sharpe_ratio(price_list):
 #		print k, price_list[k], current_ret
 
 
-    negative_ret_list = [r for r in ret_list if r <= 1.0]
-    positive_ret_list = [r for r in ret_list if r > 1.0]
+    # This changed recently: Here, we use the same length of the list, but put in a zero if the value is not the same
+    # sign as we care about
+    negative_ret_list = [min(r, 1.0) for r in ret_list]
+    positive_ret_list = [max(r, 1.0) for r in ret_list]
 
     total_losers = len(negative_ret_list)
     total_winners = len(positive_ret_list)
