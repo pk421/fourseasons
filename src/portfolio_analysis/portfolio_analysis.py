@@ -505,102 +505,12 @@ class TradeLog(object):
 
 def run_live_portfolio_analysis(assets=None):
 
-    # base_assets = live_portfolio
-    #
-    # # TODO: Simply used to get latest prices - this way we can choose to add x # of USD to the portfolio
-    # # TODO: make it easier to toggle this "addition" mode on and off
-    # # port = get_data(port, base_etf=port.assets[0], last_x_days=64, get_new_data=update_data)
-    # # import pdb; pdb.set_trace()
-    #
-    # assets_to_check = ['HCP', 'VGK', 'VNQ', 'TLT', 'IEF', 'PAA']
-    # asset_amounts = [200, 400, 600, 800, 1000, 1200, 1600, 1800, 2000]
-    #
-    # import itertools
-    # new_asset_combos = [ (a,) for a in assets_to_check ]
-    # for combo in itertools.combinations(assets_to_check, 2):
-    #     new_asset_combos.append(combo)
-    #
-    # print "ASSET COMBOS: ", new_asset_combos
-    #
-    # new_valuation_combos = [ (a,) for a in asset_amounts]
-    # for combo in itertools.permutations(asset_amounts, 2):
-    #     new_valuation_combos.append(combo)
-    #
-    # print "VALUATION PERMUTATIONS: ", new_valuation_combos
-    #
-    # # now, mesh the asset combos with the amount combos
-    # combinations = []
-    # for assets in new_asset_combos:
-    #     for valuations in new_valuation_combos:
-    #         if len(valuations) == len(assets):
-    #             combo = []
-    #             for k, a in enumerate(assets):
-    #                 combo.append((assets[k], valuations[k]))
-    #             combinations.append(combo)
-    #
-    # final_input_list = base_assets
-    # stocks_in_base_assets = [ s[0] for s in base_assets[0] ]
-    # for combo in combinations:
-    #     for item in combo:
-    #         print "ITEM: ", item, stocks_in_base_assets
-    #         this_input_item = copy.deepcopy(base_assets[0])
-    #         if item[0] in stocks_in_base_assets:
-    #             new_input_item = []
-    #             for j in this_input_item:
-    #                 if j[0] != item[0]:
-    #                     new_input_item.append(j)
-    #                 else:
-    #                     new_value = item[1] + j[1]
-    #                     new_input_item.append((j[0], new_value))
-    #             this_input_item = new_input_item
-    #         else:
-    #             this_input_item.append(item)
-    #     final_input_list.append(this_input_item)
-    #
-    # print "LEN INPUTS: ", len(final_input_list)
-
-    ## ret = inner_run_live_portfolio_analysis(assets=base_assets)
-
-    # orig_std_out = sys.stdout
-    # output_ret = []
-    # for k, input in enumerate(final_input_list):
-    #     # TODO: add the quantity to the asset if it's already in the port
-    #     sys.stdout = open('temp_file', 'w')
-    #     ret = inner_run_live_portfolio_analysis(assets=[input], update_data=False)
-    #     output_ret.append(ret)
-    #     sys.stdout = orig_std_out
-    #     print k, ret['actual_sigma'], ret['actual_div_ratio']
-    #
-    # output_str = ''
-    # for item in output_ret:
-    #     output_str += str(item['assets']).replace(',','_')
-    #     output_str += ','
-    #     output_str += str(item['actual_sigma'])
-    #     output_str += ','
-    #     output_str += str(item['actual_div_ratio'])
-    #     output_str += ','
-    #     output_str += str(item['actual_weights']).replace(',','_')
-    #     output_str += ','
-    #     output_str += str(item['valuation'])
-    #     output_str += '\n'
-    #
-    # current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
-    # out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/make_addition' + '_' + str(current_time) +'.csv'
-    # with open(out_file_name, 'w') as f:
-    #     f.write(output_str)
-
-
-
-
-    # port_ret = live_portfolio_analysis(assets=live_portfolio, update_data=True)
-    # return
-
-
+    update_data = True
     input = live_portfolio[0] + stocks_to_test
 
-    port_ret = live_portfolio_analysis(assets=live_portfolio, update_data=False)
+    port_ret = live_portfolio_analysis(assets=live_portfolio, update_data=update_data)
     port_prices_only = [ n[2] for n in port_ret['sharpe_price_list'] ]
-    port_pct_rets_only = [1.0]
+    port_pct_rets_only = [0.0]
     for k, x in enumerate(port_prices_only):
         if k > 0:
             port_pct_rets_only.append( ( x -  port_prices_only[k-1]) / port_prices_only[k-1] )
@@ -614,7 +524,11 @@ def run_live_portfolio_analysis(assets=None):
     output_data = []
     for stock_tuple in input:
 
-        stock_ret = live_portfolio_analysis(assets= [[stock_tuple]], update_data=False)
+        stock_ret = live_portfolio_analysis(assets=[[stock_tuple]], update_data=update_data)
+
+        # None will be returned if this failed...usually as a result of data not found in redis for the input list
+        if stock_ret is None:
+            continue
 
         stock_prices_only = [ n[2] for n in stock_ret['sharpe_price_list'] ]
         stock_pct_rets_only = [0.0]
@@ -630,7 +544,7 @@ def run_live_portfolio_analysis(assets=None):
         variance = np.var(port_pct_rets_only)
         beta = cov_matrix[0][1] / variance
         sigma = np.sqrt(np.var(stock_pct_rets_only))
-        output_data.append( (stock_tuple[0], 100 * beta, sigma) )
+        output_data.append( (stock_tuple[0], beta, sigma) )
 
         # print "Beta: ", stock_tuple[0], '\t', 100.0 * beta, '\t\t', np.sqrt(np.var(stock_pct_rets_only))
 
@@ -659,7 +573,10 @@ def live_portfolio_analysis(assets=None, update_data=True):
 
         port = MDPPortfolio(assets)
 
-        port = get_data(port, base_etf=port.assets[0], last_x_days=64, get_new_data=update_data)
+        try:
+            port = get_data(port, base_etf=port.assets[0], last_x_days=64, get_new_data=update_data)
+        except Exception as e:
+            return None
 
         port.shares = shares
         port.current_entry_prices = [ 0 for n in port.assets ]
