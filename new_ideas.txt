@@ -76,9 +76,28 @@ BUGS
 
 2015-06-09
 Todo:
--- 1) make a new project for a sweeper of the portfolio
--- 2) speed up the calls for get_data by avoiding repeated calls to parse
+--1) make a new project for a sweeper of the portfolio
+--2) speed up the calls for get_data by avoiding repeated calls to parse
 3) solve the issue of swapping assets in and out in the middle of a simulation
-4) add AI Suite and speed up fan
-5) add multithreading
+--4) add AI Suite and speed up fan
+--5) add multithreading
 6) add a daily routine that monitors port for DRs that drop below: 1.5 - test this to find the right value
+7) write to disk all of the results for each 63 day period. The simulation would need to specify a start date and capture data on that basis rather than simply as a day index
+
+
+- initialize the port with all the assets, all the data available
+- in the init - store data start and data end for each of the assets
+- at each iteration of the cycle, have a notion of current data and compare it to the start/end dates of each of the assets
+- although the port might be run with a huge range of assets, there are two layers of paring down assets actually traded:
+-- only trade assets that have data for the relevant window of interest
+-- only trade a combo of assets that have data AND have a high DR, volatility mix etc. - this data should be cached in stored files
+
+Storing data:
+- provide a start/end date and/or a lookback window
+- pass those values *into* do_analysis()
+- we are iterating over all asset combos, so if a given combo does not have full data for that date range, return none - this can actually be done in the worker itself - simply store a dict of start/end dates for all assets
+- the worker would then skip that combo (for that date range)
+- so dates at the beginning of the sweep would have far fewer combos that actually have valid data.
+- each of the output files should clearly be named by start/end date, and should store full statistical data, including the actual weights used by the simulator to obtain a given DR, etc. This should then be tested by running those same assets back thru the sweeper as a one off or by running thru the legacy portfolio_analysis.
+
+- this still has not solved the problem of 'swapping' assets in and out of the simulation (setting weights to 0 or higher) and flowing thru that way

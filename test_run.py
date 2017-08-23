@@ -114,7 +114,9 @@ if args.download_stocks:
     if update_check = True, then this will will NOT overwrite existing files in folder
     if new_only = True, then this will NOT download any files that already exist in the folder
     """
-    multithread_yahoo_download('large_universe.csv', thread_count=20, update_check=False, new_only=True, \
+    # multithread_yahoo_download('list_sp_500.csv', thread_count=20, update_check=False, new_only=False, \
+    #                             store_location = 'tmp/')
+    multithread_yahoo_download('300B_1M_and_etfs_etns.csv', thread_count=20, update_check=False, new_only=False, \
                                 store_location = 'tmp/')
     # multithread_yahoo_download('300B_1M_and_etfs_etns.csv', thread_count=20, update_check=False, new_only=True)
 
@@ -134,7 +136,8 @@ if args.live_portfolio_analysis:
     run_live_portfolio_analysis()
 
 if args.load_redis:
-    load_redis(stock_list='etfs_etns.csv', db_number=1, file_location='tmp/', dict_size=3)
+    # load_redis(stock_list='list_sp_500.csv', db_number=1, file_location='tmp/', dict_size=3)
+    load_redis(stock_list='300B_1M_and_etfs_etns.csv', db_number=1, file_location='tmp/', dict_size=3)
 
 if args.poll_realtime_data:
     query_realtime_data()

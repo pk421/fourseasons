@@ -19,19 +19,28 @@ def get_yahoo_data(queue, **kwargs):
     logger = kwargs['log']
     store_location = kwargs['store_location']
 
-    start_year = '1950'
+    start_year = '1970'
     start_month = '1'
     start_day = '1'
     current_year = str(datetime.datetime.today().year)
     current_month = str(datetime.datetime.today().month)
     current_day = str(datetime.datetime.today().day)
+    start_date = start_year + '-' + start_month + '-' + start_day
+    current_date = current_year + '-' + current_month + '-' + current_day
 
     while True:
-        s = queue.get()
+        s = queue.get().lower()
         print s, "\t", queue.qsize()
         ### file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/tmp/" + s + ".csv"
         file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/" + store_location + s + ".csv"
         #logger.debug(s + "\tbefore if" + str(os.path.exists(file_path)) + str(update_check))
+        start_unix_epoch = str(datetime.datetime(int(start_year),int(start_month),int(start_day),0,0).strftime('%s'))
+        end_unix_epoch = str(datetime.datetime(int(current_year), int(current_month), int(current_day),0,0).strftime('%s'))
+
+        # This is hacky. There is now a cookie involved, but it seems to last a long time. Go the "download csv" link
+        # on yahoo's historical data page. Look at the link and find the tail of it "crumb=". That needs to be kept up
+        # to date here with fresh queries that are done manually. This handles cases when the cookie expires. Note: The
+        # yahoo finance query MUST BE DONE ON LINUX, NOT WINDOWS
         if (os.path.exists(file_path) == False) or update_check == False:
 #            query_url = 'http://table.finance.yahoo.com/table.csv?s=' + s + '&a=' + start_month + \
 #                                                                           '&b=' + start_day + \
@@ -41,34 +50,49 @@ def get_yahoo_data(queue, **kwargs):
 #                                                                           '&f=' + current_year + \
 #                                                                           '&ignore=.csv'
 
-            query_url = 'http://ichart.finance.yahoo.com/table.csv?s=' + s + '&a=' + start_month + \
-                                                                          '&b=' + start_day + \
-                                                                          '&c=' + start_year + \
-                                                                          '&d=' + current_month + \
-                                                                          '&e=' + current_day + \
-                                                                          '&f=' + current_year + \
-                                                                          '&ignore=.csv'
+            # query_url = 'http://ichart.finance.yahoo.com/table.csv?s=' + s + '&a=' + start_month + \
+            #                                                               '&b=' + start_day + \
+            #                                                               '&c=' + start_year + \
+            #                                                               '&d=' + current_month + \
+            #                                                               '&e=' + current_day + \
+            #                                                               '&f=' + current_year + \
+            #                                                               '&ignore=.csv'
 
-            #logger.debug(s + "\tbefore request")
-            test_file = '\texception in urlopen'
+            query_url = 'https://query1.finance.yahoo.com/v7/finance/download/' + s + '?period1=' + \
+                                                                                start_unix_epoch + \
+                                                                                '&period2=' + \
+                                                                                end_unix_epoch + \
+                                                                                '&interval=1d&events=history&crumb=oRQtY6jjCqs'
+
+
+            headers = {'Content-Type': 'application/json', 'Authorization' : 'Token 682e2feeed3d495a6a68820c4bbb40ed5754ff5c'}
+            # This request string just gives basic info
+            # request_string = 'https://api.tiingo.com/tiingo/daily/' + s + '?token=682e2feeed3d495a6a68820c4bbb40ed5754ff5c'
+            request_string = 'https://api.tiingo.com/tiingo/daily/' + s + '/prices?startDate=' + start_date +  '&endDate=' + current_date
+
+            # print "Querying: ", request_string
+            logger.debug(s + "\tbefore request")
             try:
-                test_file = requests.get(query_url, timeout=2)
+                # test_file = requests.get(query_url, timeout=2)
+                test_file = requests.get(request_string, headers=headers, timeout=2)
+
                 if test_file.status_code != 200:
-                    test_file = requests.get(query_url, timeout=2)
+                    test_file = requests.get(request_string, timeout=2)
             except:
                 try:
-                    test_file = requests.get(query_url, timeout=2)
+                    test_file = requests.get(request_string, timeout=2)
                 except:
                     try:
-                        test_file = requests.get(query_url, timeout=10)
+                        test_file = requests.get(request_string, timeout=10)
                     except:
                         logger.info(s + ',http request failed 3 attempts')
                         queue.task_done()
                         continue
             #logger.debug(s + "\tafter request, will write to file")
             if test_file.status_code == 200:
+                test_csv = get_csv_from_json(test_file.json(), s)
                 fout = open(file_path, 'w')
-                fout.write(test_file.text)
+                fout.write(test_csv)
                 fout.close()
                 queue.task_done()
                 continue
@@ -79,6 +103,38 @@ def get_yahoo_data(queue, **kwargs):
         #catch anything that might have gotten thru other statements...this is to debug
         queue.task_done()
     return
+
+def get_csv_from_json(json_response, stock):
+    header_line = 'Date,Open,High,Low,Close,Volume,AdjClose'
+
+    body = ''
+    for line_item in json_response:
+        cleaned_date = line_item['date']
+        cleaned_year = int(cleaned_date.split('-')[0])
+        cleaned_month = int(cleaned_date.split('-')[1])
+        cleaned_day = int(cleaned_date.split('-')[2].split('T')[0])
+        cleaned_datetime = datetime.date(cleaned_year, cleaned_month, cleaned_day)
+        cleaned_date_string = cleaned_datetime.strftime('%Y%m%d')
+
+        try:
+            # some of these are None for whatever the reason. We would have cleaned these up if we plugged in a zero,
+            # but that's not desired. Instead, just break and prevent more recent dates from appearing in the string,
+            # then this can get filtered out later
+            open = round(line_item['open'], 2)
+            high = round(line_item['open'], 2)
+            low = round(line_item['open'], 2)
+            close = round(line_item['open'], 2)
+            volume = line_item['volume']
+            adj_close = round(line_item['adjClose'], 2)
+        except:
+            print "LINE ITEM HERE: ", stock, line_item
+            break
+
+        line_string = '\n' + str(cleaned_date_string) + ',' + str(open) + ',' + str(high) + ',' + str(low) + ',' + str(close) + ',' + str(volume) + ',' + str(adj_close)
+        body += line_string
+
+    final_string = header_line + body
+    return final_string
 
 #os.system("curl --silent 'http://download.finance.yahoo.com/d/quotes.csv?s=SLV&f=l' > tmp/SLV.csv")
 #http://table.finance.yahoo.com/table.csv?a=["fmonth","fmonth"]&b=["fday","fday"]&c=["fyear","fyear"]&d=["tmonth","tmonth"]&e=["tday","tday"]&f=["tyear","tyear"]&s=["ticker", "ticker"]&y=0&g=["per","per"]&ignore=.csv
@@ -96,7 +152,7 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
-    logger.info('Starting Main Thread')
+    # logger.info('Starting Main Thread')
 
     stock_list = open('/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + list_to_download, 'r')
     symbols = stock_list.read().rstrip().split('\n')
@@ -120,7 +176,7 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
     #symbols = ['MEE']
     for s in symbols:
         queue.put(s)
-    print "Number of symbols to fetch: ", len(symbols)
+    # print "Number of symbols to fetch: ", len(symbols)
 
     for d in range(thread_count):
         #logger.debug(str(symbols.index(s)) + ' if \t' + s + '\t' + str(len(threading.enumerate())))
@@ -132,7 +188,7 @@ def multithread_yahoo_download(list_to_download='large_universe.csv', thread_cou
 
     queue.join()
 
-    logger.debug("Ending Main Thread\n\n\n")
+    # logger.debug("Ending Main Thread\n\n\n")
     handler.close()
     return
 
@@ -254,12 +310,12 @@ def load_redis(stock_list='do_all', db_number=99, file_location='tmp/', dict_siz
     end_time = datetime.datetime.now()
     time_required = end_time - start_time
     print "\nData In CSV Is Empty: ", data_in_csv_empty
-    print "\nFailed Validation Symbols: ", failed_symbols
-    print "\nNumber of validation failures: ", len(failed_symbols)
-    print "\nNo Data Symbols: ", no_data_symbols
-    print "\nNumber of no data failures: ", len(no_data_symbols)
-    print "\nTotal Loaded: ", (len(symbols) - len(failed_symbols) - len(no_data_symbols))
-    print "Time Required: ", time_required
+    print "Failed Validation Symbols: ", failed_symbols
+    print "Number of validation failures: ", len(failed_symbols)
+    print "No Data Symbols: ", no_data_symbols
+    # print "Number of no data failures: ", len(no_data_symbols)
+    # print "Total Loaded: ", (len(symbols) - len(failed_symbols) - len(no_data_symbols))
+    # print "Time Required: ", time_required
 
     return
 

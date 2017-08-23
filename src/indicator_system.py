@@ -23,7 +23,8 @@ def run_indicator_system():
     sectors = ('basic_materials', 'conglomerates', 'consumer_goods', 'financial', 'healthcare', 'industrial_services', \
                'services', 'technology', 'utilities')
 
-    in_file_name = 'etfs_etns_sp_500'
+    # in_file_name = 'etfs_etns_sp_500'
+    in_file_name = 'big_etfs'
     location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
     in_file = open(location, 'r')
     stock_list = in_file.read().split('\n')
@@ -34,7 +35,7 @@ def run_indicator_system():
 
     etf_list = get_etf_list()
 
-    # stock_list = ['SPY', 'KRU']
+    # stock_list = ['SPY', 'TLT']
     paired_list = get_paired_stock_list(sorted(stock_list), fixed_stock='SPY')
 
     len_stocks = len(paired_list)
@@ -51,7 +52,7 @@ def run_indicator_system():
 
     days_analyzed = 0
     base_stock = paired_list[0]['stock_1']
-    stock_1_data = manage_redis.parse_fast_data(base_stock, db_to_use=0)
+    stock_1_data = manage_redis.parse_fast_data(base_stock, db_to_use=1)
     for k, item in enumerate(paired_list):
         is_stock = not item['stock_2'] in etf_list
         print k, len_stocks, item['stock_1'], item['stock_2'], '\t', is_stock
@@ -137,7 +138,7 @@ def run_indicator_system():
 
 def do_indicator_test(item, k, len_stocks, stock_1_data, is_stock):
 #	stock_1_data = manage_redis.parse_fast_data(item['stock_1'], db_to_use=0)
-    stock_2_data = manage_redis.parse_fast_data(item['stock_2'], db_to_use=0)
+    stock_2_data = manage_redis.parse_fast_data(item['stock_2'], db_to_use=1)
 
     try:
         # print "Getting data for: ", item['stock_1'], item['stock_2']
@@ -146,9 +147,11 @@ def do_indicator_test(item, k, len_stocks, stock_1_data, is_stock):
         logging.warning('Exception in getting corrected data: %s' % (item['stock_2']))
         return 'data_failure', None, None
 
+    stock_1_volume = [x['Volume'] for x in stock_1_trimmed]
+
     stock_2_close = [x['AdjClose'] for x in stock_2_trimmed]
-    stock_2_high = [x['AdjHigh'] for x in stock_2_trimmed]
-    stock_2_low = [x['AdjLow'] for x in stock_2_trimmed]
+    # stock_2_high = [x['AdjHigh'] for x in stock_2_trimmed]
+    # stock_2_low = [x['AdjLow'] for x in stock_2_trimmed]
     stock_2_volume = [x['Volume'] for x in stock_2_trimmed]
 
     if len(stock_2_trimmed) < 253:
@@ -163,8 +166,9 @@ def do_indicator_test(item, k, len_stocks, stock_1_data, is_stock):
     next_index = 0
 
     # signal = signals.MovingAverageSeasonalitySystem(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock, kwargs = {'stock_1_close':stock_1_close} )
-    signal = signals.SignalsSigmaSpanVolatilityTest_2(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock)
+    # signal = signals.SignalsSigmaSpanVolatilityTest_2(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock)
     # signal = signals.SignalsSigmaSpanVolatilityTest_3(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock, kwargs = {'stock_1_close':stock_1_close} )
+    signal = signals.InWeekAfterDown(stock_1_close, stock_1_volume, stock_1_trimmed, item)
     
     for x in xrange(252, end_data):
         # If we've been told we're still in a trade then we simply skip this day
@@ -193,7 +197,8 @@ def backtest_trade_log(trade_log, exclude_log=None):
     print "Total Entries Found Length: ", len(trade_log)
     start_date = datetime.datetime(1900, 1, 1)
     end_date = datetime.datetime(2100,1,1)
-    chrono_trade_log = [t for t in trade_log if datetime.datetime.strptime(t.entry_date, '%Y-%m-%d') > start_date and datetime.datetime.strptime(t.entry_date, '%Y-%m-%d') < end_date]
+    # chrono_trade_log = [t for t in trade_log if datetime.datetime.strptime(t.entry_date, '%Y-%m-%d') > start_date and datetime.datetime.strptime(t.entry_date, '%Y-%m-%d') < end_date]
+    chrono_trade_log = [t for t in trade_log if datetime.datetime.strptime(t.entry_date, '%Y%m%d') > start_date and datetime.datetime.strptime(t.entry_date, '%Y%m%d') < end_date]
     chrono_trade_log.sort(key=lambda x: x.entry_date)
 
     # for result in chrono_trade_log:
@@ -212,8 +217,11 @@ def backtest_trade_log(trade_log, exclude_log=None):
             last_exit = small_log[-1].exit_date
             todays_entry = current_date
 
-            last_exit = datetime.datetime.strptime(last_exit, '%Y-%m-%d')
-            todays_entry = datetime.datetime.strptime(todays_entry, '%Y-%m-%d')
+            # last_exit = datetime.datetime.strptime(last_exit, '%Y-%m-%d')
+            # todays_entry = datetime.datetime.strptime(todays_entry, '%Y-%m-%d')
+
+            last_exit = datetime.datetime.strptime(last_exit, '%Y%m%d')
+            todays_entry = datetime.datetime.strptime(todays_entry, '%Y%m%d')
 
             # The continue here will cut out all other logic and move on to the next item in the
             # master trade log. Basically, if we are already in a trade and have not exited yet,
@@ -233,7 +241,8 @@ def backtest_trade_log(trade_log, exclude_log=None):
 
         # Choose the most volatile stock at a given day
         target = 999
-        start_today.sort(key=lambda z: abs((z.entry_score - target)), reverse=False)
+
+        ### start_today.sort(key=lambda z: abs((z.entry_score - target)), reverse=False)
         # start_today.sort(key=lambda z: abs((z.entry_sigma_over_p - target)), reverse=False)
         # start_today.sort(key=lambda z: abs((z.entry_volatility - target)), reverse=False)
 
@@ -272,7 +281,7 @@ def get_intra_prices(trade_log):
     ### To properly determine the sharpe ratio, we must compare the returns in the trade log with returns in
     # SPY over the same period of time. Specifically, we must know the number of days that SPY traded within the
     # time period of interest, then insert returns of zero (1.0) in the trade log so that the length matches SPY
-    ref_price_data = manage_redis.parse_fast_data('SPY', db_to_use=0)
+    ref_price_data = manage_redis.parse_fast_data('SPY', db_to_use=1)
 
     system_ret_log = []
     print "*****************************SHARPE RATIO ANALYSIS"
@@ -291,12 +300,15 @@ def get_intra_prices(trade_log):
     first_entry = trade_log[0].entry_date
     last_exit = trade_log[-1].exit_date
 
-    first_entry = datetime.datetime.strptime(first_entry, '%Y-%m-%d')
-    last_exit = datetime.datetime.strptime(last_exit, '%Y-%m-%d')
+    # first_entry = datetime.datetime.strptime(first_entry, '%Y-%m-%d')
+    # last_exit = datetime.datetime.strptime(last_exit, '%Y-%m-%d')
+    first_entry = datetime.datetime.strptime(first_entry, '%Y%m%d')
+    last_exit = datetime.datetime.strptime(last_exit, '%Y%m%d')
 
     ref_trimmed_price_data = []
     for day in ref_price_data:
-        z = datetime.datetime.strptime(day['Date'], '%Y-%m-%d')
+        # z = datetime.datetime.strptime(day['Date'], '%Y-%m-%d')
+        z = datetime.datetime.strptime(day['Date'], '%Y%m%d')
         if z >= first_entry and z <= last_exit:
             # We hardcode "long" here because this is a buy and hold assumption...
             p = ('existing_trade', 'long', day['AdjClose'])

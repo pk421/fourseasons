@@ -46,8 +46,13 @@ def do_optimization(mdp_port, x):
     # Turn this on to fix the weights of at each rebalance
     ### HACK:
 
-    normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
+    # SPY SECTORS: normalized_theoretical_weights = np.array([ [0.113], [0.09], [0.135], [0.0], [0.0], [0.215], [0.215], [0.0], [0.057], [0.175] ])
+    normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075], [0.0], [0.0]])
+    # normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
     # normalized_theoretical_weights = np.array([[0.35], [0.18], [0.47]])
+
+    # Modified All Weather 1 rebalance for all of history, done on 20161120
+    # normalized_theoretical_weights = np.array([[0.15], [0.19], [0.28], [0.08], [0.09], [0.09], [0.12]])
 
     # modified_mdp optimized for 2008 days, single rebalance
     # normalized_theoretical_weights = np.array([[0.23], [0.41], [0.17], [0.09], [0.10]])
@@ -506,9 +511,11 @@ class TradeLog(object):
 def run_live_portfolio_analysis(assets=None):
 
     update_data = True
+    update_date = '20170821'
+
     input = live_portfolio[0] + stocks_to_test
 
-    port_ret = live_portfolio_analysis(assets=live_portfolio, update_data=update_data)
+    port_ret = live_portfolio_analysis(assets=live_portfolio, update_data=update_data, update_date=update_date)
     port_prices_only = [ n[2] for n in port_ret['sharpe_price_list'] ]
     port_pct_rets_only = [0.0]
     for k, x in enumerate(port_prices_only):
@@ -523,46 +530,50 @@ def run_live_portfolio_analysis(assets=None):
 
     output_data = []
     for stock_tuple in input:
+        try:
+            stock_ret = live_portfolio_analysis(assets=[[stock_tuple]], update_data=update_data, update_date=update_date)
+            # None will be returned if this failed...usually as a result of data not found in redis for the input list
+            if stock_ret is None:
+                continue
 
-        stock_ret = live_portfolio_analysis(assets=[[stock_tuple]], update_data=update_data)
+            stock_prices_only = [ n[2] for n in stock_ret['sharpe_price_list'] ]
+            stock_pct_rets_only = [0.0]
+            for k, x in enumerate(stock_prices_only):
+                if k > 0:
+                    stock_pct_rets_only.append( ( x -  stock_prices_only[k-1]) / stock_prices_only[k-1] )
 
-        # None will be returned if this failed...usually as a result of data not found in redis for the input list
-        if stock_ret is None:
+
+            # cov_matrix_input = np.array( [stock_pct_rets_only, port_pct_rets_only] )
+            cov_matrix_input = np.array( [stock_pct_rets_only, port_pct_rets_only] )
+
+            cov_matrix = np.cov(cov_matrix_input)
+            variance = np.var(port_pct_rets_only)
+            beta = cov_matrix[0][1] / variance
+            sigma = np.sqrt(np.var(stock_pct_rets_only))
+            output_data.append( (stock_tuple[0], beta, sigma) )
+
+            # print "Beta: ", stock_tuple[0], '\t', 100.0 * beta, '\t\t', np.sqrt(np.var(stock_pct_rets_only))
+        except:
             continue
 
-        stock_prices_only = [ n[2] for n in stock_ret['sharpe_price_list'] ]
-        stock_pct_rets_only = [0.0]
-        for k, x in enumerate(stock_prices_only):
-            if k > 0:
-                stock_pct_rets_only.append( ( x -  stock_prices_only[k-1]) / stock_prices_only[k-1] )
-
-
-        # cov_matrix_input = np.array( [stock_pct_rets_only, port_pct_rets_only] )
-        cov_matrix_input = np.array( [stock_pct_rets_only, port_pct_rets_only] )
-
-        cov_matrix = np.cov(cov_matrix_input)
-        variance = np.var(port_pct_rets_only)
-        beta = cov_matrix[0][1] / variance
-        sigma = np.sqrt(np.var(stock_pct_rets_only))
-        output_data.append( (stock_tuple[0], beta, sigma) )
-
-        # print "Beta: ", stock_tuple[0], '\t', 100.0 * beta, '\t\t', np.sqrt(np.var(stock_pct_rets_only))
-
     print '\n\n'
-    print '\t', 'Symbol', '\t\t', 'Beta', '\t\t\t', 'Sigma'
+    print '     ', 'Symbol', '\t', 'Beta', '\t\t', 'Sigma'
 
     new_stock_output_data = output_data[len(live_portfolio[0]):]
 
     print '\n'
-    for item in sorted(output_data[0:len(live_portfolio[0])], key=lambda tup: tup[1], reverse=False):
-        print "Beta: ", item[0], '\t', item[1], '\t\t', item[2]
+    # for item in sorted(output_data[0:len(live_portfolio[0])], key=lambda tup: tup[1], reverse=False):
+        # print "Beta: ", item[0], '\t', item[1], '\t\t', item[2]
+    for i, item in enumerate(output_data[0:len(live_portfolio[0])]):
+        weighted_delta = (port_ret['tangency'][i] - port_ret['actual_weights'][i]) * port_ret['valuation']
+        print "Beta: ", item[0], '\t', '{0:.6f}'.format(item[1].round(6)).zfill(8), '\t', '{0:.6f}'.format(item[2].round(6)).zfill(8), '\tAct / Tan / Diff:  ', port_ret['actual_weights'][i], '\t', port_ret['tangency'][i], '\t', weighted_delta
     for item in sorted(new_stock_output_data, key=lambda tup: tup[1], reverse=False):
-        print "Beta: ", item[0], '\t', item[1], '\t\t', item[2]
+        print "Beta: ", item[0], '\t', '{0:.6f}'.format(item[1].round(6)), '\t', '{0:.6f}'.format(item[2].round(6))
 
     return
 
 
-def live_portfolio_analysis(assets=None, update_data=True):
+def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
     all_portfolios=assets if assets else live_portfolio
 
     for account in all_portfolios:
@@ -574,7 +585,7 @@ def live_portfolio_analysis(assets=None, update_data=True):
         port = MDPPortfolio(assets)
 
         try:
-            port = get_data(port, base_etf=port.assets[0], last_x_days=64, get_new_data=update_data)
+            port = get_data(port, base_etf=port.assets[0], last_x_days=64, get_new_data=update_data, update_date=update_date)
         except Exception as e:
             return None
 
@@ -607,27 +618,26 @@ def live_portfolio_analysis(assets=None, update_data=True):
         original_weights = port.current_weights
 
         if len(assets) > 1:
+            # First calc of div ratio just uses the weights as-is, based on # of shares and prices
             div_ratio = port.get_diversification_ratio(weights='current')
-        else:
-            div_ratio = 1.0
 
-        if len(assets) > 1:
+            # Set the weights to the tangency weights, then recalc the div ratio
             port.current_weights = tangency_weights
-        else:
-            tangency_weights = [ [1.0] ]
-
-        if len(assets) > 1:
             possible_div_ratio = port.get_diversification_ratio(weights='current')
         else:
+            div_ratio = 1.0
+            tangency_weights = [ [1.0] ]
             possible_div_ratio = 1.0
+
+
 
 
         if len(assets) > 1:
             print port.portfolio_valuations
             print "Assets: \t", assets
             print "Act. Sigma: \t", round(system_sigma, 6)
-            print "Act. Weights: \t", [ round(n[0], 6) for n in original_weights ]
-            print "Tangency: \t", [ round(n[0], 6) for n in tangency_weights ]
+            print "Act. Weights: \t", [ str(round(n[0], 4)).zfill(6) for n in original_weights ]
+            print "Tangency: \t", [ str(round(n[0], 4)).zfill(6) for n in tangency_weights ]
             print "Value: \t\t", valuation
             print "Act Div Ratio: \t", div_ratio
             print "Tan Div Ratio: \t", possible_div_ratio

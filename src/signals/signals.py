@@ -35,6 +35,119 @@ class SignalsBase(object):
             return False
         return True
 
+class InWeekAfterDown(SignalsBase):
+
+    def __init__(self, closes, volume, stock_2_trimmed, item):
+        super(InWeekAfterDown, self).__init__(closes, volume, stock_2_trimmed, item)
+
+        self.get_weekly_closes()
+
+    def get_weekly_closes(self):
+        """Finds starts/ends of weeks and gets the total return across that week. If end of week is detected, simply
+        add a key to stock_2_trimmed"""
+
+        for x, day_dict in enumerate(self.stock_2_trimmed):
+            if x <= 4:
+                continue
+            today_int = day_dict['Date']
+            today_datetime = datetime.datetime(int(today_int[0:4]), int(today_int[4:6]), int(today_int[6:8]))
+            # Monday is 0, Sunday is 7
+            today_day_of_week = today_datetime.weekday()
+
+            yesterday_int = self.stock_2_trimmed[x-1]['Date']
+            yesterday_datetime = datetime.datetime(int(yesterday_int[0:4]), int(yesterday_int[4:6]), int(yesterday_int[6:8]))
+            # Monday is 0, Sunday is 7
+            yesterday_day_of_week = yesterday_datetime.weekday()
+
+            # print "Today, today weekday, yesterday, yesterday weekday: ", today_int, today_day_of_week, yesterday_int, yesterday_day_of_week
+
+            if today_day_of_week < yesterday_day_of_week:
+                # print "starting iteration: ", today_day_of_week, yesterday_day_of_week
+
+                prev_iter_weekday = yesterday_day_of_week
+                x_starting = x-1
+                while True:
+                    x_starting -= 1
+                    # print "x starting: ", x_starting
+                    current_weekday_int = self.stock_2_trimmed[x_starting]['Date']
+                    current_weekday_datetime = datetime.datetime(int(current_weekday_int[0:4]), int(current_weekday_int[4:6]), int(current_weekday_int[6:8]))
+                    iter_weekday = current_weekday_datetime.weekday()
+                    if iter_weekday >= prev_iter_weekday:
+                        break
+                    else:
+                        prev_iter_weekday = iter_weekday
+
+                # This line is correct and should be used
+                # print "Week start/end: ", self.stock_2_trimmed[x_starting+1]['Date'], prev_iter_weekday, yesterday_int, yesterday_day_of_week
+
+                # x starting here is actually the day before the week starts, this gives us the previous Friday's close
+                last_week_open = self.stock_2_trimmed[x_starting]['AdjClose']
+                last_week_close = self.stock_2_trimmed[x-1]['AdjClose']
+                last_week_return = last_week_close / last_week_open
+                self.stock_2_trimmed[x-1]['week_return'] = last_week_return
+                print "Week Return: ", self.stock_2_trimmed[x_starting+1]['Date'], yesterday_int, last_week_return
+
+    def get_entry_signal(self, x):
+        week_return = self.stock_2_trimmed[x].get('week_return')
+        if week_return:
+            if week_return > 0.97 and week_return < 0.995:
+                trade_result = self.get_entry_trade_result(x)
+                trade_result.long_short = 'long'
+                return trade_result
+        else:
+            return False
+
+    def get_entry_trade_result(self, x):
+        result = trade_result()
+
+        result.stock_2 = self.item['stock_2']
+        result.entry_date = self.stock_2_trimmed[x]['Date']
+        result.entry_price = self.closes[x]
+        result.entry_vol = self.volume[x]
+        result.prev_weekly_close = self.stock_2_trimmed[x]['week_return']
+
+        return result
+
+    def get_exit(self, x, result):
+        start_index = x+1
+        len_data = len(self.closes)
+
+        trading_up = True if result.long_short == 'long' else False
+
+        price_log = [self.closes[x]]
+
+        for x in xrange(start_index, 9999999):
+            if x == len_data:
+                return None, None
+
+            date_today = self.stock_2_trimmed[x]['Date']
+            current_price = self.closes[x]
+            price_log.append(current_price)
+            price_change_pc = (current_price - result.entry_price) / result.entry_price
+
+            if trading_up:
+                ret = price_change_pc
+            else:
+                ret = -price_change_pc
+
+            if trading_up and self.stock_2_trimmed[x].get('week_return'):
+
+                result.time_in_trade = x - (start_index - 1)
+                result.exit_price = current_price
+                result.ret = ret
+                result.chained_ret = 1 + ret
+                result.exit_date = date_today
+                result.end_index = x
+                result.price_log = price_log
+
+                if ret > 0:
+                    # print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+                    result.trade_result = "Profit"
+                else:
+                    # print "Loss: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+                    result.trade_result = "Loss"
+
+                return result, result.end_index
 
 class SignalsSigmaSpan(SignalsBase):
     """

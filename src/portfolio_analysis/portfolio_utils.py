@@ -11,23 +11,37 @@ from src.cointegrations_data    import get_paired_stock_list, get_corrected_data
 from src.math_tools             import get_returns, get_ln_returns
 
 
-def get_data(port, base_etf, last_x_days = 0, get_new_data=True, historical_data={}):
+def get_data(port, base_etf, last_x_days = 0, get_new_data=True, update_date=None, historical_data={}):
     """
     historical_data parameter is used by sweeper so that the data here is not re-parsed many times
     """
     # The sort in data_retriever.py would corrupt the order of the asset list if it is not copied here
     asset_list = copy.deepcopy(port.assets)
-    if get_new_data:
-        multithread_yahoo_download(thread_count=20, update_check=False, \
+
+    download_data=False
+    stock_1_data = historical_data.get(base_etf) or manage_redis.parse_fast_data(base_etf, db_to_use=1)
+    for item in port.assets:
+        if get_new_data and update_date:
+            try:
+                if not manage_redis.parse_fast_data(item, db_to_use=1)[-1]['Date'] >= update_date:
+                    download_data = True
+                    break
+            except:
+                download_data = True
+                break
+    if download_data:
+        multithread_yahoo_download(thread_count=1, update_check=False, \
                                        new_only=False, store_location = 'data/portfolio_analysis/', use_list=asset_list)
         load_redis(stock_list='tda_free_etfs.csv', db_number=1, file_location='data/portfolio_analysis/', dict_size=3, use_list=asset_list)
     stock_1_data = historical_data.get(base_etf) or manage_redis.parse_fast_data(base_etf, db_to_use=1)
     ### logging.info('Loading Data...')
-    ### logging.info('Base Start/End Dates: %s %s %s' % (base_etf, stock_1_data[0]['Date'],stock_1_data[-1]['Date']))
+    if stock_1_data[-1]['Date'] < update_date:
+        logging.info('Base Start/End Dates: %s %s %s' % (base_etf, stock_1_data[0]['Date'],stock_1_data[-1]['Date']))
     for item in port.assets:
         logging.debug(item)
         stock_2_data = historical_data.get(item) or manage_redis.parse_fast_data(item, db_to_use=1)
-        ### logging.info('Base Start/End Dates: %s %s %s' % (item, stock_2_data[0]['Date'], stock_2_data[-1]['Date']))
+        if stock_2_data[-1]['Date'] < update_date:
+            logging.info('Base Start/End Dates: %s %s %s' % (item, stock_2_data[0]['Date'], stock_2_data[-1]['Date']))
         # print "HERE: "
         # print stock_1_data
         # print "\n\n\n\n\n"
