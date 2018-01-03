@@ -28,9 +28,9 @@ def do_optimization(mdp_port, x):
     # theoretical_weights = np.array([ [0.30], [0.15], [0.40], [0.075], [0.075] ])
     # theoretical_weights = np.array([ [0.30], [0.55], [0.15] ])
 
-    if logging.root.level < 25:
-        print "Theoretical Result: \n", theoretical_weights
-        print "weighted vols equal one check: ", mdp_port.weighted_vols_equal_one(theoretical_weights)
+    # if logging.root.level < 25:
+        # print "Theoretical Result: \n", theoretical_weights
+        # print "weighted vols equal one check: ", mdp_port.weighted_vols_equal_one(theoretical_weights)
 
     # This section should not be necessary since weights are already normalized. It's an added safety.
     abs_weight_sum = np.sum([abs(n) for n in theoretical_weights])
@@ -47,8 +47,105 @@ def do_optimization(mdp_port, x):
     ### HACK:
 
     # SPY SECTORS: normalized_theoretical_weights = np.array([ [0.113], [0.09], [0.135], [0.0], [0.0], [0.215], [0.215], [0.0], [0.057], [0.175] ])
-    normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075], [0.0], [0.0]])
+    # normalized_theoretical_weights = np.array([[0.20], [0.20], [0.20], [0.20], [0.20]])
     # normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
+    normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075], [0.0]])
+
+    ##### ALGO WITH TREASURY DATA
+
+    # must be <= 62
+    ma_length = 10
+
+    # import pdb; pdb.set_trace()
+
+    recent_yc = [ d['AdjClose'] for d in mdp_port.other_data_trimmed[x-ma_length:x] ]
+    yc_ma = np.mean(recent_yc)
+    recent_yc_1 = [ d['AdjClose'] for d in mdp_port.other_data_trimmed[x-(ma_length+1):x-1] ]
+    yc_ma_1 = np.mean(recent_yc_1)
+    yc_ma_slope = yc_ma - yc_ma_1
+
+    yc_ma_100 = 0.0
+    if x > 100:
+        yc_ma_100 = np.mean([ d['AdjClose'] for d in mdp_port.other_data_trimmed[x-100:x-80] ])
+
+    adjusted_yc_ma = yc_ma - 0.0
+
+    all_weather_base = [[0.30], [0.15], [0.40], [0.075], [0.075]]
+    golden_butterfly_base = [[0.20], [0.20], [0.20], [0.20], [0.20]]
+
+    # End of cycle, inflation area, use commodities
+    if adjusted_yc_ma < 0 and yc_ma_slope < 0:
+        normalized_theoretical_weights = np.array([[0.15], [0.15], [0.0], [0.85], [0.85], [-1.0]])
+        # normalized_theoretical_weights = np.array([[0.15], [0.15], [0.20], [0.0], [1.5], [-1.0]])
+
+    # bear market area, do not leverage, just stay in All Weather, but bias slightly to bonds and away from inflation
+    elif adjusted_yc_ma < 0 and yc_ma_slope > 0:
+        normalized_theoretical_weights = np.array([[0.10], [0.40], [0.40], [0.05], [0.05], [0.0]])
+        # normalized_theoretical_weights = np.array([[0.05], [0.05], [0.40], [0.40], [0.10], [0.0]])
+
+    # coming out of recession, stay in all weather, the normal rules don't apply, low commodities, heavy bonds
+    elif adjusted_yc_ma >= 0 and yc_ma_slope > 0 and (yc_ma_100 - 1.0) < 0:
+        normalized_theoretical_weights = np.array([[0.20], [0.30], [0.75], [0.05], [0.05], [-0.35]])
+        # normalized_theoretical_weights = np.array([[0.10], [0.10], [0.35], [0.75], [0.05], [-0.35]])
+
+    elif adjusted_yc_ma >=0 and adjusted_yc_ma < 1:
+        weights = [ [1.00*n[0]] for n in all_weather_base]
+        weights.append([0.0])
+        normalized_theoretical_weights = np.array(weights)
+
+    # just use all weather, the yields available are not high
+    elif adjusted_yc_ma >= 1 and adjusted_yc_ma < 2:
+        # normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
+        weights = [ [3.50*n[0]] for n in all_weather_base]
+        weights.append([-2.50])
+        normalized_theoretical_weights = np.array(weights)
+
+    # 2x leverage, go into risk assets
+    elif adjusted_yc_ma >= 2.0 and adjusted_yc_ma < 3.0:
+        # normalized_theoretical_weights = np.array([[1.3], [0.15], [0.40], [0.075], [0.075]])
+        weights = [ [4.0*n[0]] for n in all_weather_base]
+        weights.append([-3.00])
+        normalized_theoretical_weights = np.array(weights)
+
+    # 3x leverage, go higher into risk assets
+    elif adjusted_yc_ma >= 3.0 and adjusted_yc_ma < 4.0:
+        # normalized_theoretical_weights = np.array([[2.3], [0.15], [0.40], [0.075], [0.075]])
+        weights = [ [5.00*n[0]] for n in all_weather_base]
+        weights.append([-4.00])
+        normalized_theoretical_weights = np.array(weights)
+
+    elif adjusted_yc_ma >= 4.0 and adjusted_yc_ma < 5.0:
+        # normalized_theoretical_weights = np.array([[3.3], [0.15], [0.40], [0.075], [0.075]])
+        weights = [ [5.0*n[0]] for n in all_weather_base]
+        weights.append([-4.0])
+        normalized_theoretical_weights = np.array(weights)
+
+
+    # normalized_theoretical_weights = np.array( [[0.20], [0.20], [0.20], [0.20], [0.20], [0.0]])
+    # normalized_theoretical_weights = np.array([ [1*n[0]] for n in all_weather_base ])
+    # normalized_theoretical_weights = np.array([[0.90], [0.45], [1.20], [0.225], [0.225], [-2.0]])
+
+
+    print 'Adjusting Weights: ', x, mdp_port.other_data_trimmed[x]['Date'], yc_ma_slope, yc_ma_100, '\n', normalized_theoretical_weights
+    # import pdb; pdb.set_trace()
+
+
+
+    # Rising Inflation, Growth and Flattening, Positive YC - Commodities
+
+    # Falling Growth, High Inflation And Negative And Falling YC - Cash
+
+    # Low Growth, Low Inflation, Rising, Negative YC, Or Steeply Rising and Positive YC - Bonds
+
+    # Higher Growth, Low Inflation, Positive YC That is not Changing Slope Too Quickly - Stocks
+
+    # Fa
+
+
+    #####
+
+    # normalized_theoretical_weights = np.array([[0.15], [0.15], [0.20], [0.075], [0.075], [0.15], [0.20]])
+    # normalized_theoretical_weights = np.array([[0.20], [0.15], [0.20], [0.15], [0.10], [0.20]])
     # normalized_theoretical_weights = np.array([[0.35], [0.18], [0.47]])
 
     # Modified All Weather 1 rebalance for all of history, done on 20161120
@@ -93,14 +190,23 @@ def do_analysis(assets=None, write_to_file=True):
     mdp_port.rebalance_counter = 0
     mdp_port.rebalance_now = False
     mdp_port.rebalance_log = []
+    old_weighted_valuation = 1000
+    debt = 0
     while x < len(mdp_port.trimmed[mdp_port.assets[0]]):
         if not mdp_port.rebalance_now:
 
             mdp_port.x = x
-            current_portfolio_valuation = get_port_valuation(mdp_port, x=x)
+            ### current_portfolio_valuation = get_port_valuation(mdp_port, x=x)
+            ### current_leverage_ratio = np.sum(mdp_port.normalized_weights)
+            ### current_portfolio_valuation = get_port_valuation(mdp_port, x=x) - ((current_leverage_ratio - 1) * old_weighted_valuation)
+
+            current_portfolio_valuation = get_port_valuation(mdp_port, x=x) - debt
+            current_leverage_ratio = current_portfolio_valuation / (current_portfolio_valuation - debt)
+
+            ### print "Not Rebalancing: ", current_portfolio_valuation, get_port_valuation(mdp_port, x=x), old_weighted_valuation, current_leverage_ratio, ((current_leverage_ratio - 1) * old_weighted_valuation)
             mdp_port.portfolio_valuations.append([mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation])
-            if logging.root.level < 25:
-                print x, mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation
+            # if logging.root.level < 25:
+                ### print x, mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation
             mdp_port.rebalance_counter += 1
 
             if x >= mdp_port.rebalance_time:
@@ -110,8 +216,8 @@ def do_analysis(assets=None, write_to_file=True):
                 trailing_diversification_ratio = mdp_port.get_diversification_ratio(weights='current')
                 mdp_port.trailing_DRs.append(trailing_diversification_ratio)
                 rebalance_date = mdp_port.trimmed[mdp_port.assets[0]][x]['Date']
-                if logging.root.level < 25:
-                    print "Trailing DR: ", x, trailing_diversification_ratio
+                # if logging.root.level < 25:
+                    ### print "Trailing DR: ", x, trailing_diversification_ratio
 
                 # Only consider a rebalance after rebalance_time, if div ratio is low, rebalance. If it's high, wait
                 # another rebalance_time to check again
@@ -132,24 +238,28 @@ def do_analysis(assets=None, write_to_file=True):
             # When calculating the rebalance ratio, we first assume we used the old weights for today's valuation. Then
             # we calculate new weights for today, value the portfolio for today, then find the ratio for today if we
             # had used the old weights for today
-            old_weighted_valuation = get_port_valuation(mdp_port, x=x)
+
+            ### old_leverage_ratio = np.sum(mdp_port.normalized_weights)
+            old_weighted_valuation = get_port_valuation(mdp_port, x=x) - debt
             mdp_port.x = x
+
+            # old_weights = mdp_port.normalized_weights
 
             rebalance_old_div_ratio = mdp_port.get_diversification_ratio(weights='current')
 
             mdp_port, theoretical_weights = do_optimization(mdp_port, x)
-            
+
             ###
-            if logging.root.level < 25:
-                print "\n\n\nTheoretical Weights: ", str(theoretical_weights)
+            # if logging.root.level < 25:
+            #     print "\n\n\nTheoretical Weights: ", str(theoretical_weights)
             mdp_port.set_normalized_weights(theoretical_weights, old_weighted_valuation, x)
             ###
 
             # calling get_port_valuation here is used to set the current weights, used in the div ratio below
             _ = get_port_valuation(mdp_port, x=x)
-            for k, asset in enumerate(mdp_port.assets):
-                if round(mdp_port.normalized_weights[k], 6) != round(mdp_port.current_weights[k], 6):
-                    raise Exception("Normalized weights do not equal the current weights after setting normalized.")
+            ### for k, asset in enumerate(mdp_port.assets):
+            ###     if round(mdp_port.normalized_weights[k], 6) != round(mdp_port.current_weights[k], 6):
+            ###        raise Exception("Normalized weights do not equal the current weights after setting normalized.")
 
             trailing_diversification_ratio = mdp_port.get_diversification_ratio(weights='normalized')
             mdp_port.trailing_DRs.append(trailing_diversification_ratio)
@@ -157,17 +267,22 @@ def do_analysis(assets=None, write_to_file=True):
                 print "New Trailing Diversification Ratio: ", x, trailing_diversification_ratio
             mdp_port.rebalance_log.append((rebalance_date, rebalance_old_div_ratio, trailing_diversification_ratio, theoretical_weights))
 
-            current_portfolio_valuation = get_port_valuation(mdp_port, x=x)
+            # total_leverage = np.sum(old_weights)
+            current_leverage_ratio = np.sum(mdp_port.normalized_weights)
+            debt = (current_leverage_ratio - 1) * old_weighted_valuation
+            current_portfolio_valuation = get_port_valuation(mdp_port, x=x) - debt
 
-            if round(current_portfolio_valuation, 6) != round(old_weighted_valuation, 6):
-                raise Exception("Current Valuation != Old Weighted Valuation: Curr/Old: " + str(current_portfolio_valuation) + '\t' + str(old_weighted_valuation))
+            ### current_portfolio_valuation = get_port_valuation(mdp_port, x=x) / current_leverage_ratio
+            ### if round(current_portfolio_valuation, 6) != round(old_weighted_valuation, 6):
+            ###    raise Exception("Current Valuation != Old Weighted Valuation: Curr/Old: " + str(current_portfolio_valuation) + '\t' + str(old_weighted_valuation))
 
-            if logging.root.level < 25:
-                print "Current Portfolio New Valuation: ", current_portfolio_valuation
+            # if logging.root.level < 25:
+            #     print "Current Portfolio New Valuation: ", current_portfolio_valuation
 
+            print "Appending Valuation: ", mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_leverage_ratio, current_portfolio_valuation
             mdp_port.portfolio_valuations.append([mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation ])
-            if logging.root.level < 25:
-                print x, mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation
+            # if logging.root.level < 25:
+            #     print x, mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation
             x+=1
 
     for i, p in enumerate(mdp_port.portfolio_valuations):
@@ -298,6 +413,9 @@ def aggregate_statistics(mdp_port, write_to_file=True):
 def get_port_valuation(port, x=0):
     total_delta = 0
     total_valuation = 0
+    total_long_valuation = 0
+    total_short_valuation = 0
+    short_delta = 0
 
     # print "\nENTRIES: ", port.current_entry_prices
     for k, v in enumerate(port.assets):
@@ -305,9 +423,14 @@ def get_port_valuation(port, x=0):
         if port.shares[k] >= 0:
             total_delta += port.shares[k] * (port.closes[v][x] - port.current_entry_prices[k])
             total_valuation += abs(port.shares[k] * port.closes[v][x])
+            total_long_valuation += abs(port.shares[k] * port.closes[v][x])
+        ### HACK - this forces us to treat shorting cash as a special case that does not add to risk at all
+        # Just ignore anything with negative shares...rather than viewing this as a "short" position, that is adding to
+        # to your assets at risk, we will instead just treat it as shorting cash, representing borrowed money
         else:
             total_delta += abs(port.shares[k]) * (port.current_entry_prices[k] - port.closes[v][x])
             total_valuation += abs(port.shares[k]) * (port.current_entry_prices[k] + port.current_entry_prices[k] - port.closes[v][x])
+            total_short_valuation += abs(port.shares[k]) * (port.current_entry_prices[k] + port.current_entry_prices[k] - port.closes[v][x])
 
     for k, v in enumerate(port.assets):
         # This loop is used to get current weights that are evaluated in real-time each day, rather than static
@@ -318,13 +441,21 @@ def get_port_valuation(port, x=0):
         else:
             this_delta = abs(port.shares[k]) * (port.current_entry_prices[k] - port.closes[v][x])
             this_weight = -abs(port.shares[k]) * (port.current_entry_prices[k] + port.current_entry_prices[k] - port.closes[v][x])
+            short_delta = abs(port.shares[k]) * (port.current_entry_prices[k] - port.closes[v][x])
 
         # print "VALUATION: ", port.shares[k], port.closes[v][x], this_valuation, total_valuation, '\t', (this_valuation / total_valuation)
         port.current_weights[k] = this_weight / total_valuation
 
     logging.debug('%s %s %s' % (x, port.trimmed[port.assets[0]][x]['Date'], total_delta))
 
-    return total_valuation
+    # The short cash concept introduces a parasitic loss each period. Here we must deduct it. Cannot look at its value
+    # directly or sum it with a total valuation.
+    net_long_valuation = total_long_valuation - total_short_valuation + short_delta
+
+    # print "Valuation: ", total_valuation, net_long_valuation, total_short_valuation, port.current_entry_prices[-1], port.closes['BSV'][x], short_delta
+
+    return net_long_valuation
+
 
 def get_drawdown(closes):
 
@@ -367,6 +498,11 @@ class MDPPortfolio():
 
         self.lookback = None
         self.rebalance_time = None
+
+        # Use to store signals, etc.
+        self.use_other_data = True
+        self.other_data = '10_year_treasury_minus_fed_funds_rate'
+        self.other_data_trimmed = []
 
         for item in assets_list:
             self.closes[item] = []
@@ -470,10 +606,11 @@ class MDPPortfolio():
     def set_normalized_weights(self, weights, old_weighted_valuation, x):
         self.normalized_weights = weights
         weight_sum = np.sum([abs(n) for n in weights])
-        if round(weight_sum, 6) != 1.0:
-            raise Exception("set normalized weights don't sum to 1.0: " + str(weight_sum))
+        ### if round(weight_sum, 6) != 1.0:
+        ###     raise Exception("set normalized weights don't sum to 1.0: " + str(weight_sum))
         self.current_entry_prices = [ self.closes[v][x] for k, v in enumerate(self.assets) ]
         self.shares = [ (old_weighted_valuation * self.normalized_weights[k][0] / self.closes[v][x]) for k, v in enumerate(self.assets) ]
+        print "SELF SHARES: ", self.shares
 
     def get_diversification_ratio(self, weights=None):
 
@@ -511,7 +648,7 @@ class TradeLog(object):
 def run_live_portfolio_analysis(assets=None):
 
     update_data = True
-    update_date = '20170821'
+    update_date = '20180102'
 
     input = live_portfolio[0] + stocks_to_test
 
