@@ -49,84 +49,85 @@ def do_optimization(mdp_port, x):
     # SPY SECTORS: normalized_theoretical_weights = np.array([ [0.113], [0.09], [0.135], [0.0], [0.0], [0.215], [0.215], [0.0], [0.057], [0.175] ])
     # normalized_theoretical_weights = np.array([[0.20], [0.20], [0.20], [0.20], [0.20]])
     # normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
-    normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075], [0.0]])
+    normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
 
     ##### ALGO WITH TREASURY DATA
 
-    # must be <= 62
-    ma_length = 10
+    if mdp_port.use_other_data:
+        # must be <= 62
+        ma_length = 10
 
-    # import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
 
-    recent_yc = [ d['AdjClose'] for d in mdp_port.other_data_trimmed[x-ma_length:x] ]
-    yc_ma = np.mean(recent_yc)
-    recent_yc_1 = [ d['AdjClose'] for d in mdp_port.other_data_trimmed[x-(ma_length+1):x-1] ]
-    yc_ma_1 = np.mean(recent_yc_1)
-    yc_ma_slope = yc_ma - yc_ma_1
+        recent_yc = [ d['AdjClose'] for d in mdp_port.other_data_trimmed[x-ma_length:x] ]
+        yc_ma = np.mean(recent_yc)
+        recent_yc_1 = [ d['AdjClose'] for d in mdp_port.other_data_trimmed[x-(ma_length+1):x-1] ]
+        yc_ma_1 = np.mean(recent_yc_1)
+        yc_ma_slope = yc_ma - yc_ma_1
 
-    yc_ma_100 = 0.0
-    if x > 100:
-        yc_ma_100 = np.mean([ d['AdjClose'] for d in mdp_port.other_data_trimmed[x-100:x-80] ])
+        yc_ma_100 = 0.0
+        if x > 100:
+            yc_ma_100 = np.mean([ d['AdjClose'] for d in mdp_port.other_data_trimmed[x-100:x-80] ])
 
-    adjusted_yc_ma = yc_ma - 0.0
+        adjusted_yc_ma = yc_ma - 0.0
 
-    all_weather_base = [[0.30], [0.15], [0.40], [0.075], [0.075]]
-    golden_butterfly_base = [[0.20], [0.20], [0.20], [0.20], [0.20]]
+        all_weather_base = [[0.30], [0.15], [0.40], [0.075], [0.075]]
+        golden_butterfly_base = [[0.20], [0.20], [0.20], [0.20], [0.20]]
 
-    # End of cycle, inflation area, use commodities
-    if adjusted_yc_ma < 0 and yc_ma_slope < 0:
-        normalized_theoretical_weights = np.array([[0.15], [0.15], [0.0], [0.85], [0.85], [-1.0]])
-        # normalized_theoretical_weights = np.array([[0.15], [0.15], [0.20], [0.0], [1.5], [-1.0]])
+        # End of cycle, inflation area, use commodities
+        if adjusted_yc_ma < 0 and yc_ma_slope < 0:
+            normalized_theoretical_weights = np.array([[0.15], [0.15], [0.0], [0.85], [0.85], [-1.0]])
+            # normalized_theoretical_weights = np.array([[0.15], [0.15], [0.20], [0.0], [1.5], [-1.0]])
 
-    # bear market area, do not leverage, just stay in All Weather, but bias slightly to bonds and away from inflation
-    elif adjusted_yc_ma < 0 and yc_ma_slope > 0:
-        normalized_theoretical_weights = np.array([[0.10], [0.40], [0.40], [0.05], [0.05], [0.0]])
-        # normalized_theoretical_weights = np.array([[0.05], [0.05], [0.40], [0.40], [0.10], [0.0]])
+        # bear market area, do not leverage, just stay in All Weather, but bias slightly to bonds and away from inflation
+        elif adjusted_yc_ma < 0 and yc_ma_slope > 0:
+            normalized_theoretical_weights = np.array([[0.10], [0.40], [0.40], [0.05], [0.05], [0.0]])
+            # normalized_theoretical_weights = np.array([[0.05], [0.05], [0.40], [0.40], [0.10], [0.0]])
 
-    # coming out of recession, stay in all weather, the normal rules don't apply, low commodities, heavy bonds
-    elif adjusted_yc_ma >= 0 and yc_ma_slope > 0 and (yc_ma_100 - 1.0) < 0:
-        normalized_theoretical_weights = np.array([[0.20], [0.30], [0.75], [0.05], [0.05], [-0.35]])
-        # normalized_theoretical_weights = np.array([[0.10], [0.10], [0.35], [0.75], [0.05], [-0.35]])
+        # coming out of recession, stay in all weather, the normal rules don't apply, low commodities, heavy bonds
+        elif adjusted_yc_ma >= 0 and yc_ma_slope > 0 and (yc_ma_100 - 1.0) < 0:
+            normalized_theoretical_weights = np.array([[0.20], [0.30], [0.75], [0.05], [0.05], [-0.35]])
+            # normalized_theoretical_weights = np.array([[0.10], [0.10], [0.35], [0.75], [0.05], [-0.35]])
 
-    elif adjusted_yc_ma >=0 and adjusted_yc_ma < 1:
-        weights = [ [1.00*n[0]] for n in all_weather_base]
-        weights.append([0.0])
-        normalized_theoretical_weights = np.array(weights)
+        elif adjusted_yc_ma >=0 and adjusted_yc_ma < 1:
+            weights = [ [1.00*n[0]] for n in all_weather_base]
+            weights.append([0.0])
+            normalized_theoretical_weights = np.array(weights)
 
-    # just use all weather, the yields available are not high
-    elif adjusted_yc_ma >= 1 and adjusted_yc_ma < 2:
-        # normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
-        weights = [ [3.50*n[0]] for n in all_weather_base]
-        weights.append([-2.50])
-        normalized_theoretical_weights = np.array(weights)
+        # just use all weather, the yields available are not high
+        elif adjusted_yc_ma >= 1 and adjusted_yc_ma < 2:
+            # normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
+            weights = [ [3.50*n[0]] for n in all_weather_base]
+            weights.append([-2.50])
+            normalized_theoretical_weights = np.array(weights)
 
-    # 2x leverage, go into risk assets
-    elif adjusted_yc_ma >= 2.0 and adjusted_yc_ma < 3.0:
-        # normalized_theoretical_weights = np.array([[1.3], [0.15], [0.40], [0.075], [0.075]])
-        weights = [ [4.0*n[0]] for n in all_weather_base]
-        weights.append([-3.00])
-        normalized_theoretical_weights = np.array(weights)
+        # 2x leverage, go into risk assets
+        elif adjusted_yc_ma >= 2.0 and adjusted_yc_ma < 3.0:
+            # normalized_theoretical_weights = np.array([[1.3], [0.15], [0.40], [0.075], [0.075]])
+            weights = [ [4.0*n[0]] for n in all_weather_base]
+            weights.append([-3.00])
+            normalized_theoretical_weights = np.array(weights)
 
-    # 3x leverage, go higher into risk assets
-    elif adjusted_yc_ma >= 3.0 and adjusted_yc_ma < 4.0:
-        # normalized_theoretical_weights = np.array([[2.3], [0.15], [0.40], [0.075], [0.075]])
-        weights = [ [5.00*n[0]] for n in all_weather_base]
-        weights.append([-4.00])
-        normalized_theoretical_weights = np.array(weights)
+        # 3x leverage, go higher into risk assets
+        elif adjusted_yc_ma >= 3.0 and adjusted_yc_ma < 4.0:
+            # normalized_theoretical_weights = np.array([[2.3], [0.15], [0.40], [0.075], [0.075]])
+            weights = [ [5.00*n[0]] for n in all_weather_base]
+            weights.append([-4.00])
+            normalized_theoretical_weights = np.array(weights)
 
-    elif adjusted_yc_ma >= 4.0 and adjusted_yc_ma < 5.0:
-        # normalized_theoretical_weights = np.array([[3.3], [0.15], [0.40], [0.075], [0.075]])
-        weights = [ [5.0*n[0]] for n in all_weather_base]
-        weights.append([-4.0])
-        normalized_theoretical_weights = np.array(weights)
-
-
-    # normalized_theoretical_weights = np.array( [[0.20], [0.20], [0.20], [0.20], [0.20], [0.0]])
-    # normalized_theoretical_weights = np.array([ [1*n[0]] for n in all_weather_base ])
-    # normalized_theoretical_weights = np.array([[0.90], [0.45], [1.20], [0.225], [0.225], [-2.0]])
+        elif adjusted_yc_ma >= 4.0 and adjusted_yc_ma < 5.0:
+            # normalized_theoretical_weights = np.array([[3.3], [0.15], [0.40], [0.075], [0.075]])
+            weights = [ [5.0*n[0]] for n in all_weather_base]
+            weights.append([-4.0])
+            normalized_theoretical_weights = np.array(weights)
 
 
-    print 'Adjusting Weights: ', x, mdp_port.other_data_trimmed[x]['Date'], yc_ma_slope, yc_ma_100, '\n', normalized_theoretical_weights
+        # normalized_theoretical_weights = np.array( [[0.20], [0.20], [0.20], [0.20], [0.20], [0.0]])
+        # normalized_theoretical_weights = np.array([ [1*n[0]] for n in all_weather_base ])
+        # normalized_theoretical_weights = np.array([[0.90], [0.45], [1.20], [0.225], [0.225], [-2.0]])
+
+
+        print 'Adjusting Weights: ', x, mdp_port.other_data_trimmed[x]['Date'], yc_ma_slope, yc_ma_100, '\n', normalized_theoretical_weights
     # import pdb; pdb.set_trace()
 
 
@@ -345,6 +346,16 @@ def aggregate_statistics(mdp_port, write_to_file=True):
     system_stats['drawdown'] = get_drawdown(sys_closes)
     ref_stats['drawdown'] = get_drawdown(ref_closes)
 
+    system_stats['mean_drawdown'] = np.mean(system_stats['drawdown'])
+    ref_stats['mean_drawdown'] = np.mean(ref_stats['drawdown'])
+
+    system_stats['median_drawdown'] = np.median(system_stats['drawdown'])
+    ref_stats['median_drawdown'] = np.median(ref_stats['drawdown'])
+
+    system_stats['sigma_drawdown'] = np.std(system_stats['drawdown'])
+    ref_stats['sigma_drawdown'] = np.std(ref_stats['drawdown'])
+
+
     # smean, sstd, sneg_std, spos_std, ssharpe, ssortino, savg_loser, savg_winner, spct_losers = get_sharpe_ratio(sharpe_price_list)
 
     system_stats['arith_mean'], system_stats['sigma'], system_stats['neg_sigma'], system_stats['pos_sigma'], \
@@ -362,10 +373,12 @@ def aggregate_statistics(mdp_port, write_to_file=True):
                                      ',' + str(mdp_port.trailing_DRs[k])
             ) for k, n in enumerate(mdp_port.portfolio_valuations)] )
 
+        output_header = ','.join(output_fields)
+        output_header_and_data = output_header + '\n' + output_string
         current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
         out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/portfolio_analysis' + '_' + str(current_time) +'.csv'
         with open(out_file_name, 'w') as f:
-            f.write(output_string)
+            f.write(output_header_and_data)
 
     system_stats['total_years_in'] = len(sharpe_price_list) / 252.0
     system_stats['annualized_return'] = math.pow(mdp_port.portfolio_valuations[-1][1], (1.0/system_stats['total_years_in']))
@@ -381,6 +394,9 @@ def aggregate_statistics(mdp_port, write_to_file=True):
         print '\t\tSystem:'
         print 'ArithMu: \t', round(system_stats['arith_mean'], 6)
         print 'Sigma: \t\t', round(system_stats['sigma'], 6)
+        print 'Mean DD: \t', round(system_stats['mean_drawdown'], 6)
+        print 'Median DD: \t', round(system_stats['median_drawdown'], 6)
+        print 'Sigma DD: \t', round(system_stats['sigma_drawdown'], 6)
         print 'NegSigma: \t', round(system_stats['neg_sigma'], 6)
         print 'NegSigma/Tot: \t', round((system_stats['neg_sigma']/system_stats['sigma']), 6)
         print 'Sharpe: \t', round(system_stats['sharpe'], 6)
@@ -398,6 +414,9 @@ def aggregate_statistics(mdp_port, write_to_file=True):
         print '\n\t\tReference:'
         print 'ArithMu: \t', round(ref_stats['arith_mean'], 6)
         print 'Sigma: \t\t', round(ref_stats['sigma'], 6)
+        print 'Mean DD: \t', round(ref_stats['mean_drawdown'], 6)
+        print 'Median DD: \t', round(ref_stats['median_drawdown'], 6)
+        print 'Sigma DD: \t', round(ref_stats['sigma_drawdown'], 6)
         print 'NegSigma: \t', round(ref_stats['neg_sigma'], 6)
         print 'NegSigma/Tot: \t', round((ref_stats['neg_sigma']/ref_stats['sigma']), 6)
         print 'Sharpe: \t', round(ref_stats['sharpe'], 6)
@@ -499,8 +518,8 @@ class MDPPortfolio():
         self.lookback = None
         self.rebalance_time = None
 
-        # Use to store signals, etc.
-        self.use_other_data = True
+        # Use to store signals, etc., it is trimmed in a hacky way, so set use_other_data to False unless using this
+        self.use_other_data = False
         self.other_data = '10_year_treasury_minus_fed_funds_rate'
         self.other_data_trimmed = []
 
@@ -648,7 +667,7 @@ class TradeLog(object):
 def run_live_portfolio_analysis(assets=None):
 
     update_data = True
-    update_date = '20180102'
+    update_date = '20191029'
 
     input = live_portfolio[0] + stocks_to_test
 
