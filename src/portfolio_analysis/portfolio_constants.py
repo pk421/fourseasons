@@ -130,10 +130,9 @@ max_uncorrelated = [('SPY', 1), ('TLT', 1), ('IEF', 1), ('GLD', 1), ('DBC', 4), 
                     ]
 
 
-
-m_ib = [
+m_ib_all_assets = [
        # Developed Market stocks
-       ('HP', 500), ('T', 1400), ('VOO', 0.001), ('VBR', 700),
+       ('T', 1400), ('VOO', 0.001), ('VBR', 700),
 
        # Developed Market Bonds
        ('VGLT', 0.001), ('VGIT', 0.0001),
@@ -149,7 +148,7 @@ m_ib = [
 
        # Commodities
        # Switch DBC to PDBC
-       ('DBC', 4000), ('MPLX', 2000), ('PAA', 1000),
+       ('DBC', 4000), ('HP', 500), ('MPLX', 2000), ('PAA', 1000),
 
        # Gold
        ('GDX', 3800), ('IAU', 7000),
@@ -164,6 +163,41 @@ m_ib = [
        ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 5985), ('CGC', 798),
 
        ]
+
+m_ib = [
+       # Developed Market stocks
+       ('T', 1400), ('VBR', 700),
+
+       # Developed Market Bonds
+       # ('VGLT', 0.001), ('VGIT', 0.0001),
+
+       # Developed Market Muni Bonds
+       # ('MUB', 0.0001),
+
+       # Emerging Market Bonds
+       # ('PCY', 0.001),
+
+       # Emerging Market Stocks
+       ('EWZ', 1000), ('GXG', 4000), ('RSX', 2000),
+
+       # Commodities
+       # Switch DBC to PDBC
+       ('DBC', 4000), ('HP', 500), ('MPLX', 2000), ('PAA', 1000),
+
+       # Gold
+       ('GDX', 3800), ('IAU', 7000),
+
+       # Real Estate
+       # ('VNQ', 0.0001),
+
+       # Crypto
+       # ('GBTC', 0.001),
+
+       # Other
+       ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 5985), ('CGC', 798),
+
+       ]
+
 
 m_golden_butterfly_20191020 = [('IAU', 84), ('VGLT', 14), ('VGSH', 20), ('VBR', 9), ('VTI', 8),
 

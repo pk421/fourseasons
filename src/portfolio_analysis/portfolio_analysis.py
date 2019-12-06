@@ -15,6 +15,8 @@ from src.portfolio_analysis.portfolio_constants     import custom_assets_list, l
 
 from src.math_tools                                 import get_returns, get_ln_returns
 
+from util.memoize import memoize
+
 import logging
 
 # determine whether to download new data from the internet
@@ -186,7 +188,7 @@ def do_analysis(assets=None, write_to_file=True):
 
     assets_list = assets
 
-    mdp_port = MDPPortfolio(assets_list=assets_list)
+    mdp_port = Portfolio(assets_list=assets_list)
     logging.debug(str(mdp_port.assets))
     mdp_port = get_data(mdp_port, base_etf=mdp_port.assets[0], last_x_days=0, get_new_data=UPDATE_DATA)
 
@@ -341,7 +343,7 @@ def aggregate_statistics(mdp_port, write_to_file=True):
     ref_log = []
 
     # add the other ETF here so that the data for SPY will be validated against it, but we won't use it directly
-    ref_port = MDPPortfolio(assets_list=['SPY', 'TLT'])
+    ref_port = Portfolio(assets_list=['SPY', 'TLT'])
     ref_port = get_data(ref_port, base_etf=ref_port.assets[0], last_x_days=0, get_new_data=UPDATE_DATA)
     ref_price_list = ref_port.trimmed[ref_port.assets[0]]
 
@@ -503,7 +505,7 @@ def get_drawdown(closes):
 
     return drawdown
 
-class MDPPortfolio():
+class Portfolio():
 
     def __init__(self, assets_list):
 
@@ -584,16 +586,57 @@ class MDPPortfolio():
 
         return np.array([r1[0] - 1])
 
-    def get_mdp_weights(self, x):
+    @memoize
+    def get_max_index(self):
+        max_index = len(self.closes[self.assets[0]]) - 1
+        return max_index
+
+    @memoize
+    def get_closes_lookback(self, x):
         end_index = x
         start_index = max(0, x - self.lookback)
 
-        self.mean_past_returns = {}
+        all_closes = {}
         for item in self.assets:
             closes = self.closes[item][start_index:end_index]
-            self.past_returns[item] = get_returns(closes)
-            self.mean_past_returns[item] = np.mean(self.past_returns[item])
-            self.volatilities[item] = np.std(self.past_returns[item])
+            all_closes[item] = closes
+
+        return all_closes
+
+    @memoize
+    def get_returns_lookback(self, x):
+        all_returns = {}
+        for item in self.assets:
+            past_closes = self.get_closes_lookback(x)[item]
+            all_returns[item] = get_returns(past_closes)
+
+        return all_returns
+
+    @memoize
+    def get_mean_returns_lookback(self, x):
+        all_mean_returns = {}
+        for item in self.assets:
+            past_returns = self.get_returns_lookback(x)[item]
+            all_mean_returns[item] = np.mean(past_returns)
+
+        return all_mean_returns
+
+    @memoize
+    def get_volatilities_lookback(self, x):
+        all_volatilities = {}
+        for item in self.assets:
+            volatility = np.std(self.get_returns_lookback(x)[item])
+            all_volatilities[item] = volatility
+
+        return all_volatilities
+
+    @memoize
+    def get_mdp_weights(self, x):
+        self.mean_past_returns = {}
+        for item in self.assets:
+            self.past_returns[item] = self.get_returns_lookback(x)[item]
+            self.volatilities[item] = self.get_volatilities_lookback(x)[item]
+
 
         self.past_returns_matrix = np.array([self.past_returns[item] for item in self.assets])
         self.volatilities_matrix = np.array( [ [self.volatilities[z]] for z in self.assets ] )
@@ -634,6 +677,19 @@ class MDPPortfolio():
         normalized_weights = np.divide(mdp_weights, total_sum)
 
         return normalized_weights
+
+
+    @memoize
+    def get_inverse_volatility_weights(self, x):
+        inverse_volatilities_weights = {}
+        volatilities = self.get_volatilities_lookback(x)
+        inverse_volatility_sum = np.sum( [(1/s) for s in volatilities.values() ] )
+
+        for item in self.assets:
+            this_stocks_inverse_volatility = 1 / volatilities[item]
+            inverse_volatilities_weights[item] = this_stocks_inverse_volatility / inverse_volatility_sum
+
+        return inverse_volatilities_weights
 
 
     def set_normalized_weights(self, weights, old_weighted_valuation, x):
@@ -684,7 +740,7 @@ def run_live_portfolio_analysis(assets=None):
     update_date = '20191129'
 
     input = live_portfolio[0] + stocks_to_test
-    input = live_portfolio[0]
+    # input = live_portfolio[0]
 
     port_ret, port = live_portfolio_analysis(assets=live_portfolio, update_data=update_data, update_date=update_date)
     port_prices_only = [ n[2] for n in port_ret['sharpe_price_list'] ]
@@ -702,7 +758,7 @@ def run_live_portfolio_analysis(assets=None):
     output_data = []
     for stock_tuple in input:
         try:
-            stock_ret, port = live_portfolio_analysis(assets=[[stock_tuple]], update_data=update_data, update_date=update_date)
+            stock_ret, stock_port = live_portfolio_analysis(assets=[[stock_tuple]], update_data=update_data, update_date=update_date)
             # None will be returned if this failed...usually as a result of data not found in redis for the input list
             if stock_ret is None:
                 continue
@@ -728,33 +784,37 @@ def run_live_portfolio_analysis(assets=None):
             continue
 
     print '\n\n'
-    print '     ', 'Symbol', '\t', 'Beta', '\t\t', 'Sigma'
+    print '     ', 'Symbol', '\t', 'Beta', '\t', 'Sigma', '\t', 'Act', '\t', '1/Vol', '\t', 'MDP', '\t', 'MDPDiff'
 
     new_stock_output_data = output_data[len(live_portfolio[0]):]
 
+    inverse_volatility_weights = port.get_inverse_volatility_weights(port.get_max_index())
 
-    all_stocks_with_real_balances = [ s[0] for s in live_portfolio[0] if s[1] > 1 ]
-    inverse_volatility_sum = np.sum( [(1/s[2]) for s in output_data if s[0] in all_stocks_with_real_balances ] )
-
-    inverse_volatility_weights = {}
-    for item in output_data:
-        if item[0] not in all_stocks_with_real_balances:
-            inverse_volatility_weights[item[0]] = 0.0
-        else:
-            this_stocks_inverse_volatility = 1/item[2]
-            inverse_volatility_weights[item[0]] = this_stocks_inverse_volatility / inverse_volatility_sum
+    # all_stocks_with_real_balances = [ s[0] for s in live_portfolio[0] if s[1] > 1 ]
+    # inverse_volatility_sum = np.sum( [(1/s[2]) for s in output_data if s[0] in all_stocks_with_real_balances ] )
+    #
+    # inverse_volatility_weights = {}
+    # for item in output_data:
+    #     if item[0] not in all_stocks_with_real_balances:
+    #         inverse_volatility_weights[item[0]] = 0.0
+    #     else:
+    #         this_stocks_inverse_volatility = 1/item[2]
+    #         inverse_volatility_weights[item[0]] = this_stocks_inverse_volatility / inverse_volatility_sum
 
     print '\n'
     # for item in sorted(output_data[0:len(live_portfolio[0])], key=lambda tup: tup[1], reverse=False):
         # print "Beta: ", item[0], '\t', item[1], '\t\t', item[2]
     for i, item in enumerate(output_data[0:len(live_portfolio[0])]):
         weighted_delta = (port_ret['tangency'][i] - port_ret['actual_weights'][i]) * port_ret['valuation']
-        print "Beta: ", item[0], '\t', '{0:.6f}'.format(item[1].round(6)).zfill(8), '\t', \
-            '{0:.6f}'.format(item[2].round(6)).zfill(8), '\tAct / Tan / Diff / 1/Vol:  ', \
-            port_ret['actual_weights'][i], '\t', port_ret['tangency'][i], '\t', round(weighted_delta, 2), '\t',  \
-            '{0:.6f}'.format(round(inverse_volatility_weights[item[0]], 6)).zfill(8)
+        print "Beta: ", item[0], '\t', '{0:.3f}'.format(item[1].round(3)).zfill(5), '\t', \
+            '{0:.4f}'.format(item[2].round(4)).zfill(6), '\t', \
+            '{0:.3f}'.format(round(port_ret['actual_weights'][i], 3)).zfill(5), '\t', \
+            '{0:.3f}'.format(round(inverse_volatility_weights[item[0]], 3)).zfill(5), '\t', \
+            '{0:.3f}'.format(round(port_ret['tangency'][i], 3)).zfill(5), '\t', \
+            round(weighted_delta, 2)
+
     for item in sorted(new_stock_output_data, key=lambda tup: tup[1], reverse=False):
-        print "Beta: ", item[0], '\t', '{0:.6f}'.format(item[1].round(6)), '\t', '{0:.6f}'.format(item[2].round(6))
+        print "Beta: ", item[0], '\t', '{0:.3f}'.format(item[1].round(3)), '\t', '{0:.3f}'.format(item[2].round(3))
 
     return
 
@@ -768,7 +828,7 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
         assets = [ n[0] for n in account ]
         shares = [ n[1] for n in account ]
 
-        port = MDPPortfolio(assets)
+        port = Portfolio(assets)
 
         try:
             port = get_data(port, base_etf=port.assets[0], last_x_days=64, get_new_data=update_data, update_date=update_date)
