@@ -22,7 +22,7 @@ UPDATE_DATA=True
 logging.root.setLevel(logging.INFO)
 
 def do_optimization(mdp_port, x):
-    theoretical_weights = mdp_port.get_tangency_weights(x)
+    theoretical_weights = mdp_port.get_mdp_weights(x)
 
     # theoretical_weights = np.array([ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets])
     # theoretical_weights = np.array([ [0.30], [0.15], [0.40], [0.075], [0.075] ])
@@ -50,6 +50,20 @@ def do_optimization(mdp_port, x):
     # normalized_theoretical_weights = np.array([[0.20], [0.20], [0.20], [0.20], [0.20]])
     # normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
     normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
+
+    # this is weighted based on the reciprocal of the volatility. Should also try based on a max diversification over
+    # the full history perhaps...
+    # normalized_theoretical_weights = np.array([ [0.09558], [0.11438], [0.22369], [0.10481], [0.08670], [0.18544], [0.07285], [0.10273], [0.01383], ])
+    ### normalized_theoretical_weights = np.array([ [0.09558], [0.11438], [0.22369], [0.10481], [0.08670], [0.18544], [0.07285], [0.10273], [0.01383], ])
+
+    # This is based on a Max Div Ratio averaged over the full 1152 of combined history
+    # normalized_theoretical_weights = np.array([ [0.19905], [0.10195], [0.38623], [0.06136], [0.09811], [-0.09478], [0.02040], [-0.02123], [0.01689], ])
+
+    # This is based on a Max Div Ratio excluding GBTC and averaged over 2880 days. VWO came up negative 1.5%, so it's set to zero
+    # normalized_theoretical_weights = np.array([ [0.216479451], [0.2592777], [0.21405836], [0.07390945], [0.10728062], [0.11038039], [0.0], [0.00288665]])
+
+    # max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'MUB']
+    # normalized_theoretical_weights = np.array([ [0.17], [0.20], [0.12], [0.06], [0.09], [0.09], [0.00], [0.0], [0.24]])
 
     ##### ALGO WITH TREASURY DATA
 
@@ -213,7 +227,7 @@ def do_analysis(assets=None, write_to_file=True):
             if x >= mdp_port.rebalance_time:
                 # The statement below DOES have an impact on whether a rebalance is hit in this if block
                 # It also affects overall program flow and the end result
-                _ = mdp_port.get_tangency_weights(x)
+                _ = mdp_port.get_mdp_weights(x)
                 trailing_diversification_ratio = mdp_port.get_diversification_ratio(weights='current')
                 mdp_port.trailing_DRs.append(trailing_diversification_ratio)
                 rebalance_date = mdp_port.trimmed[mdp_port.assets[0]][x]['Date']
@@ -570,7 +584,7 @@ class MDPPortfolio():
 
         return np.array([r1[0] - 1])
 
-    def get_tangency_weights(self, x):
+    def get_mdp_weights(self, x):
         end_index = x
         start_index = max(0, x - self.lookback)
 
@@ -611,13 +625,13 @@ class MDPPortfolio():
 
         numerator = np.dot(scipy.linalg.inv(self.cov_matrix), volatilities_matrix)
         denominator = B
-        tangency_weights = np.divide(numerator, denominator)
+        mdp_weights = np.divide(numerator, denominator)
 
         # This is akin (though possibly not identical) to the "naive" risk parity optimization.
-        ### tangency_weights = np.divide(unity_vector, self.volatilities_matrix)
+        ### mdp_weights = np.divide(unity_vector, self.volatilities_matrix)
 
-        total_sum = sum([abs(n) for n in tangency_weights])[0]
-        normalized_weights = np.divide(tangency_weights, total_sum)
+        total_sum = sum([abs(n) for n in mdp_weights])[0]
+        normalized_weights = np.divide(mdp_weights, total_sum)
 
         return normalized_weights
 
@@ -667,11 +681,12 @@ class TradeLog(object):
 def run_live_portfolio_analysis(assets=None):
 
     update_data = True
-    update_date = '20191029'
+    update_date = '20191129'
 
     input = live_portfolio[0] + stocks_to_test
+    input = live_portfolio[0]
 
-    port_ret = live_portfolio_analysis(assets=live_portfolio, update_data=update_data, update_date=update_date)
+    port_ret, port = live_portfolio_analysis(assets=live_portfolio, update_data=update_data, update_date=update_date)
     port_prices_only = [ n[2] for n in port_ret['sharpe_price_list'] ]
     port_pct_rets_only = [0.0]
     for k, x in enumerate(port_prices_only):
@@ -687,7 +702,7 @@ def run_live_portfolio_analysis(assets=None):
     output_data = []
     for stock_tuple in input:
         try:
-            stock_ret = live_portfolio_analysis(assets=[[stock_tuple]], update_data=update_data, update_date=update_date)
+            stock_ret, port = live_portfolio_analysis(assets=[[stock_tuple]], update_data=update_data, update_date=update_date)
             # None will be returned if this failed...usually as a result of data not found in redis for the input list
             if stock_ret is None:
                 continue
@@ -717,12 +732,27 @@ def run_live_portfolio_analysis(assets=None):
 
     new_stock_output_data = output_data[len(live_portfolio[0]):]
 
+
+    all_stocks_with_real_balances = [ s[0] for s in live_portfolio[0] if s[1] > 1 ]
+    inverse_volatility_sum = np.sum( [(1/s[2]) for s in output_data if s[0] in all_stocks_with_real_balances ] )
+
+    inverse_volatility_weights = {}
+    for item in output_data:
+        if item[0] not in all_stocks_with_real_balances:
+            inverse_volatility_weights[item[0]] = 0.0
+        else:
+            this_stocks_inverse_volatility = 1/item[2]
+            inverse_volatility_weights[item[0]] = this_stocks_inverse_volatility / inverse_volatility_sum
+
     print '\n'
     # for item in sorted(output_data[0:len(live_portfolio[0])], key=lambda tup: tup[1], reverse=False):
         # print "Beta: ", item[0], '\t', item[1], '\t\t', item[2]
     for i, item in enumerate(output_data[0:len(live_portfolio[0])]):
         weighted_delta = (port_ret['tangency'][i] - port_ret['actual_weights'][i]) * port_ret['valuation']
-        print "Beta: ", item[0], '\t', '{0:.6f}'.format(item[1].round(6)).zfill(8), '\t', '{0:.6f}'.format(item[2].round(6)).zfill(8), '\tAct / Tan / Diff:  ', port_ret['actual_weights'][i], '\t', port_ret['tangency'][i], '\t', weighted_delta
+        print "Beta: ", item[0], '\t', '{0:.6f}'.format(item[1].round(6)).zfill(8), '\t', \
+            '{0:.6f}'.format(item[2].round(6)).zfill(8), '\tAct / Tan / Diff / 1/Vol:  ', \
+            port_ret['actual_weights'][i], '\t', port_ret['tangency'][i], '\t', round(weighted_delta, 2), '\t',  \
+            '{0:.6f}'.format(round(inverse_volatility_weights[item[0]], 6)).zfill(8)
     for item in sorted(new_stock_output_data, key=lambda tup: tup[1], reverse=False):
         print "Beta: ", item[0], '\t', '{0:.6f}'.format(item[1].round(6)), '\t', '{0:.6f}'.format(item[2].round(6))
 
@@ -757,12 +787,13 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
         # We can ONLY do this if we have multiple assets to re-weight, otherwise, the weight is always fixed at 1.0.
         # This would be the case if we are only interested in the returns stats of a given asset
         if len(assets) > 1:
-            tangency_weights = port.get_tangency_weights(x=max_index)
+            mdp_weights = port.get_mdp_weights(x=max_index)
         else:
-            tangency_weights = [ [1.0] ]
+            mdp_weights = [ [1.0] ]
 
         historical_valuations = []
         sharpe_price_list = []
+        # This assumes that we started 63 days ago with the portfolio in a state optimized based on a 63 day lookback
         for x in xrange(max_index-63, max_index):
             valuation = get_port_valuation(port, x=x)
             historical_valuations.append(valuation)
@@ -777,35 +808,32 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
             # First calc of div ratio just uses the weights as-is, based on # of shares and prices
             div_ratio = port.get_diversification_ratio(weights='current')
 
-            # Set the weights to the tangency weights, then recalc the div ratio
-            port.current_weights = tangency_weights
+            # Set the weights to the mdp weights, then recalc the div ratio
+            port.current_weights = mdp_weights
             possible_div_ratio = port.get_diversification_ratio(weights='current')
         else:
             div_ratio = 1.0
-            tangency_weights = [ [1.0] ]
+            mdp_weights = [ [1.0] ]
             possible_div_ratio = 1.0
-
-
-
 
         if len(assets) > 1:
             print port.portfolio_valuations
             print "Assets: \t", assets
             print "Act. Sigma: \t", round(system_sigma, 6)
             print "Act. Weights: \t", [ str(round(n[0], 4)).zfill(6) for n in original_weights ]
-            print "Tangency: \t", [ str(round(n[0], 4)).zfill(6) for n in tangency_weights ]
+            print "Tangency: \t", [ str(round(n[0], 4)).zfill(6) for n in mdp_weights ]
             print "Value: \t\t", valuation
             print "Act Div Ratio: \t", div_ratio
             print "Tan Div Ratio: \t", possible_div_ratio
 
         ret_dict = {'assets': assets, 'actual_sigma': round(system_sigma, 6), \
                 'actual_weights': [ round(n[0], 6) for n in original_weights ], \
-                'tangency': [ round(n[0], 6) for n in tangency_weights ],
+                'tangency': [ round(n[0], 6) for n in mdp_weights ],
                 'valuation': valuation, 'actual_div_ratio': div_ratio, \
                 'tangency_div_ratio': possible_div_ratio, \
                 'sharpe_price_list': sharpe_price_list}
 
-        return ret_dict
+        return ret_dict, port
 
 
 

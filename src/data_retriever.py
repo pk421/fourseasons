@@ -30,6 +30,13 @@ def get_yahoo_data(queue, **kwargs):
 
     while True:
         s = queue.get().lower()
+
+        # If we only want to update with the latest data, we change the dates that we use, then later, we merge in the
+        # existing redis data
+        # if kwargs['merge_latest_data']:
+        #     existing_data, start_date = get_merged_start_date(s)
+
+
         print s, "\t", queue.qsize()
         ### file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/tmp/" + s + ".csv"
         file_path = "/home/wilmott/Desktop/fourseasons/fourseasons/" + store_location + s + ".csv"
@@ -136,7 +143,11 @@ def get_csv_from_json(json_response, stock):
     final_string = header_line + body
     return final_string
 
-#os.system("curl --silent 'http://download.finance.yahoo.com/d/quotes.csv?s=SLV&f=l' > tmp/SLV.csv")
+def get_merged_start_date(s):
+    data = manage_redis.parse_fast_data(s, db_to_use=1)
+    latest_date = data[-1]['Date'][0:4] + '-' + data[-1]['Date'][4:6] + '-' + data[-1]['Date'][6:8]
+    return data, latest_date
+
 #http://table.finance.yahoo.com/table.csv?a=["fmonth","fmonth"]&b=["fday","fday"]&c=["fyear","fyear"]&d=["tmonth","tmonth"]&e=["tday","tday"]&f=["tyear","tyear"]&s=["ticker", "ticker"]&y=0&g=["per","per"]&ignore=.csv
 #http://table.finance.yahoo.com/table.csv?a=1&b=1&c=1900&d=2&e=2&f=2020&s=AMMD&ignore=.csv
 

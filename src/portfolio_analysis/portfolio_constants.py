@@ -84,6 +84,11 @@ hedged_dividends = ['IWM', 'TLT', 'IEF', 'DBC', 'GLD', 'PAA', 'T', 'HCP', 'OKE']
 #                     'NUE', 'DBD', 'PG', 'VVC', 'SON', 'CTBI', 'MCD', 'CINF', 'PNY', 'KO', 'WGL', 'KMB', 'MSEX',\
 #                     'JNJ', 'TMP', 'CWT', 'RAVN', 'SYY', 'NFG', 'PEP', 'WMT', 'CTWS', 'WEYS', 'TROW', 'LEG']
 
+max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'MUB']
+# Adding GBTC significantly reduces the history we can test against
+# max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'GBTC']
+# max diversity: also add MUB, VTEB - muni bonds
+
 custom_assets_list = dalio_all_weather
 
 
@@ -115,11 +120,48 @@ marijuana = [('CANN', 970), ('HEMP', 49000), ('CBDS', 280), ('MJNA', 4000), ('CB
 #         # ('EMMBF', 2750),
 #        ]
 
+# max_uncorrelated = [('SPY', 1), ('TLT', 1), ('IEF', 1), ('GLD', 1), ('DBC', 1), ('PCY', 1), ('VWO', 1), ('RWO', 1),
+#                     ('MUB', 1), ('GBTC', 1)
+#                     ]
 
-m_ib = [('DBC', 4000), ('EWZ', 1000), ('GDX', 3800), ('GXG', 4000), ('HP', 500), ('IAU', 7000),  ('MPLX', 2000), \
-        ('PAA', 1000), ('RSX', 2000), ('T', 1400), ('VBR', 700),
+# manually optimized in latest 63 days
+max_uncorrelated = [('SPY', 1), ('TLT', 1), ('IEF', 1), ('GLD', 1), ('DBC', 4), ('PCY', 0.000001), ('VWO', 2), ('RWO', 0),
+                    ('MUB', 3), ('GBTC', 1)
+                    ]
 
-       ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 5985), ('CGC', 798)
+
+
+m_ib = [
+       # Developed Market stocks
+       ('HP', 500), ('T', 1400), ('VOO', 0.001), ('VBR', 700),
+
+       # Developed Market Bonds
+       ('VGLT', 0.001), ('VGIT', 0.0001),
+
+       # Developed Market Muni Bonds
+       ('MUB', 0.0001),
+
+       # Emerging Market Bonds
+       ('PCY', 0.001),
+
+       # Emerging Market Stocks
+       ('EWZ', 1000), ('GXG', 4000), ('RSX', 2000), ('VWO', 0.0001),
+
+       # Commodities
+       # Switch DBC to PDBC
+       ('DBC', 4000), ('MPLX', 2000), ('PAA', 1000),
+
+       # Gold
+       ('GDX', 3800), ('IAU', 7000),
+
+       # Real Estate
+       ('VNQ', 0.0001),
+
+       # Crypto
+       ('GBTC', 0.001),
+
+       # Other
+       ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 5985), ('CGC', 798),
 
        ]
 
@@ -146,8 +188,6 @@ m_ib_pot = [('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 5985), ('CG
 
 
 roth_ira = [('TLT', 128), ('DBC', 560), ('IAU',573), ('IJR', 206), ('XOP', 140)]
-
-bac_roth_401k = [('VIIIX',78.3551), ('VTPSX',24.5670), ('VBMPX',3662.4414)]
 
 #####['TNA', 'EURL', 'EDC', 'UGLD', 'DRN', 'TMF']
 ### c_ib = [('IWM', 2835), ('TLT', 3488), ('IEF', 1500), ('DBC', 5800), ('UGLD', 3400), ('PAA', 1850)]

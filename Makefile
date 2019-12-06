@@ -73,7 +73,7 @@ load_redis:
 poll_realtime_data:
 	python test_run.py --poll_realtime_data
 
-portfolio_analaysis:
+portfolio_analysis:
 	python test_run.py --portfolio_analysis
 
 read_redis:

@@ -102,6 +102,7 @@ def trim_data(stock_1_data, stock_2_data):
         # 			print "**************"
         # 			break
         e = stock_1_data[0]['Symbol'] + ' and ' + stock_2_data[0]['Symbol']
+        import pdb; pdb.set_trace()
         raise Exception(e + ' did not trim properly and cannot be processed')
 
     # TODO: this section should be cythonized

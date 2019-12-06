@@ -106,6 +106,29 @@ def get_data(port, base_etf, last_x_days = 0, get_new_data=True, update_date=Non
             port.closes[item] = closes
 
 
+    ##### OTHER DATA HACK ####
+    if port.use_other_data and len(port.other_data_trimmed) == 0:
+        # The treasury data is relatively high quality, but it has different holidays than the equity market. Just have
+        # it get trimmed based on equities as the baseline. This is not as safe, and is very inefficient, but it is
+        # much easier.
+        other_data = historical_data.get(port.other_data) or manage_redis.parse_fast_data(port.other_data, db_to_use=1)
+        trimmed = []
+        for base_day in port.trimmed[base_etf]:
+            # print 'Base Day: ', base_day['Date']
+            for i, day in enumerate(other_data):
+                if day.get('Date') > base_day['Date']:
+                    trimmed.append(other_data[i-1])
+                    # print 'Appending: ', other_data[i]['Date'], other_data[i-1]['Date']
+                    break
+
+        len_offset = len(port.trimmed[base_etf]) - len(trimmed)
+        trimmed_repeated = trimmed[-1]
+        for x in xrange(len_offset):
+            trimmed.append(trimmed_repeated)
+
+        port.other_data_trimmed = trimmed
+    #####
+
     if not port.validate_portfolio():
         return False
     ### logging.info('\nData has been properly imported and validated.')
