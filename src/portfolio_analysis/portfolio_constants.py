@@ -89,7 +89,7 @@ max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'MUB']
 # max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'GBTC']
 # max diversity: also add MUB, VTEB - muni bonds
 
-custom_assets_list = dalio_all_weather
+custom_assets_list = max_diversity
 
 
 ##########################
@@ -197,6 +197,8 @@ m_ib = [
        ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 5985), ('CGC', 798),
 
        ]
+
+# m_ib = [('VBR', 100), ('TLT', 100), ('GLD', 100)]
 
 
 m_golden_butterfly_20191020 = [('IAU', 84), ('VGLT', 14), ('VGSH', 20), ('VBR', 9), ('VTI', 8),

@@ -50,13 +50,7 @@ def do_optimization(mdp_port, x):
 
     # SPY SECTORS: normalized_theoretical_weights = np.array([ [0.113], [0.09], [0.135], [0.0], [0.0], [0.215], [0.215], [0.0], [0.057], [0.175] ])
     # normalized_theoretical_weights = np.array([[0.20], [0.20], [0.20], [0.20], [0.20]])
-    # normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
     normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
-
-    # this is weighted based on the reciprocal of the volatility. Should also try based on a max diversification over
-    # the full history perhaps...
-    # normalized_theoretical_weights = np.array([ [0.09558], [0.11438], [0.22369], [0.10481], [0.08670], [0.18544], [0.07285], [0.10273], [0.01383], ])
-    ### normalized_theoretical_weights = np.array([ [0.09558], [0.11438], [0.22369], [0.10481], [0.08670], [0.18544], [0.07285], [0.10273], [0.01383], ])
 
     # This is based on a Max Div Ratio averaged over the full 1152 of combined history
     # normalized_theoretical_weights = np.array([ [0.19905], [0.10195], [0.38623], [0.06136], [0.09811], [-0.09478], [0.02040], [-0.02123], [0.01689], ])
@@ -66,6 +60,10 @@ def do_optimization(mdp_port, x):
 
     # max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'MUB']
     # normalized_theoretical_weights = np.array([ [0.17], [0.20], [0.12], [0.06], [0.09], [0.09], [0.00], [0.0], [0.24]])
+
+    # Set Weights To Inverse Vol
+    # inverse_vol = mdp_port.get_inverse_volatility_weights(x)
+    # normalized_theoretical_weights = np.array([ [inverse_vol[a]] for a in mdp_port.assets ])
 
     ##### ALGO WITH TREASURY DATA
 
@@ -613,6 +611,11 @@ class Portfolio():
         return all_returns
 
     @memoize
+    def get_past_returns_matrix_lookback(self, x):
+        past_returns = np.array([self.get_returns_lookback(x)[asset] for asset in self.assets])
+        return past_returns
+
+    @memoize
     def get_mean_returns_lookback(self, x):
         all_mean_returns = {}
         for item in self.assets:
@@ -631,6 +634,17 @@ class Portfolio():
         return all_volatilities
 
     @memoize
+    def get_correlation_matrix_lookback(self, x):
+        past_returns = self.get_past_returns_matrix_lookback(x)
+        correlation_matrix = np.corrcoef(past_returns)
+
+        return correlation_matrix
+
+    @memoize
+    def get_two_asset_correlation_lookback(self, x, asset_1, asset_2):
+        import pbd; pdb.set_trace()
+
+    @memoize
     def get_mdp_weights(self, x):
         self.mean_past_returns = {}
         for item in self.assets:
@@ -638,7 +652,7 @@ class Portfolio():
             self.volatilities[item] = self.get_volatilities_lookback(x)[item]
 
 
-        self.past_returns_matrix = np.array([self.past_returns[item] for item in self.assets])
+        self.past_returns_matrix = self.get_past_returns_matrix_lookback(x)
         self.volatilities_matrix = np.array( [ [self.volatilities[z]] for z in self.assets ] )
         self.cov_matrix = np.cov(self.past_returns_matrix)
 
@@ -691,6 +705,78 @@ class Portfolio():
 
         return inverse_volatilities_weights
 
+    @memoize
+    def get_risk_parity_weights(self, x):
+        risk_budget = 1.0 / len(self.assets)
+        starting_weights = [ risk_budget ] * len(self.assets)
+        current_weights = starting_weights
+        new_weights = current_weights
+
+        u = 0
+        while u < 10:
+            current_weights = new_weights
+            new_weights = self._get_risk_parity_weight_iteration(x, current_weights)
+           #  print 'New Normalized Weights: ', u, new_weights
+
+            u += 1
+
+        np_new_weights = np.array([ [w] for w in new_weights ])
+        return np_new_weights
+
+    def _get_risk_parity_weight_iteration(self, x, input_weights):
+        portfolio_returns = self._get_risk_parity_port_returns(x, input_weights)
+        portfolio_sigma = np.std(portfolio_returns)
+
+        len_assets = len(self.assets)
+        risk_budget_value = 1.0 / len_assets
+
+        output_weights = []
+
+        all_volatilities = self.get_volatilities_lookback(x)
+        for i, i_stock in enumerate(self.assets):
+            i_volatility = all_volatilities[i_stock]
+
+            summation_term = 0.0
+            for j, j_stock in enumerate(self.assets):
+                j_stock_index = self.assets.index(j_stock)
+                if j_stock == i_stock:
+                    continue
+
+                x_j = input_weights[j_stock_index]
+                rho_i_j = self.get_correlation_matrix_lookback(x)[i][j]
+                sigma_j = self.get_volatilities_lookback(x)[j_stock]
+
+                j_product = x_j * rho_i_j * sigma_j
+                summation_term += j_product
+
+            initial_part = -i_volatility * summation_term
+            risk_budget_term = 4.0 * risk_budget_value * (i_volatility **2) * portfolio_sigma
+            square_root_term = math.sqrt((i_volatility **2) * (summation_term **2) + risk_budget_term)
+
+            numerator = initial_part + square_root_term
+            denominator = 2 * (i_volatility **2)
+
+            i_weight = numerator / denominator
+            output_weights.append(i_weight)
+
+        total_weights = np.sum(output_weights)
+        normalized_weights = []
+        for w in output_weights:
+            normalized = w / total_weights
+            normalized_weights.append(normalized)
+
+        return normalized_weights
+
+    def _get_risk_parity_port_returns(self, x, input_weights):
+        return_matrix = self.get_past_returns_matrix_lookback(x)
+        total_returns = [0.0] * len(return_matrix[0])
+
+        for i, asset_returns in enumerate(return_matrix):
+            for j, daily_return in enumerate(asset_returns):
+                asset_day_contribution = input_weights[i] * daily_return
+                total_returns[j] = total_returns[j] + asset_day_contribution
+
+        return total_returns
 
     def set_normalized_weights(self, weights, old_weighted_valuation, x):
         self.normalized_weights = weights
@@ -784,22 +870,12 @@ def run_live_portfolio_analysis(assets=None):
             continue
 
     print '\n\n'
-    print '     ', 'Symbol', '\t', 'Beta', '\t', 'Sigma', '\t', 'Act', '\t', '1/Vol', '\t', 'MDP', '\t', 'MDPDiff'
+    print '     ', 'Symbol', '\t', 'Beta', '\t', 'Sigma', '\t', 'Act', '\t', 'RP', '\t', '1/Vol', '\t', 'MDP', '\t', 'MDPDiff'
 
     new_stock_output_data = output_data[len(live_portfolio[0]):]
 
+    risk_parity_weights = port.get_risk_parity_weights(port.get_max_index())
     inverse_volatility_weights = port.get_inverse_volatility_weights(port.get_max_index())
-
-    # all_stocks_with_real_balances = [ s[0] for s in live_portfolio[0] if s[1] > 1 ]
-    # inverse_volatility_sum = np.sum( [(1/s[2]) for s in output_data if s[0] in all_stocks_with_real_balances ] )
-    #
-    # inverse_volatility_weights = {}
-    # for item in output_data:
-    #     if item[0] not in all_stocks_with_real_balances:
-    #         inverse_volatility_weights[item[0]] = 0.0
-    #     else:
-    #         this_stocks_inverse_volatility = 1/item[2]
-    #         inverse_volatility_weights[item[0]] = this_stocks_inverse_volatility / inverse_volatility_sum
 
     print '\n'
     # for item in sorted(output_data[0:len(live_portfolio[0])], key=lambda tup: tup[1], reverse=False):
@@ -809,6 +885,7 @@ def run_live_portfolio_analysis(assets=None):
         print "Beta: ", item[0], '\t', '{0:.3f}'.format(item[1].round(3)).zfill(5), '\t', \
             '{0:.4f}'.format(item[2].round(4)).zfill(6), '\t', \
             '{0:.3f}'.format(round(port_ret['actual_weights'][i], 3)).zfill(5), '\t', \
+            '{0:.3f}'.format(round(risk_parity_weights[i], 3)).zfill(5), '\t', \
             '{0:.3f}'.format(round(inverse_volatility_weights[item[0]], 3)).zfill(5), '\t', \
             '{0:.3f}'.format(round(port_ret['tangency'][i], 3)).zfill(5), '\t', \
             round(weighted_delta, 2)
@@ -847,8 +924,10 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
         # We can ONLY do this if we have multiple assets to re-weight, otherwise, the weight is always fixed at 1.0.
         # This would be the case if we are only interested in the returns stats of a given asset
         if len(assets) > 1:
+            risk_parity_weights = port.get_risk_parity_weights(x=max_index)
             mdp_weights = port.get_mdp_weights(x=max_index)
         else:
+            risk_parity_weights = [ [1.0] ]
             mdp_weights = [ [1.0] ]
 
         historical_valuations = []
@@ -869,28 +948,38 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
             div_ratio = port.get_diversification_ratio(weights='current')
 
             # Set the weights to the mdp weights, then recalc the div ratio
+            port.current_weights = risk_parity_weights
+            risk_parity_div_ratio = port.get_diversification_ratio(weights='current')
+
             port.current_weights = mdp_weights
-            possible_div_ratio = port.get_diversification_ratio(weights='current')
+            mdp_div_ratio = port.get_diversification_ratio(weights='current')
+
         else:
             div_ratio = 1.0
+
+            risk_parity_weights = [ [1.0] ]
+            risk_parity_div_ratio = 1.0
+
             mdp_weights = [ [1.0] ]
-            possible_div_ratio = 1.0
+            mdp_div_ratio = 1.0
 
         if len(assets) > 1:
             print port.portfolio_valuations
             print "Assets: \t", assets
             print "Act. Sigma: \t", round(system_sigma, 6)
             print "Act. Weights: \t", [ str(round(n[0], 4)).zfill(6) for n in original_weights ]
-            print "Tangency: \t", [ str(round(n[0], 4)).zfill(6) for n in mdp_weights ]
+            print "MDP: \t", [ str(round(n[0], 4)).zfill(6) for n in mdp_weights ]
             print "Value: \t\t", valuation
             print "Act Div Ratio: \t", div_ratio
-            print "Tan Div Ratio: \t", possible_div_ratio
+            print "RP Div Ratio: \t", risk_parity_div_ratio
+            print "MDP Div Ratio: \t", mdp_div_ratio
 
         ret_dict = {'assets': assets, 'actual_sigma': round(system_sigma, 6), \
                 'actual_weights': [ round(n[0], 6) for n in original_weights ], \
                 'tangency': [ round(n[0], 6) for n in mdp_weights ],
                 'valuation': valuation, 'actual_div_ratio': div_ratio, \
-                'tangency_div_ratio': possible_div_ratio, \
+                'risk_parity_div_ratio': [ round(n[0], 6) for n in risk_parity_weights ], \
+                'tangency_div_ratio': mdp_div_ratio, \
                 'sharpe_price_list': sharpe_price_list}
 
         return ret_dict, port
