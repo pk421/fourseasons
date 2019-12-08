@@ -89,7 +89,7 @@ max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'MUB']
 # max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'GBTC']
 # max diversity: also add MUB, VTEB - muni bonds
 
-custom_assets_list = max_diversity
+custom_assets_list = dalio_all_weather
 
 
 ##########################
@@ -166,19 +166,19 @@ m_ib_all_assets = [
 
 m_ib = [
        # Developed Market stocks
-       ('T', 1400), ('VBR', 700),
+       ('T', 1400), ('VBR', 700), ('VOO', 350),
 
        # Developed Market Bonds
-       # ('VGLT', 0.001), ('VGIT', 0.0001),
+       ('VGLT', 1000), # ('VGIT', 0.0001),
 
        # Developed Market Muni Bonds
        # ('MUB', 0.0001),
 
        # Emerging Market Bonds
-       # ('PCY', 0.001),
+       ('EMB', 1000),
 
        # Emerging Market Stocks
-       ('EWZ', 1000), ('GXG', 4000), ('RSX', 2000),
+       ('EWZ', 1000), ('GXG', 6000), ('RSX', 2600),
 
        # Commodities
        # Switch DBC to PDBC
@@ -188,18 +188,15 @@ m_ib = [
        ('GDX', 3800), ('IAU', 7000),
 
        # Real Estate
-       # ('VNQ', 0.0001),
+       ('VNQ', 1000),
 
        # Crypto
-       # ('GBTC', 0.001),
+       ('GBTC', 150),
 
        # Other
        ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 5985), ('CGC', 798),
 
        ]
-
-# m_ib = [('VBR', 100), ('TLT', 100), ('GLD', 100)]
-
 
 m_golden_butterfly_20191020 = [('IAU', 84), ('VGLT', 14), ('VGSH', 20), ('VBR', 9), ('VTI', 8),
 

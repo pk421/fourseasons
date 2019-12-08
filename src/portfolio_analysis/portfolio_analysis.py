@@ -65,6 +65,8 @@ def do_optimization(mdp_port, x):
     # inverse_vol = mdp_port.get_inverse_volatility_weights(x)
     # normalized_theoretical_weights = np.array([ [inverse_vol[a]] for a in mdp_port.assets ])
 
+    normalized_theoretical_weights = mdp_port.get_risk_parity_weights(x)
+
     ##### ALGO WITH TREASURY DATA
 
     if mdp_port.use_other_data:
@@ -200,8 +202,8 @@ def do_analysis(assets=None, write_to_file=True):
 
     x=0
     mdp_port.x = x
-    mdp_port.lookback = 63
-    mdp_port.rebalance_time = 63
+    mdp_port.lookback = 126
+    mdp_port.rebalance_time = 126
     mdp_port.rebalance_counter = 0
     mdp_port.rebalance_now = False
     mdp_port.rebalance_log = []
@@ -646,6 +648,9 @@ class Portfolio():
 
     @memoize
     def get_mdp_weights(self, x):
+        # The foundation for this and get_diversification_ratio() can be found in Roger Clarke: Minimum Variance,
+        # Maximum Diversification, and Risk Parity: An Analytic Perspective
+        # Additional information about MDP is in Choueifaty: Properties Of The Most Diverisified Portfolio
         self.mean_past_returns = {}
         for item in self.assets:
             self.past_returns[item] = self.get_returns_lookback(x)[item]
@@ -654,7 +659,7 @@ class Portfolio():
 
         self.past_returns_matrix = self.get_past_returns_matrix_lookback(x)
         self.volatilities_matrix = np.array( [ [self.volatilities[z]] for z in self.assets ] )
-        self.cov_matrix = np.cov(self.past_returns_matrix)
+        self.cov_matrix = np.cov(self.past_returns_matrix, bias=True)
 
         # This is used as the "mean return"
         volatilities_matrix = self.volatilities_matrix
@@ -671,6 +676,7 @@ class Portfolio():
         # print "A is: ", A
 
         # B = np.dot(np.dot(np.matrix.transpose(unity_vector), scipy.linalg.inv(self.cov_matrix)), volatilities_matrix)
+        # This basic equation appears in the Holt paper - chapter 3
         B = np.dot(np.dot(self.transposed_volatilities_matrix, scipy.linalg.inv(self.cov_matrix)), volatilities_matrix)
         # print "B is: ", B
 
@@ -707,6 +713,20 @@ class Portfolio():
 
     @memoize
     def get_risk_parity_weights(self, x):
+        '''
+        The entire risk parity algo is taken from the paper: "A Fast Algorithm For Computing High-dimensional Risk
+        Parity Portfolios". Written in September 2013 by Theophile Griveau-Billion of Quantitative Research
+        The algorithm has criteria for determining convergence, which are NOT implemented here. That criteria might
+        be more relevant if the portfolio had many assets (e.g. 100+). Certainly for small numbers of assets and a
+        reasonable lookback window, this algorithm converges very quickly (less than 5 iterations). I've hardcoded
+        the iterations to be 10, just because that seemed to be more than enough.
+        The current starting weights in the algorithm are assumed to have an equal weight given to each asset. Since
+        a risk parity portfolio will have asset weights that are pretty close to an inverse-volatility weighted
+        portfolio, a better starting guess would be to initially weight the assets by inverse volatility. In reality
+        this is unimportant as this portfolio converges very rapidly.
+        The risk_budget parameter could be adjusted for each asset. Here it is set so that each asset contributes the
+        exact same amount of risk to the portfolio. But it could be set to adjust the risk on an asset by asset basis.
+        '''
         risk_budget = 1.0 / len(self.assets)
         starting_weights = [ risk_budget ] * len(self.assets)
         current_weights = starting_weights
@@ -788,6 +808,7 @@ class Portfolio():
         print "SELF SHARES: ", self.shares
 
     def get_diversification_ratio(self, weights=None):
+        # The Holt paper shows the equations for this in Chapter 3
 
         # Current weights are the weights at a given instant, normalized weights are the weights at the last rebalance
         if weights == 'current':
@@ -795,10 +816,11 @@ class Portfolio():
         elif weights == 'normalized':
             weights_to_use = self.normalized_weights
 
-        # logging.info('\nGet Div Ratio: WEIGHTS: \n' + str(weights) + str('\n') + str(weights_to_use))
-
+        # The numerator is essentially the weighted average volatility of the individual assets in the portfolio
         transposed_weights = np.matrix.transpose(weights_to_use)
         numerator = np.dot(transposed_weights, self.volatilities_matrix)
+
+        # the volatilities_matrix should be the square root of the diagonal terms of the cov matrix...this is not the case...
 
         d1 = np.dot(transposed_weights, self.cov_matrix)
         d2 = np.dot(d1, weights_to_use)
@@ -823,10 +845,10 @@ class TradeLog(object):
 def run_live_portfolio_analysis(assets=None):
 
     update_data = True
-    update_date = '20191129'
+    update_date = '20191206'
 
     input = live_portfolio[0] + stocks_to_test
-    # input = live_portfolio[0]
+    input = live_portfolio[0]
 
     port_ret, port = live_portfolio_analysis(assets=live_portfolio, update_data=update_data, update_date=update_date)
     port_prices_only = [ n[2] for n in port_ret['sharpe_price_list'] ]
@@ -859,7 +881,7 @@ def run_live_portfolio_analysis(assets=None):
             # cov_matrix_input = np.array( [stock_pct_rets_only, port_pct_rets_only] )
             cov_matrix_input = np.array( [stock_pct_rets_only, port_pct_rets_only] )
 
-            cov_matrix = np.cov(cov_matrix_input)
+            cov_matrix = np.cov(cov_matrix_input, bias=True)
             variance = np.var(port_pct_rets_only)
             beta = cov_matrix[0][1] / variance
             sigma = np.sqrt(np.var(stock_pct_rets_only))
@@ -870,7 +892,7 @@ def run_live_portfolio_analysis(assets=None):
             continue
 
     print '\n\n'
-    print '     ', 'Symbol', '\t', 'Beta', '\t', 'Sigma', '\t', 'Act', '\t', 'RP', '\t', '1/Vol', '\t', 'MDP', '\t', 'MDPDiff'
+    print '     ', 'Symbol', '\t', 'Beta', '\t', 'Sigma', '\t', 'Act', '\t', 'RP', '\t', 'MDP', '\t', '1/Vol', '\t', 'MDPDiff'
 
     new_stock_output_data = output_data[len(live_portfolio[0]):]
 
@@ -884,10 +906,10 @@ def run_live_portfolio_analysis(assets=None):
         weighted_delta = (port_ret['tangency'][i] - port_ret['actual_weights'][i]) * port_ret['valuation']
         print "Beta: ", item[0], '\t', '{0:.3f}'.format(item[1].round(3)).zfill(5), '\t', \
             '{0:.4f}'.format(item[2].round(4)).zfill(6), '\t', \
-            '{0:.3f}'.format(round(port_ret['actual_weights'][i], 3)).zfill(5), '\t', \
-            '{0:.3f}'.format(round(risk_parity_weights[i], 3)).zfill(5), '\t', \
-            '{0:.3f}'.format(round(inverse_volatility_weights[item[0]], 3)).zfill(5), '\t', \
-            '{0:.3f}'.format(round(port_ret['tangency'][i], 3)).zfill(5), '\t', \
+            '{0:.4f}'.format(round(port_ret['actual_weights'][i], 4)).zfill(6), '\t', \
+            '{0:.4f}'.format(round(risk_parity_weights[i], 4)).zfill(6), '\t', \
+            '{0:.4f}'.format(round(port_ret['tangency'][i], 4)).zfill(6), '\t', \
+            '{0:.4f}'.format(round(inverse_volatility_weights[item[0]], 4)).zfill(6), '\t', \
             round(weighted_delta, 2)
 
     for item in sorted(new_stock_output_data, key=lambda tup: tup[1], reverse=False):
