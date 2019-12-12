@@ -10,7 +10,9 @@ from src.cointegrations_data    import get_paired_stock_list, get_corrected_data
                                     get_bunches_of_pairs
 from src.math_tools             import get_returns, get_ln_returns
 
+from util.memoize import memoize
 
+@memoize
 def get_data(port, base_etf, last_x_days = 0, get_new_data=True, update_date=None, historical_data={}):
     """
     historical_data parameter is used by sweeper so that the data here is not re-parsed many times

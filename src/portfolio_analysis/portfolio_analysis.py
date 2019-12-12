@@ -505,6 +505,36 @@ def get_drawdown(closes):
 
     return drawdown
 
+def _get_long_only_diversification_ratio(weights):
+
+    # Globals used to avoid passing in more than 1 arg:
+    # long_only_mdp_cov_matrix
+    # long_only_mdp_global_port
+
+    # the .T is an alternate way to call .transpose()
+    w_vol = np.dot(np.sqrt(np.diag(long_only_mdp_cov_matrix)), weights.T)
+
+    port = long_only_mdp_global_port
+
+    shares = [ n for n in port.assets ]
+    port.shares = shares
+    port.current_entry_prices = [ 0 for n in port.assets ]
+    port.lookback = 126
+    port.current_weights = weights
+
+    # can't use self since this must exist outside of the clcass
+    portfolio_returns = port._get_risk_parity_port_returns(port.get_max_index(), port.current_weights)
+    portfolio_sigma = np.std(portfolio_returns)
+
+    diversification_ratio = w_vol / portfolio_sigma
+
+    # We are using a minimize optimization so need the opposite sign
+    ret = -diversification_ratio
+
+    print "DIVERSIFICATION RATIO: ", ret, weights
+
+    return ret
+
 class Portfolio():
 
     def __init__(self, assets_list):
@@ -698,6 +728,97 @@ class Portfolio():
 
         return normalized_weights
 
+    @memoize
+    def get_long_only_mdp_weights(self, x, method='initial_guess_mdp'):
+        # The basis for this comes from Clarke, page 40, which suggests that MDP weights are equal to RP weights scaled
+        # by inverse of volatility
+
+        self.past_returns_matrix = self.get_past_returns_matrix_lookback(x)
+        self.volatilities_matrix = np.array( [ [self.volatilities[z]] for z in self.assets ] )
+        self.cov_matrix = np.cov(self.past_returns_matrix, bias=True)
+
+        # Use risk parity weights as an initial guess because in this case they are all positive weights, unlike the
+        # existing MDP weights, which are long-short
+        risk_parity_weights = np.array([ w[0] for w in self.get_risk_parity_weights(x) ])
+
+        cov_matrix_input = self.cov_matrix
+
+        global long_only_mdp_cov_matrix
+        global long_only_mdp_global_port
+
+        long_only_mdp_cov_matrix = cov_matrix_input
+        long_only_mdp_assets_list = self.assets
+
+        port = Portfolio(long_only_mdp_assets_list)
+        try:
+            # TODO: This should have an update_date parameter
+            long_only_mdp_global_port = get_data(port, base_etf=port.assets[0], last_x_days=127, get_new_data=UPDATE_DATA, update_date='20191206')
+        except Exception as e:
+            print "EXCEPTION IN get_data() in _get_long_only_diversification_ratio()"
+            return None
+
+        method = 'basinhopping_global'
+        result = self._maximize_diversification_ratio(method=method)
+
+        np_normalized_weights = result['x']
+
+        ret_weights = np.array([ [w] for w in np_normalized_weights ])
+        return ret_weights
+
+    @memoize
+    def _maximize_diversification_ratio(self, method='initial_guess_mdp'):
+
+        bounds = [ (0, 1) for asset in self.assets ]
+
+        initial_guess_rp = np.array([ w[0] for w in self.get_risk_parity_weights(self.get_max_index()) ])
+        initial_guess_mdp = np.array([ max(w[0], 0) for w in self.get_mdp_weights(self.get_max_index()) ])
+
+        constraints = {'type': 'eq', 'fun': (lambda x: sum(x) - 1.0) }
+
+        all_results = []
+
+        def callback(x, f, accept):
+            this_result = (x, f, accept)
+            all_results.append(this_result)
+            # print "Finished an iteration: ", len(all_results)
+
+        if method == 'basinhopping_global':
+
+            basinhopping_minimizer_kwargs = {'bounds': bounds, 'constraints': constraints}
+
+            res = scipy.optimize.basinhopping(_get_long_only_diversification_ratio, initial_guess_mdp, niter=100, stepsize=0.5, minimizer_kwargs=basinhopping_minimizer_kwargs, callback=callback)
+
+        elif method == 'initial_guess_mdp_local':
+            options_dict = {'maxiter': 300, 'disp': True}
+
+            res = scipy.optimize.minimize(_get_long_only_diversification_ratio, initial_guess_mdp, bounds=bounds, method='trust-constr', options=options_dict)
+
+        elif method == 'shgo_global':
+            """
+            maxtime: not clear what units this is in...does not appear to be minutes or seconds
+            maxfev: max numnber of calls to _get_long_only_diversification_ratio
+            maxiter: maximum number of times each asset is changed, so total function calls would be maxiter * len(assets)
+
+            """
+            options_dict = {}
+            options_dict = {'maxtime': 640, 'disp': True}
+            # options_dict = {'maxtime': 100, 'maxfev': 100, 'maxev': 100, 'maxiter': 100, 'disp': True}
+
+            # IMPORTANT: counterintuitively, an unconstrained optimization will converge faster. It's just necessary
+            # at the end to normalize the final weights so that they sum to 1.0
+            # Adding constraints requires more iterations than no constraints
+            # eq constraint must equal zero
+            # ineq constraint must be non-negative
+            constraints = {'type': 'eq', 'fun': (lambda x: sum(x) - 1.0) }
+
+            # not totally clear what n is. Iters are full iterations (each one takes a while)
+            res = scipy.optimize.shgo(_get_long_only_diversification_ratio, bounds, n=10, iters=10, options=options_dict)
+            # res = scipy.optimize.shgo(_get_long_only_diversification_ratio, bounds, n=10, iters=10, options=options_dict, constraints=constraints)
+
+        print "\n\nFINAL OPTIMIZATION RESULT: "
+        print res
+
+        return res
 
     @memoize
     def get_inverse_volatility_weights(self, x):
@@ -891,24 +1012,23 @@ def run_live_portfolio_analysis(assets=None):
         except:
             continue
 
-    print '\n\n'
-    print '     ', 'Symbol', '\t', 'Beta', '\t', 'Sigma', '\t', 'Act', '\t', 'RP', '\t', 'MDP', '\t', '1/Vol', '\t', 'MDPDiff'
+    inverse_volatility_weights = port.get_inverse_volatility_weights(port.get_max_index())
+
+    print '     ', 'Symbol', '\t', 'Beta', '\t', 'Sigma', '\t', 'Act', '\t', 'LOMDP', '\t', 'RP', '\t', 'MDP', '\t', '1/Vol', '\t', 'LOMDPDiff'
 
     new_stock_output_data = output_data[len(live_portfolio[0]):]
-
-    risk_parity_weights = port.get_risk_parity_weights(port.get_max_index())
-    inverse_volatility_weights = port.get_inverse_volatility_weights(port.get_max_index())
 
     print '\n'
     # for item in sorted(output_data[0:len(live_portfolio[0])], key=lambda tup: tup[1], reverse=False):
         # print "Beta: ", item[0], '\t', item[1], '\t\t', item[2]
     for i, item in enumerate(output_data[0:len(live_portfolio[0])]):
-        weighted_delta = (port_ret['tangency'][i] - port_ret['actual_weights'][i]) * port_ret['valuation']
+        weighted_delta = (port_ret['long_only_mdp_weights'][i] - port_ret['actual_weights'][i]) * port_ret['valuation']
         print "Beta: ", item[0], '\t', '{0:.3f}'.format(item[1].round(3)).zfill(5), '\t', \
             '{0:.4f}'.format(item[2].round(4)).zfill(6), '\t', \
             '{0:.4f}'.format(round(port_ret['actual_weights'][i], 4)).zfill(6), '\t', \
-            '{0:.4f}'.format(round(risk_parity_weights[i], 4)).zfill(6), '\t', \
-            '{0:.4f}'.format(round(port_ret['tangency'][i], 4)).zfill(6), '\t', \
+            '{0:.4f}'.format(round(port_ret['long_only_mdp_weights'][i], 4)).zfill(6), '\t', \
+            '{0:.4f}'.format(round(port_ret['risk_parity_weights'][i], 4)).zfill(6), '\t', \
+            '{0:.4f}'.format(round(port_ret['mdp_weights'][i], 4)).zfill(6), '\t', \
             '{0:.4f}'.format(round(inverse_volatility_weights[item[0]], 4)).zfill(6), '\t', \
             round(weighted_delta, 2)
 
@@ -930,14 +1050,14 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
         port = Portfolio(assets)
 
         try:
-            port = get_data(port, base_etf=port.assets[0], last_x_days=64, get_new_data=update_data, update_date=update_date)
+            port = get_data(port, base_etf=port.assets[0], last_x_days=127, get_new_data=update_data, update_date=update_date)
         except Exception as e:
             return None
 
         port.shares = shares
         port.current_entry_prices = [ 0 for n in port.assets ]
         port.current_weights = [ 0 for n in port.assets ]
-        port.lookback = 63
+        port.lookback = 126
 
         # print [ port.closes[v] for k, v in enumerate(port.assets) ]
 
@@ -947,15 +1067,17 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
         # This would be the case if we are only interested in the returns stats of a given asset
         if len(assets) > 1:
             risk_parity_weights = port.get_risk_parity_weights(x=max_index)
+            long_only_mdp_weights = port.get_long_only_mdp_weights(x=max_index)
             mdp_weights = port.get_mdp_weights(x=max_index)
         else:
             risk_parity_weights = [ [1.0] ]
+            long_only_mdp_weights  = [ [1.0] ]
             mdp_weights = [ [1.0] ]
 
         historical_valuations = []
         sharpe_price_list = []
-        # This assumes that we started 63 days ago with the portfolio in a state optimized based on a 63 day lookback
-        for x in xrange(max_index-63, max_index):
+        # This assumes that we started 126 days ago with the portfolio in a state optimized based on a 126 day lookback
+        for x in xrange(max_index-126, max_index):
             valuation = get_port_valuation(port, x=x)
             historical_valuations.append(valuation)
             sharpe_price_list.append(('existing_trade', 'long', valuation))
@@ -969,9 +1091,12 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
             # First calc of div ratio just uses the weights as-is, based on # of shares and prices
             div_ratio = port.get_diversification_ratio(weights='current')
 
-            # Set the weights to the mdp weights, then recalc the div ratio
+            # Set the weights to the various algo weights, then recalc the div ratio
             port.current_weights = risk_parity_weights
             risk_parity_div_ratio = port.get_diversification_ratio(weights='current')
+
+            port.current_weights = long_only_mdp_weights
+            long_only_mdp_div_ratio = port.get_diversification_ratio(weights='current')
 
             port.current_weights = mdp_weights
             mdp_div_ratio = port.get_diversification_ratio(weights='current')
@@ -981,6 +1106,9 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
 
             risk_parity_weights = [ [1.0] ]
             risk_parity_div_ratio = 1.0
+
+            long_only_mdp_weights = [ [1.0] ]
+            long_only_mdp_div_ratio = 1.0
 
             mdp_weights = [ [1.0] ]
             mdp_div_ratio = 1.0
@@ -993,15 +1121,19 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
             print "MDP: \t", [ str(round(n[0], 4)).zfill(6) for n in mdp_weights ]
             print "Value: \t\t", valuation
             print "Act Div Ratio: \t", div_ratio
+            print "LOMDP DR: \t", long_only_mdp_div_ratio
             print "RP Div Ratio: \t", risk_parity_div_ratio
             print "MDP Div Ratio: \t", mdp_div_ratio
 
         ret_dict = {'assets': assets, 'actual_sigma': round(system_sigma, 6), \
                 'actual_weights': [ round(n[0], 6) for n in original_weights ], \
-                'tangency': [ round(n[0], 6) for n in mdp_weights ],
                 'valuation': valuation, 'actual_div_ratio': div_ratio, \
-                'risk_parity_div_ratio': [ round(n[0], 6) for n in risk_parity_weights ], \
-                'tangency_div_ratio': mdp_div_ratio, \
+                'long_only_mdp_weights': long_only_mdp_weights, \
+                'long_only_mdp_div_ratio': long_only_mdp_div_ratio, \
+                'risk_parity_weights': risk_parity_weights, \
+                'risk_parity_div_ratio': risk_parity_div_ratio, \
+                'mdp_weights': [ round(n[0], 6) for n in mdp_weights ],
+                'mdp_div_ratio': mdp_div_ratio, \
                 'sharpe_price_list': sharpe_price_list}
 
         return ret_dict, port
