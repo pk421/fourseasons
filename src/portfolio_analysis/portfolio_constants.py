@@ -89,7 +89,7 @@ max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'MUB']
 # max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'GBTC']
 # max diversity: also add MUB, VTEB - muni bonds
 
-custom_assets_list = dalio_all_weather
+custom_assets_list = max_diversity
 
 
 ##########################
@@ -164,45 +164,79 @@ m_ib_all_assets = [
 
        ]
 
+# m_ib = [
+#        # Developed Market stocks
+#        ('T', 1400), ('VBR', 700), ('VOO', 350), ###############
+#
+#        # Developed Market Bonds
+#        ('VGLT', 1000), # ('VGIT', 0.0001), ################
+#
+#        # Developed Market Muni Bonds
+#        # ('MUB', 0.0001),
+#
+#        # Emerging Market Bonds
+#        # ('EMB', 1000),
+#        ('VWOB', 1200), ################
+#
+#        # Emerging Market Stocks
+#        ('EWZ', 1000), ('GXG', 6000), ('RSX', 2600), ##############
+#
+#        # Commodities
+#        # Switch DBC to PDBC
+#        ('DBC', 4000), ('HP', 500), ('MPLX', 2000), ('PAA', 1000),
+#
+#        # Gold
+#        ('GDX', 3800), ('IAU', 7000),
+#
+#        # Real Estate
+#        ('VNQ', 1000), #############
+#
+#        # Crypto
+#        ('GBTC', 150), ############
+#
+#        # Other
+#        ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 5985), ('CGC', 798),
+#
+#        ]
+
 m_ib = [
        # Developed Market stocks
-       ('T', 1400), ('VBR', 700), ('VOO', 350), ###############
+       ('T', 1400), ('VOO', 0.001), ('VBR', 700),
 
        # Developed Market Bonds
-       ('VGLT', 1000), # ('VGIT', 0.0001), ################
+       ('VGLT', 1000), ('VGIT', 0.0001),
 
        # Developed Market Muni Bonds
-       # ('MUB', 0.0001),
+       ('MUB', 2000),
 
        # Emerging Market Bonds
-       # ('EMB', 1000),
-       ('VWOB', 1200), ################
+       ('VWOB', 0.001),
 
        # Emerging Market Stocks
-       ('EWZ', 1000), ('GXG', 6000), ('RSX', 2600), ##############
+       ('EWZ', 1000), ('GXG', 4000), ('RSX', 2000), ('VWO', 0.0001),
 
        # Commodities
        # Switch DBC to PDBC
-       ('DBC', 4000), ('HP', 500), ('MPLX', 2000), ('PAA', 1000),
+       ('DBC', 4000), ('HP', 580), ('MPLX', 2000), ('PAA', 1000),
 
        # Gold
        ('GDX', 3800), ('IAU', 7000),
 
        # Real Estate
-       ('VNQ', 1000), #############
+       ('VNQ', 0.0001),
 
        # Crypto
-       ('GBTC', 150), ############
+       ('GBTC', 1200),
 
        # Other
-       ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 5985), ('CGC', 798),
+       ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 20000), ('CGC', 798),
 
        ]
 
-m_ib = [('T', 1), ('VBR', 1), ('VOO', 1), ('VGLT', 1), ('VWOB', 1), ('EWZ', 1), ('GXG', 1), ('RSX', 1), ('DBC', 1), ('HP', 1),
-        ('MPLX', 1), ('PAA', 1), ('GDX', 1), ('IAU', 1), ('VNQ', 1), ('GBTC', 1), ('ACB', 1), ('APHA', 1), ('HMLSF', 1), ('LXRP', 1),
-        ('CGC', 1)]
+
+# m_ib = [('SPY', 1), ('TLT', 1), ('GLD', 1), ('DBC', 1), ('GBTC', 1)]
 # m_ib = max_uncorrelated
+# m_ib = m_ib_all_assets
 
 m_golden_butterfly_20191020 = [('IAU', 84), ('VGLT', 14), ('VGSH', 20), ('VBR', 9), ('VTI', 8),
 
