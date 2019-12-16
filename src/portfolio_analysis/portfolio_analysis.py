@@ -536,7 +536,7 @@ def _get_long_only_diversification_ratio(weights):
 
     # can't use self since this must exist outside of the class
     # FIXME - port.current_weights should not be passed in, right? We should be using the weights passed to function
-    portfolio_returns = port._get_port_returns(port.get_max_index(), port.current_weights)
+    portfolio_returns = port._get_port_returns(port.get_max_index(), weights)
     portfolio_sigma = np.std(portfolio_returns)
 
     diversification_ratio = w_vol / portfolio_sigma
@@ -564,11 +564,8 @@ class Portfolio():
 
         self.forward_returns = {}
 
-        self.volatilities = {}
-
         #Matrices / vectors
         self.past_returns_matrix = None
-        self.volatilities_matrix = None
         self.cov_matrix = None
         self.inv_cov_matrix = None
         self.transposed_volatilities_matrix = None
@@ -584,7 +581,6 @@ class Portfolio():
         for item in assets_list:
             self.closes[item] = []
             self.trimmed[item] = []
-            self.volatilities[item] = []
 
     def validate_portfolio(self):
         len_data = len(self.trimmed[self.assets[0]])
@@ -755,7 +751,6 @@ class Portfolio():
 
         # The basis for this comes from Clarke, page 40, which suggests that MDP weights are equal to RP weights scaled
         # by inverse of volatility
-        self.volatilities_matrix = np.array( [ [self.volatilities[z]] for z in self.assets ] )
 
         cov_matrix = self.get_covariance_matrix_lookback(x)
 
@@ -767,9 +762,8 @@ class Portfolio():
         global long_only_mdp_global_port
 
         long_only_mdp_cov_matrix = cov_matrix
-        long_only_mdp_assets_list = self.assets
+        port = Portfolio(self.assets)
 
-        port = Portfolio(long_only_mdp_assets_list)
         try:
             # TODO: This should have an update_date parameter
             long_only_mdp_global_port = get_data(port, base_etf=port.assets[0], last_x_days=x, get_new_data=UPDATE_DATA, update_date=GLOBAL_UPDATE_DATE)
