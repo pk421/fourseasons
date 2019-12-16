@@ -12,6 +12,7 @@ import src.toolsx as tools
 from src.indicator_system                           import get_sharpe_ratio
 from src.portfolio_analysis.portfolio_utils         import get_data
 from src.portfolio_analysis.portfolio_constants     import custom_assets_list, live_portfolio, stocks_to_test
+from src.portfolio_analysis.portfolio_helpers       import get_drawdown, get_port_valuation, TradeLog
 
 from src.math_tools                                 import get_returns, get_ln_returns
 
@@ -285,6 +286,18 @@ def do_analysis(assets=None, write_to_file=True):
             ###        raise Exception("Normalized weights do not equal the current weights after setting normalized.")
 
             trailing_diversification_ratio = mdp_port.get_diversification_ratio(x, weights='normalized')
+
+            global long_only_mdp_cov_matrix, long_only_mdp_global_port
+            long_only_mdp_cov_matrix = mdp_port.get_covariance_matrix_lookback(x)
+            long_only_mdp_global_port = mdp_port
+            # _ = mdp_port.get_long_only_mdp_weights(x)
+            long_only_dr_algo = _get_long_only_diversification_ratio(np.array([ w[0] for w in mdp_port.normalized_weights]))
+
+            # This is for safety, either method should be able to get the same result, if not there is a problem
+            if round(long_only_dr_algo, 8) != -round(trailing_diversification_ratio, 8):
+                print "Div Diff: ", long_only_dr_algo, '\t', trailing_diversification_ratio
+                import pdb; pdb.set_trace()
+
             mdp_port.trailing_DRs.append(trailing_diversification_ratio)
             if logging.root.level < 25:
                 print "New Trailing Diversification Ratio: ", x, trailing_diversification_ratio
@@ -457,65 +470,6 @@ def aggregate_statistics(mdp_port, write_to_file=True):
 
     return system_stats
 
-def get_port_valuation(port, x=0):
-    total_delta = 0
-    total_valuation = 0
-    total_long_valuation = 0
-    total_short_valuation = 0
-    short_delta = 0
-
-    # print "\nENTRIES: ", port.current_entry_prices
-    for k, v in enumerate(port.assets):
-        # total_valuation += weights[k][0] * port.closes[v][x]
-        if port.shares[k] >= 0:
-            total_delta += port.shares[k] * (port.closes[v][x] - port.current_entry_prices[k])
-            total_valuation += abs(port.shares[k] * port.closes[v][x])
-            total_long_valuation += abs(port.shares[k] * port.closes[v][x])
-        ### HACK - this forces us to treat shorting cash as a special case that does not add to risk at all
-        # Just ignore anything with negative shares...rather than viewing this as a "short" position, that is adding to
-        # to your assets at risk, we will instead just treat it as shorting cash, representing borrowed money
-        else:
-            total_delta += abs(port.shares[k]) * (port.current_entry_prices[k] - port.closes[v][x])
-            total_valuation += abs(port.shares[k]) * (port.current_entry_prices[k] + port.current_entry_prices[k] - port.closes[v][x])
-            total_short_valuation += abs(port.shares[k]) * (port.current_entry_prices[k] + port.current_entry_prices[k] - port.closes[v][x])
-
-    for k, v in enumerate(port.assets):
-        # This loop is used to get current weights that are evaluated in real-time each day, rather than static
-        # only every rebalance as the normalized weights are
-        if port.shares[k] >= 0:
-            this_delta = port.shares[k] * (port.closes[v][x] - port.current_entry_prices[k])
-            this_weight = port.shares[k] * port.closes[v][x]
-        else:
-            this_delta = abs(port.shares[k]) * (port.current_entry_prices[k] - port.closes[v][x])
-            this_weight = -abs(port.shares[k]) * (port.current_entry_prices[k] + port.current_entry_prices[k] - port.closes[v][x])
-            short_delta = abs(port.shares[k]) * (port.current_entry_prices[k] - port.closes[v][x])
-
-        # print "VALUATION: ", port.shares[k], port.closes[v][x], this_valuation, total_valuation, '\t', (this_valuation / total_valuation)
-        port.current_weights[k] = this_weight / total_valuation
-
-    logging.debug('%s %s %s' % (x, port.trimmed[port.assets[0]][x]['Date'], total_delta))
-
-    # The short cash concept introduces a parasitic loss each period. Here we must deduct it. Cannot look at its value
-    # directly or sum it with a total valuation.
-    net_long_valuation = total_long_valuation - total_short_valuation + short_delta
-
-    # print "Valuation: ", total_valuation, net_long_valuation, total_short_valuation, port.current_entry_prices[-1], port.closes['BSV'][x], short_delta
-
-    return net_long_valuation
-
-
-def get_drawdown(closes):
-
-    all_time_high = closes[0]
-    drawdown = [1.0]
-
-    for k, close in enumerate(closes):
-        if k == 0:
-            continue
-        all_time_high = max(close, all_time_high)
-        drawdown.append(close / all_time_high)
-
-    return drawdown
 
 def _get_long_only_diversification_ratio(weights):
     # This is taken from: https://thequantmba.wordpress.com/2017/06/06/max-diversification-in-python/
@@ -528,15 +482,13 @@ def _get_long_only_diversification_ratio(weights):
 
     port = long_only_mdp_global_port
 
-    shares = [ n for n in port.assets ]
-    port.shares = shares
     port.current_entry_prices = [ 0 for n in port.assets ]
     port.lookback = GLOBAL_LOOKBACK
     port.current_weights = weights
 
     # can't use self since this must exist outside of the class
-    # FIXME - port.current_weights should not be passed in, right? We should be using the weights passed to function
-    portfolio_returns = port._get_port_returns(port.get_max_index(), weights)
+    # Very important that x is set correctly on the long_only_mdp_global_port before this function is run
+    portfolio_returns = port._get_port_returns(port.x, weights)
     portfolio_sigma = np.std(portfolio_returns)
 
     diversification_ratio = w_vol / portfolio_sigma
@@ -770,6 +722,7 @@ class Portfolio():
         except Exception as e:
             print "EXCEPTION IN get_data() in _get_long_only_diversification_ratio()"
             return None
+        long_only_mdp_global_port.x = x
 
         # result = self._maximize_diversification_ratio(method=method)
 
@@ -1002,6 +955,12 @@ class Portfolio():
         elif weights == 'normalized':
             weights_to_use = self.normalized_weights
 
+        # FIXME: we shouldn't have to put current weights in a list just to get the same shape as normalized
+        if isinstance(weights_to_use, np.ndarray) and weights_to_use.ndim == 1:
+            weights_to_use = np.array([ [w] for w in weights_to_use ])
+            # import pdb; pdb.set_trace()
+
+
         # The numerator is essentially the weighted average volatility of the individual assets in the portfolio
         transposed_weights = np.matrix.transpose(weights_to_use)
         numerator = np.dot(transposed_weights, self.get_volatilities_matrix_lookback(x))
@@ -1020,21 +979,14 @@ class Portfolio():
             # give it a bad DR and ensure that this won't be chosen.
             return 0.0
 
-        ret = (numerator / d3)[0][0]
+        # FIXME: This fails if current weights are being used. The function only seems to work with normalized weights
+        # This is related to the FixMe above where the number of dimensions is wrong
+        try:
+            ret = (numerator / d3)[0][0]
+        except:
+            import pdb; pdb.set_trace()
 
-        self.diversification_ratio = ret
         return ret
-
-class TradeLog(object):
-
-    def __init__(self):
-        self.Date = None
-        self.Valuation = None
-        self.DR = None
-        self.Mean_Vol = None
-        self.Weighted_Mean_Vol = None
-        self.IsRebalanced = None
-
 
 def run_live_portfolio_analysis(assets=None):
 
@@ -1169,6 +1121,7 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
             global long_only_mdp_cov_matrix, long_only_mdp_global_port
             long_only_mdp_cov_matrix = port.get_covariance_matrix_lookback(port.get_max_index())
             long_only_mdp_global_port = port
+            long_only_mdp_global_port.x = port.get_max_index()
             approx_derivative = scipy.optimize._numdiff.approx_derivative(_get_long_only_diversification_ratio, deriv_weights)
 
             # Set the weights to the various algo weights, then recalc the div ratio
