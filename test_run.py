@@ -170,4 +170,4 @@ if args.vol_analyzer:
 
 time_end = time.time()
 time_total = round(time_end - time_start, 4)
-print "\n\nTime Needed: ", time_total, " sec", '\n'
+print "\n\nFinish Time, Time Needed: ", time.asctime(), '\t', time_total, " sec", '\n'
