@@ -42,12 +42,9 @@ def get_data(port, base_etf, last_x_days = 0, get_new_data=True, update_date=Non
     for item in port.assets:
         logging.debug(item)
         stock_2_data = historical_data.get(item) or manage_redis.parse_fast_data(item, db_to_use=1)
-        if stock_2_data[-1]['Date'] < update_date:
-            logging.info('Base Start/End Dates: %s %s %s' % (item, stock_2_data[0]['Date'], stock_2_data[-1]['Date']))
-        # print "HERE: "
-        # print stock_1_data
-        # print "\n\n\n\n\n"
-        # print stock_2_data
+        # if stock_2_data[-1]['Date'] < update_date:
+        #     logging.info('Base Start/End Dates: %s %s %s' % (item, stock_2_data[0]['Date'], stock_2_data[-1]['Date']))
+        # logging.info('Base Start/End Dates: %s %s %s' % (item, stock_2_data[0]['Date'], stock_2_data[-1]['Date']))
         stock_1_close, stock_2_close, stock_1_trimmed, stock_2_trimmed = get_corrected_data(stock_1_data, stock_2_data)
         port.closes[base_etf] = stock_1_close
         port.trimmed[base_etf] = stock_1_trimmed

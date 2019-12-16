@@ -98,7 +98,7 @@ max_uncorrelated = [('SPY', 1), ('TLT', 1), ('IEF', 1), ('GLD', 1), ('DBC', 4), 
                     ('RWO', 0), ('MUB', 3), ('GBTC', 1),
                     ]
 
-m_ib_all_assets = [
+m_ib_live_now = [
        # Developed Market stocks
        ('T', 1400), ('VOO', 0.001), ('VBR', 700),
 
@@ -201,7 +201,7 @@ c_roth_ira = [('TLT', 775), ('DBC', 2600), ('UGLD', 1350), ('VGK', 1500)]
 
 # Developed World Large Cap Stocks - Dividend.com 25 Year Dividend Stocks - incomplete list
 dividend_growers = [
-    ('ABBV', 0.000001),
+    # ('ABBV', 0.000001),
     ('ABT', 0.000001),
     ('ADM', 0.000001),
     ('ADP', 0.000001),
@@ -262,7 +262,7 @@ usa_large_indices = [
     ('IJR', 0.000001),
     ('SPY', 0.000001),
     ('VBR', 0.000001),
-    ('VOO', 0.000001),
+    # ('VOO', 0.000001),
     ('VTI', 0.000001),
 ]
 
@@ -271,7 +271,7 @@ emerging_market_etfs = [
     ('EEM', 0.000001),
     ('EWZ', 0.000001),
     ('GXG', 0.000001),
-    ('ICOL', 0.000001),
+    # ('ICOL', 0.000001),
     ('RSX', 0.000001),
 ]
 
@@ -302,7 +302,7 @@ reits = [
 # Commodities
 commodities = [
     ('DBC', 0.000001),
-    ('MPLX', 0.000001),
+    # ('MPLX', 0.000001),
     ('PAA', 0.000001),
 ]
 
@@ -347,6 +347,10 @@ stocks_to_test = dividend_growers + developed_world_etfs + usa_large_indices + e
                       developed_world_bonds + emerging_market_bonds + reits + commodities + precious_metals + \
                       sector_etfs + marijuana + cryptocurrencies
 
+# marijuana and cryptocurrency stocks don't have enough history to be in here for historical tests
+volatile_groups = dividend_growers + developed_world_etfs + usa_large_indices + emerging_market_etfs + commodities + \
+                precious_metals
+
 # with open('/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + '300B_1M_and_etfs_etns.csv', 'r') as file:
 # with open('/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + 'big_etfs.csv', 'r') as file:
 #     tickers = file.read().split('\n')
@@ -362,7 +366,16 @@ stocks_to_test = dividend_growers + developed_world_etfs + usa_large_indices + e
 #                 ('TLT', 100), ('DBC', 100), ('GLD', 100)]
 ###
 
-live_portfolio = [stocks_to_test]
+m_test = [
+
+
+]
+
+live_portfolio = [m_ib_live_now]
+
+custom_assets_volatile_groups = [ a[0] for a in volatile_groups ]
+
+custom_assets_list = dalio_all_weather
 
 
 
