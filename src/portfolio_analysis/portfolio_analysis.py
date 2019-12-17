@@ -26,18 +26,22 @@ UPDATE_DATA=True
 GLOBAL_LOOKBACK = 63
 GLOBAL_UPDATE_DATE = '20191213'
 
+global long_only_mdp_cov_matrix, long_only_mdp_global_port
+long_only_mdp_cov_matrix = None
+long_only_mdp_global_port = None
+
 logging.root.setLevel(logging.INFO)
 
 def get_portfolio_weights(mdp_port, x):
 
     # FIXME: sometimes this routine results in a singular matrix and fails
     try:
-        theoretical_weights = mdp_port.get_mdp_weights(x)
+        theoretical_weights = mdp_port.get_short_long_mdp_weights(x)
     except:
         # this is a hack...if we can't determine new MDP weights, just re-use the current ones
         # arguably it would be better to determine current risk parity weights for example...
         import pdb; pdb.set_trace()
-        return mdp_port, mdp_port.current_weights
+        return mdp_port, mdp_port.normalized_weights
 
     # if logging.root.level < 25:
         # print "Theoretical Result: \n", theoretical_weights
@@ -143,7 +147,26 @@ def do_analysis(assets=None, write_to_file=True):
 
             old_weighted_valuation = get_port_valuation(mdp_port, x=x) - debt
 
+            # if x == 128:
+            #     import pdb; pdb.set_trace()
+
             rebalance_old_div_ratio = mdp_port.get_diversification_ratio(x, weights='current')
+
+            global long_only_mdp_cov_matrix, long_only_mdp_global_port
+
+            long_only_mdp_cov_matrix = mdp_port.get_covariance_matrix_lookback(mdp_port.x)
+            long_only_mdp_global_port = copy.deepcopy(mdp_port)
+            long_only_mdp_global_port.x = mdp_port.x
+            # get_long_only_mdp_weights would only set the globals if the short_long_mdp algo has negative weights
+            # _ = mdp_port.get_long_only_mdp_weights(x)
+
+            # if x == 128:
+            #     import pdb; pdb.set_trace()
+
+            long_only_dr_algo = _get_long_only_diversification_ratio(np.array([ w[0] for w in mdp_port.current_weights ]))
+
+            # if round(long_only_dr_algo, 8) != -round(rebalance_old_div_ratio, 8):
+            print "LO DR ALGO / LEGACY DR: ", x, long_only_dr_algo, '\t', rebalance_old_div_ratio
 
             mdp_port, theoretical_weights = get_portfolio_weights(mdp_port, x)
 
@@ -161,21 +184,27 @@ def do_analysis(assets=None, write_to_file=True):
 
             trailing_diversification_ratio = mdp_port.get_diversification_ratio(x, weights='normalized')
 
-            # global long_only_mdp_cov_matrix, long_only_mdp_global_port
-            # long_only_mdp_cov_matrix = mdp_port.get_covariance_matrix_lookback(x)
-            # long_only_mdp_global_port = mdp_port
+            if trailing_diversification_ratio < rebalance_old_div_ratio:
+                import pdb; pdb.set_trace()
+
+            # get_long_only_mdp_weights(x) would be sufficient to set globals, but only if the basinhopping routine is
+            # run. If LongShortMDP results in positive weights, the LOMDP kicks out early and won't set these
+            global long_only_mdp_cov_matrix, long_only_mdp_global_port
+            long_only_mdp_cov_matrix = mdp_port.get_covariance_matrix_lookback(mdp_port.x)
+            long_only_mdp_global_port = copy.deepcopy(mdp_port)
+            long_only_mdp_global_port.x = mdp_port.x
             # _ = mdp_port.get_long_only_mdp_weights(x)
-            # long_only_dr_algo = _get_long_only_diversification_ratio(np.array([ w[0] for w in mdp_port.normalized_weights]))
+            long_only_dr_algo = _get_long_only_diversification_ratio(np.array([ w[0] for w in mdp_port.normalized_weights]))
 
             # This is for safety, either method should be able to get the same result, if not there is a problem
-            # if round(long_only_dr_algo, 8) != -round(trailing_diversification_ratio, 8):
-            #     print "Div Diff: ", long_only_dr_algo, '\t', trailing_diversification_ratio
-            #     import pdb; pdb.set_trace()
+            if round(long_only_dr_algo, 8) != -round(trailing_diversification_ratio, 8):
+                print "Div Diff: ", x, '\t', long_only_dr_algo, '\t', trailing_diversification_ratio
+                import pdb; pdb.set_trace()
             # import pdb; pdb.set_trace()
 
             mdp_port.trailing_DRs.append(trailing_diversification_ratio)
             if logging.root.level < 25:
-                print "New Trailing Diversification Ratio: ", x, trailing_diversification_ratio
+                print "Trailing DR (old/new): ", x, rebalance_old_div_ratio, '\t', trailing_diversification_ratio
 
             mdp_port.rebalance_log.append((rebalance_date, rebalance_old_div_ratio, trailing_diversification_ratio, theoretical_weights))
 
@@ -216,6 +245,8 @@ def _get_long_only_diversification_ratio(weights):
     # long_only_mdp_cov_matrix
     # long_only_mdp_global_port
 
+    global long_only_mdp_cov_matrix, long_only_mdp_global_port
+
     # the .T is an alternate way to call .transpose()
     w_vol = np.dot(np.sqrt(np.diag(long_only_mdp_cov_matrix)), weights.T)
 
@@ -223,7 +254,7 @@ def _get_long_only_diversification_ratio(weights):
 
     port.current_entry_prices = [ 0 for n in port.assets ]
     port.lookback = GLOBAL_LOOKBACK
-    port.current_weights = weights
+    port.current_weights = np.array([ [w] for w in weights ])
 
     # can't use self since this must exist outside of the class
     # Very important that x is set correctly on the long_only_mdp_global_port before this function is run
@@ -235,7 +266,7 @@ def _get_long_only_diversification_ratio(weights):
     # We are using a minimize optimization so need the opposite sign
     ret = -diversification_ratio
 
-    print "DIVERSIFICATION RATIO: ", ret, weights
+    # print "DIVERSIFICATION RATIO: ", ret, weights
 
     return ret
 
@@ -386,7 +417,7 @@ class Portfolio():
         import pbd; pdb.set_trace()
 
     @memoize
-    def get_mdp_weights(self, x):
+    def get_short_long_mdp_weights(self, x):
         # The foundation for this and get_diversification_ratio() can be found in Roger Clarke: Minimum Variance,
         # Maximum Diversification, and Risk Parity: An Analytic Perspective
         # Additional information about MDP is in Choueifaty: Properties Of The Most Diverisified Portfolio
@@ -436,7 +467,9 @@ class Portfolio():
     def get_long_only_mdp_weights(self, x, method='basinhopping_global'):
         # this entire optimization routine is expensive and imprecise. If the closed-form, MDP weights happen to be all
         # positive, there is no reason to waste time optimizing to get an approximation!
-        long_short_mdp_weights = self.get_mdp_weights(x)
+        global long_only_mdp_cov_matrix, long_only_mdp_global_port
+
+        long_short_mdp_weights = self.get_short_long_mdp_weights(x)
         if all([w[0] >= 0 for w in long_short_mdp_weights]):
             return long_short_mdp_weights
 
@@ -449,18 +482,18 @@ class Portfolio():
         # existing MDP weights, which are long-short
         risk_parity_weights = np.array([ w[0] for w in self.get_risk_parity_weights(x) ])
 
-        global long_only_mdp_cov_matrix
-        global long_only_mdp_global_port
-
         long_only_mdp_cov_matrix = cov_matrix
-        port = Portfolio(self.assets)
+        # port = Portfolio(self.assets)
 
-        try:
-            # TODO: This should have an update_date parameter
-            long_only_mdp_global_port = get_data(port, base_etf=port.assets[0], last_x_days=x, get_new_data=UPDATE_DATA, update_date=GLOBAL_UPDATE_DATE)
-        except Exception as e:
-            print "EXCEPTION IN get_data() in _get_long_only_diversification_ratio()"
-            return None
+        ###### this is mutating the long_only_mdp_global_port, don't think that should happen
+        # also, last_x_days should probably just get all data, not pass in an x...check that
+
+        # try:
+        #     # TODO: This should have an update_date parameter
+        #     long_only_mdp_global_port = get_data(port, base_etf=port.assets[0], last_x_days=x, get_new_data=UPDATE_DATA, update_date=GLOBAL_UPDATE_DATE)
+        # except Exception as e:
+        #     print "EXCEPTION IN get_data() in _get_long_only_diversification_ratio()"
+        #     return None
         long_only_mdp_global_port.x = x
 
         # result = self._maximize_diversification_ratio(method=method)
@@ -478,7 +511,7 @@ class Portfolio():
         # import pdb; pdb.set_trace()
         return ret_weights
 
-    @memoize
+    # Do NOT memoize. Generally, only things that take an x as an input can be memoized.
     def _maximize_diversification_ratio(self, method='initial_guess_mdp'):
 
         # lower bound can't be zero because it will pass in "nan" into the diversification ratio function
@@ -486,7 +519,7 @@ class Portfolio():
         bounds = [ (0.00001, 1.0) for asset in self.assets ]
 
         initial_guess_rp = np.array([ w[0] for w in self.get_risk_parity_weights(self.x) ])
-        initial_guess_mdp = np.array([ max(w[0], 0) for w in self.get_mdp_weights(self.x) ])
+        initial_guess_mdp = np.array([ max(w[0], 0) for w in self.get_short_long_mdp_weights(self.x) ])
         initial_guess_equal = np.array([ (1.0 / len(initial_guess_mdp)) for a in initial_guess_mdp ])
 
         constraints = {'type': 'eq', 'fun': (lambda x: sum(x) - 1.0) }
@@ -538,7 +571,7 @@ class Portfolio():
             res = scipy.optimize.shgo(_get_long_only_diversification_ratio, bounds, n=10, iters=100, options=options_dict)
             # res = scipy.optimize.shgo(_get_long_only_diversification_ratio, bounds, n=10, iters=10, options=options_dict, constraints=constraints)
 
-        print "\n\nFINAL OPTIMIZATION RESULT: "
+        print "\n\nFINAL OPTIMIZATION RESULT: ", long_only_mdp_global_port.x
         print res
         print '\n\n'
 
@@ -570,7 +603,7 @@ class Portfolio():
         final_result_count = 0
         for geometric_mean, result in sorted(final_results.iteritems()):
             final_result_count += 1
-            print "Final Result: ", final_result_count, round(geometric_mean, 6), round(result[1], 6), result[0]
+            # print "Final Result: ", final_result_count, round(geometric_mean, 6), round(result[1], 6), result[0]
 
         lowest_derivative = min(final_results.keys())
         best_result = final_results[lowest_derivative]
@@ -618,6 +651,7 @@ class Portfolio():
         new_weights = current_weights
 
         u = 0
+        # 10 iterations is arbitrary. This converges very quickly for reasonable numbers of assets
         while u < 10:
             current_weights = new_weights
             new_weights = self._get_risk_parity_weight_iteration(x, current_weights)
@@ -628,6 +662,7 @@ class Portfolio():
         np_new_weights = np.array([ [w] for w in new_weights ])
         return np_new_weights
 
+    # Not easy to memoize because input weights is an unhashable list. Not much to be gained either though
     def _get_risk_parity_weight_iteration(self, x, input_weights):
         portfolio_returns = self._get_port_returns(x, input_weights)
         portfolio_sigma = np.std(portfolio_returns)
@@ -672,6 +707,7 @@ class Portfolio():
 
         return normalized_weights
 
+    # because this takes np.ndarry type weights, it is unhashable and not easily memoized. Not called repeatedly though
     def _get_port_returns(self, x, input_weights):
         return_matrix = self.get_past_returns_matrix_lookback(x)
         total_returns = [0.0] * len(return_matrix[0])
@@ -692,6 +728,7 @@ class Portfolio():
         self.shares = [ (old_weighted_valuation * self.normalized_weights[k][0] / self.closes[v][x]) for k, v in enumerate(self.assets) ]
         print "SELF SHARES: ", self.shares
 
+    # Do NOT memoize, it can be called with both current and normalized weights at the same x
     def get_diversification_ratio(self, x, weights=None):
         # The Holst paper shows the equations for this in Chapter 3
 
@@ -811,6 +848,7 @@ def run_live_portfolio_analysis(assets=None):
 
 def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
     all_portfolios=assets if assets else live_portfolio
+    global long_only_mdp_cov_matrix, long_only_mdp_global_port
 
     for account in all_portfolios:
         cash = 0
@@ -832,6 +870,9 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
         port.lookback = GLOBAL_LOOKBACK
         port.x = port.get_max_index()
 
+        long_only_mdp_global_port = copy.deepcopy(port)
+        long_only_mdp_cov_matrix = port.get_covariance_matrix_lookback(port.get_max_index())
+
         # print [ port.closes[v] for k, v in enumerate(port.assets) ]
 
         max_index = len(port.closes[port.assets[0]]) - 1
@@ -841,7 +882,7 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
         if len(assets) > 1:
             risk_parity_weights = port.get_risk_parity_weights(x=max_index)
             long_only_mdp_weights = port.get_long_only_mdp_weights(x=max_index)
-            mdp_weights = port.get_mdp_weights(x=max_index)
+            mdp_weights = port.get_short_long_mdp_weights(x=max_index)
         else:
             risk_parity_weights = [ [1.0] ]
             long_only_mdp_weights  = [ [1.0] ]
@@ -867,7 +908,7 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
             deriv_weights = np.array([ w[0] for w in port.current_weights ])
             global long_only_mdp_cov_matrix, long_only_mdp_global_port
             long_only_mdp_cov_matrix = port.get_covariance_matrix_lookback(port.get_max_index())
-            long_only_mdp_global_port = port
+            long_only_mdp_global_port = copy.deepcopy(port)
             long_only_mdp_global_port.x = port.get_max_index()
             approx_derivative = scipy.optimize._numdiff.approx_derivative(_get_long_only_diversification_ratio, deriv_weights)
 

@@ -1,5 +1,7 @@
 __author__ = 'Mike'
 
+import numpy as np
+
 import logging
 
 def get_drawdown(closes):
@@ -58,6 +60,8 @@ def get_port_valuation(port, x=0):
     net_long_valuation = total_long_valuation - total_short_valuation + short_delta
 
     # print "Valuation: ", total_valuation, net_long_valuation, total_short_valuation, port.current_entry_prices[-1], port.closes['BSV'][x], short_delta
+
+    port.current_weights = np.array([ w for w in port.current_weights ])
 
     return net_long_valuation
 
