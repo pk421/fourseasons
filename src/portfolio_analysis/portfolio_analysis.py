@@ -12,7 +12,8 @@ import src.toolsx as tools
 from src.indicator_system                           import get_sharpe_ratio
 from src.portfolio_analysis.portfolio_utils         import get_data
 from src.portfolio_analysis.portfolio_constants     import custom_assets_list, live_portfolio, stocks_to_test
-from src.portfolio_analysis.portfolio_helpers       import get_drawdown, get_port_valuation, TradeLog
+from src.portfolio_analysis.portfolio_helpers       import get_drawdown, get_port_valuation, TradeLog, \
+                                                           adjust_weights_based_on_yield_curve
 
 from src.math_tools                                 import get_returns, get_ln_returns
 
@@ -20,11 +21,11 @@ from util.memoize import memoize
 
 import logging
 
+# determine whether to download new data from the internet
+UPDATE_DATA=True
 GLOBAL_LOOKBACK = 63
 GLOBAL_UPDATE_DATE = '20191213'
 
-# determine whether to download new data from the internet
-UPDATE_DATA=True
 logging.root.setLevel(logging.INFO)
 
 def get_portfolio_weights(mdp_port, x):
@@ -38,29 +39,19 @@ def get_portfolio_weights(mdp_port, x):
         import pdb; pdb.set_trace()
         return mdp_port, mdp_port.current_weights
 
-    # theoretical_weights = np.array([ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets])
-    # theoretical_weights = np.array([ [0.30], [0.15], [0.40], [0.075], [0.075] ])
-    # theoretical_weights = np.array([ [0.30], [0.55], [0.15] ])
-
     # if logging.root.level < 25:
         # print "Theoretical Result: \n", theoretical_weights
         # print "weighted vols equal one check: ", mdp_port.weighted_vols_equal_one(theoretical_weights)
 
     # This section should not be necessary since weights are already normalized. It's an added safety.
     abs_weight_sum = np.sum([abs(n) for n in theoretical_weights])
-    real_weight_sum = np.sum(theoretical_weights)
-    weight_ratio = real_weight_sum / abs_weight_sum if round(abs_weight_sum, 6) != 1.0 else 1.0
 
-    normalized_theoretical_weights = np.array([ n * weight_ratio for n in theoretical_weights])
+    normalized_theoretical_weights = np.array([ n / abs_weight_sum for n in theoretical_weights])
     # normalized_theoretical_weights = mdp_port.get_risk_parity_weights(x)
     normalized_theoretical_weights = mdp_port.get_long_only_mdp_weights(x)
 
-    # Use this to equal weight all or a portion of the portfolio
-    # equal_weighted_value = [1.0 / (len(theoretical_weights))]
-    # normalized_theoretical_weights = np.array([ equal_weighted_value for n in theoretical_weights])
-
     # Turn this on to fix the weights of at each rebalance
-    ### HACK:
+    # theoretical_weights = np.array([ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets])
 
     # SPY SECTORS: normalized_theoretical_weights = np.array([ [0.113], [0.09], [0.135], [0.0], [0.0], [0.215], [0.215], [0.0], [0.057], [0.175] ])
     # normalized_theoretical_weights = np.array([[0.20], [0.20], [0.20], [0.20], [0.20]])
@@ -77,116 +68,12 @@ def get_portfolio_weights(mdp_port, x):
     # inverse_vol = mdp_port.get_inverse_volatility_weights(x)
     # normalized_theoretical_weights = np.array([ [inverse_vol[a]] for a in mdp_port.assets ])
 
-
     ##### ALGO WITH TREASURY DATA
 
     if mdp_port.use_other_data:
-        # must be <= 62
-        ma_length = 10
-
-        # import pdb; pdb.set_trace()
-
-        recent_yc = [ d['AdjClose'] for d in mdp_port.other_data_trimmed[x-ma_length:x] ]
-        yc_ma = np.mean(recent_yc)
-        recent_yc_1 = [ d['AdjClose'] for d in mdp_port.other_data_trimmed[x-(ma_length+1):x-1] ]
-        yc_ma_1 = np.mean(recent_yc_1)
-        yc_ma_slope = yc_ma - yc_ma_1
-
-        yc_ma_100 = 0.0
-        if x > 100:
-            yc_ma_100 = np.mean([ d['AdjClose'] for d in mdp_port.other_data_trimmed[x-100:x-80] ])
-
-        adjusted_yc_ma = yc_ma - 0.0
-
-        all_weather_base = [[0.30], [0.15], [0.40], [0.075], [0.075]]
-        golden_butterfly_base = [[0.20], [0.20], [0.20], [0.20], [0.20]]
-
-        # End of cycle, inflation area, use commodities
-        if adjusted_yc_ma < 0 and yc_ma_slope < 0:
-            normalized_theoretical_weights = np.array([[0.15], [0.15], [0.0], [0.85], [0.85], [-1.0]])
-            # normalized_theoretical_weights = np.array([[0.15], [0.15], [0.20], [0.0], [1.5], [-1.0]])
-
-        # bear market area, do not leverage, just stay in All Weather, but bias slightly to bonds and away from inflation
-        elif adjusted_yc_ma < 0 and yc_ma_slope > 0:
-            normalized_theoretical_weights = np.array([[0.10], [0.40], [0.40], [0.05], [0.05], [0.0]])
-            # normalized_theoretical_weights = np.array([[0.05], [0.05], [0.40], [0.40], [0.10], [0.0]])
-
-        # coming out of recession, stay in all weather, the normal rules don't apply, low commodities, heavy bonds
-        elif adjusted_yc_ma >= 0 and yc_ma_slope > 0 and (yc_ma_100 - 1.0) < 0:
-            normalized_theoretical_weights = np.array([[0.20], [0.30], [0.75], [0.05], [0.05], [-0.35]])
-            # normalized_theoretical_weights = np.array([[0.10], [0.10], [0.35], [0.75], [0.05], [-0.35]])
-
-        elif adjusted_yc_ma >=0 and adjusted_yc_ma < 1:
-            weights = [ [1.00*n[0]] for n in all_weather_base]
-            weights.append([0.0])
-            normalized_theoretical_weights = np.array(weights)
-
-        # just use all weather, the yields available are not high
-        elif adjusted_yc_ma >= 1 and adjusted_yc_ma < 2:
-            # normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
-            weights = [ [3.50*n[0]] for n in all_weather_base]
-            weights.append([-2.50])
-            normalized_theoretical_weights = np.array(weights)
-
-        # 2x leverage, go into risk assets
-        elif adjusted_yc_ma >= 2.0 and adjusted_yc_ma < 3.0:
-            # normalized_theoretical_weights = np.array([[1.3], [0.15], [0.40], [0.075], [0.075]])
-            weights = [ [4.0*n[0]] for n in all_weather_base]
-            weights.append([-3.00])
-            normalized_theoretical_weights = np.array(weights)
-
-        # 3x leverage, go higher into risk assets
-        elif adjusted_yc_ma >= 3.0 and adjusted_yc_ma < 4.0:
-            # normalized_theoretical_weights = np.array([[2.3], [0.15], [0.40], [0.075], [0.075]])
-            weights = [ [5.00*n[0]] for n in all_weather_base]
-            weights.append([-4.00])
-            normalized_theoretical_weights = np.array(weights)
-
-        elif adjusted_yc_ma >= 4.0 and adjusted_yc_ma < 5.0:
-            # normalized_theoretical_weights = np.array([[3.3], [0.15], [0.40], [0.075], [0.075]])
-            weights = [ [5.0*n[0]] for n in all_weather_base]
-            weights.append([-4.0])
-            normalized_theoretical_weights = np.array(weights)
-
-
-        # normalized_theoretical_weights = np.array( [[0.20], [0.20], [0.20], [0.20], [0.20], [0.0]])
-        # normalized_theoretical_weights = np.array([ [1*n[0]] for n in all_weather_base ])
-        # normalized_theoretical_weights = np.array([[0.90], [0.45], [1.20], [0.225], [0.225], [-2.0]])
-
-
-        print 'Adjusting Weights: ', x, mdp_port.other_data_trimmed[x]['Date'], yc_ma_slope, yc_ma_100, '\n', normalized_theoretical_weights
-    # import pdb; pdb.set_trace()
-
-
-
-    # Rising Inflation, Growth and Flattening, Positive YC - Commodities
-
-    # Falling Growth, High Inflation And Negative And Falling YC - Cash
-
-    # Low Growth, Low Inflation, Rising, Negative YC, Or Steeply Rising and Positive YC - Bonds
-
-    # Higher Growth, Low Inflation, Positive YC That is not Changing Slope Too Quickly - Stocks
-
-    # Fa
-
+        mdp_port = adjust_weights_based_on_yield_curve(mdp_port)
 
     #####
-
-    # normalized_theoretical_weights = np.array([[0.15], [0.15], [0.20], [0.075], [0.075], [0.15], [0.20]])
-    # normalized_theoretical_weights = np.array([[0.20], [0.15], [0.20], [0.15], [0.10], [0.20]])
-    # normalized_theoretical_weights = np.array([[0.35], [0.18], [0.47]])
-
-    # Modified All Weather 1 rebalance for all of history, done on 20161120
-    # normalized_theoretical_weights = np.array([[0.15], [0.19], [0.28], [0.08], [0.09], [0.09], [0.12]])
-
-    # modified_mdp optimized for 2008 days, single rebalance
-    # normalized_theoretical_weights = np.array([[0.23], [0.41], [0.17], [0.09], [0.10]])
-
-    # MDP Optimized For 2338/2339 historical days single rebalance
-    # normalized_theoretical_weights = np.array([[0.25], [0.28], [0.29], [0.08], [0.10]])
-
-    # Naive Risk Parity Optimized for 2338/2339 historical days single rebalance
-    # normalized_theoretical_weights = np.array([[0.14], [0.40], [0.19], [0.13], [0.14]])
 
     return mdp_port, normalized_theoretical_weights
 
@@ -223,15 +110,10 @@ def do_analysis(assets=None, write_to_file=True):
     old_weighted_valuation = 1000
     debt = 0
     while x < len(mdp_port.trimmed[mdp_port.assets[0]]):
+        mdp_port.x = x
         if not mdp_port.rebalance_now:
-
-            mdp_port.x = x
-            ### current_portfolio_valuation = get_port_valuation(mdp_port, x=x)
-            ### current_leverage_ratio = np.sum(mdp_port.normalized_weights)
-            ### current_portfolio_valuation = get_port_valuation(mdp_port, x=x) - ((current_leverage_ratio - 1) * old_weighted_valuation)
-
             current_portfolio_valuation = get_port_valuation(mdp_port, x=x) - debt
-            current_leverage_ratio = current_portfolio_valuation / (current_portfolio_valuation - debt)
+            # current_leverage_ratio = current_portfolio_valuation / (current_portfolio_valuation - debt)
 
             ### print "Not Rebalancing: ", current_portfolio_valuation, get_port_valuation(mdp_port, x=x), old_weighted_valuation, current_leverage_ratio, ((current_leverage_ratio - 1) * old_weighted_valuation)
             mdp_port.portfolio_valuations.append([mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation])
@@ -240,10 +122,6 @@ def do_analysis(assets=None, write_to_file=True):
             mdp_port.rebalance_counter += 1
 
             if x >= mdp_port.rebalance_time:
-                # The statement below DOES have an impact on whether a rebalance is hit in this if block
-                # It also affects overall program flow and the end result
-                # This is what sets the covariance matrix and volatilities. Required to get a new DR
-                _ = mdp_port.get_mdp_weights(x)
                 trailing_diversification_ratio = mdp_port.get_diversification_ratio(x, weights='current')
                 mdp_port.trailing_DRs.append(trailing_diversification_ratio)
                 rebalance_date = mdp_port.trimmed[mdp_port.assets[0]][x]['Date']
@@ -263,11 +141,7 @@ def do_analysis(assets=None, write_to_file=True):
             # we calculate new weights for today, value the portfolio for today, then find the ratio for today if we
             # had used the old weights for today
 
-            ### old_leverage_ratio = np.sum(mdp_port.normalized_weights)
             old_weighted_valuation = get_port_valuation(mdp_port, x=x) - debt
-            mdp_port.x = x
-
-            # old_weights = mdp_port.normalized_weights
 
             rebalance_old_div_ratio = mdp_port.get_diversification_ratio(x, weights='current')
 
@@ -287,29 +161,26 @@ def do_analysis(assets=None, write_to_file=True):
 
             trailing_diversification_ratio = mdp_port.get_diversification_ratio(x, weights='normalized')
 
-            global long_only_mdp_cov_matrix, long_only_mdp_global_port
-            long_only_mdp_cov_matrix = mdp_port.get_covariance_matrix_lookback(x)
-            long_only_mdp_global_port = mdp_port
+            # global long_only_mdp_cov_matrix, long_only_mdp_global_port
+            # long_only_mdp_cov_matrix = mdp_port.get_covariance_matrix_lookback(x)
+            # long_only_mdp_global_port = mdp_port
             # _ = mdp_port.get_long_only_mdp_weights(x)
-            long_only_dr_algo = _get_long_only_diversification_ratio(np.array([ w[0] for w in mdp_port.normalized_weights]))
+            # long_only_dr_algo = _get_long_only_diversification_ratio(np.array([ w[0] for w in mdp_port.normalized_weights]))
 
             # This is for safety, either method should be able to get the same result, if not there is a problem
-            if round(long_only_dr_algo, 8) != -round(trailing_diversification_ratio, 8):
-                print "Div Diff: ", long_only_dr_algo, '\t', trailing_diversification_ratio
-                import pdb; pdb.set_trace()
+            # if round(long_only_dr_algo, 8) != -round(trailing_diversification_ratio, 8):
+            #     print "Div Diff: ", long_only_dr_algo, '\t', trailing_diversification_ratio
+            #     import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
 
             mdp_port.trailing_DRs.append(trailing_diversification_ratio)
             if logging.root.level < 25:
                 print "New Trailing Diversification Ratio: ", x, trailing_diversification_ratio
 
-            # need to call this function to ensure that globals are set correctly for _get_long_only_diversification_ratio
-            # _ = mdp_port.get_long_only_mdp_weights(x)
-            # other_algo_result = _get_long_only_diversification_ratio(np.array([w[0] for w in theoretical_weights]))
-            # if round(trailing_diversification_ratio, 6) != -round(other_algo_result, 6):
-            #     import pdb; pdb.set_trace()
             mdp_port.rebalance_log.append((rebalance_date, rebalance_old_div_ratio, trailing_diversification_ratio, theoretical_weights))
 
-            # total_leverage = np.sum(old_weights)
+            # concepts of leverage and debt really only a factor when using other_data / yield curve, even then might
+            # not be necessary
             current_leverage_ratio = np.sum(mdp_port.normalized_weights)
             debt = (current_leverage_ratio - 1) * old_weighted_valuation
             current_portfolio_valuation = get_port_valuation(mdp_port, x=x) - debt
@@ -337,138 +208,6 @@ def do_analysis(assets=None, write_to_file=True):
 
     system_results = aggregate_statistics(mdp_port, write_to_file=write_to_file)
     return system_results
-
-
-def aggregate_statistics(mdp_port, write_to_file=True):
-
-    if logging.root.level < 25:
-        print '\n'.join([str(r) for r in mdp_port.rebalance_log])
-
-    ### Create sharpe_price_list and a Moving Average of port valuations. Last if statement will simply store days
-    # the valuation was < MA
-    sharpe_price_list = []
-    sys_closes = []
-    system_dma = []
-    # trade_days_skipped = []
-    for k, val in enumerate(mdp_port.portfolio_valuations):
-        sharpe_price_list.append(('existing_trade', 'long', val[1]))
-        sys_closes.append(val[1])
-        if k < 200:
-            system_dma.append(1)
-        else:
-            system_dma.append(np.mean([n[1] for n in mdp_port.portfolio_valuations[k-200:k+1]]))
-        # if mdp_port.portfolio_valuations[k-1][1] < system_dma[k-1]:
-        #     trade_days_skipped.append(k)
-
-    ### Show starting and ending valuation (after potentially adding a moving average filter)
-    if logging.root.level < 25:
-        print '\n', mdp_port.portfolio_valuations[0], mdp_port.portfolio_valuations[-1]
-
-    ### Get Ref Data
-    ref_log = []
-
-    # add the other ETF here so that the data for SPY will be validated against it, but we won't use it directly
-    ref_port = Portfolio(assets_list=['SPY', 'TLT'])
-    ref_port = get_data(ref_port, base_etf=ref_port.assets[0], last_x_days=0, get_new_data=UPDATE_DATA)
-    ref_price_list = ref_port.trimmed[ref_port.assets[0]]
-
-    # first_date = datetime.datetime.strptime(mdp_port.portfolio_valuations[0][0], '%Y-%m-%d')
-    # ref_closes = [t['AdjClose'] for t in ref_price_list if datetime.datetime.strptime(t['Date'], '%Y-%m-%d') >= first_date ]
-    first_date = mdp_port.portfolio_valuations[0][0]
-    ref_closes = [ t['AdjClose'] for t in ref_price_list if t['Date'] >= first_date ]
-    for val in ref_closes:
-        ref_log.append(('existing_trade', 'long', val))
-
-
-    ### Gather statistics
-    system_stats = {}
-    ref_stats = {}
-
-    system_stats['drawdown'] = get_drawdown(sys_closes)
-    ref_stats['drawdown'] = get_drawdown(ref_closes)
-
-    system_stats['mean_drawdown'] = np.mean(system_stats['drawdown'])
-    ref_stats['mean_drawdown'] = np.mean(ref_stats['drawdown'])
-
-    system_stats['median_drawdown'] = np.median(system_stats['drawdown'])
-    ref_stats['median_drawdown'] = np.median(ref_stats['drawdown'])
-
-    system_stats['sigma_drawdown'] = np.std(system_stats['drawdown'])
-    ref_stats['sigma_drawdown'] = np.std(ref_stats['drawdown'])
-
-
-    # smean, sstd, sneg_std, spos_std, ssharpe, ssortino, savg_loser, savg_winner, spct_losers = get_sharpe_ratio(sharpe_price_list)
-
-    system_stats['arith_mean'], system_stats['sigma'], system_stats['neg_sigma'], system_stats['pos_sigma'], \
-        system_stats['sharpe'], system_stats['sortino'], system_stats['avg_loser'], system_stats['avg_winner'], \
-        system_stats['pct_losers'] = get_sharpe_ratio(sharpe_price_list)
-
-    if write_to_file:
-        output_fields = ('Date', 'Port Valuation', 'Ref Valuation', 'Port DD', 'Ref DD', 'Port MA', 'Port DRs')
-
-        # We must add back in dashes into the date so Excel handles this properly
-        output_string = '\n'.join( [(str(n[0][0:4]) + '-' + str(n[0][4:6]) + '-' + str(n[0][6:8])
-                                     + ',' + str(n[1]) + ',' + str(ref_log[k][2]/ref_log[0][2]) +\
-                                     ',' + str(system_stats['drawdown'][k]) + ',' + str(ref_stats['drawdown'][k]) +\
-                                     ',' + str(system_dma[k]) +\
-                                     ',' + str(mdp_port.trailing_DRs[k])
-            ) for k, n in enumerate(mdp_port.portfolio_valuations)] )
-
-        output_header = ','.join(output_fields)
-        output_header_and_data = output_header + '\n' + output_string
-        current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
-        out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/portfolio_analysis' + '_' + str(current_time) +'.csv'
-        with open(out_file_name, 'w') as f:
-            f.write(output_header_and_data)
-
-    system_stats['total_years_in'] = len(sharpe_price_list) / 252.0
-    system_stats['annualized_return'] = math.pow(mdp_port.portfolio_valuations[-1][1], (1.0/system_stats['total_years_in']))
-
-    system_stats['mean_diversification_ratio'] = np.mean([ n for n in mdp_port.trailing_DRs if n != 0.0 ])
-    #historical_trailing_DRs = np.mean( [ n[1] for n in mdp_port.rebalance_log ])
-    #system_stats['mean_diversification_ratio'] = historical_trailing_DRs
-    system_stats['number_of_rebals'] = len(mdp_port.rebalance_log)
-
-    # We added leading zeroes to trailing_DRs, don't include them in the mean
-    if logging.root.level < 25:
-        print "Mean Daily Diversification Ratio: ", system_stats['mean_diversification_ratio'], len(mdp_port.trailing_DRs)
-        print '\t\tSystem:'
-        print 'ArithMu: \t', round(system_stats['arith_mean'], 6)
-        print 'Sigma: \t\t', round(system_stats['sigma'], 6)
-        print 'Mean DD: \t', round(system_stats['mean_drawdown'], 6)
-        print 'Median DD: \t', round(system_stats['median_drawdown'], 6)
-        print 'Sigma DD: \t', round(system_stats['sigma_drawdown'], 6)
-        print 'NegSigma: \t', round(system_stats['neg_sigma'], 6)
-        print 'NegSigma/Tot: \t', round((system_stats['neg_sigma']/system_stats['sigma']), 6)
-        print 'Sharpe: \t', round(system_stats['sharpe'], 6)
-        print 'Sortino: \t', round(system_stats['sortino'], 6)
-        print 'Ann. Return: \t', round(system_stats['annualized_return'], 6)
-
-    ref_stats['arith_mean'], ref_stats['sigma'], ref_stats['neg_sigma'], ref_stats['pos_sigma'], \
-        ref_stats['sharpe'], ref_stats['sortino'], ref_stats['avg_loser'], ref_stats['avg_winner'], \
-        ref_stats['pct_losers'] = get_sharpe_ratio(ref_log)
-
-    ref_total_return = ref_log[-1][2] / ref_log[0][2]
-    ref_stats['annualized_return'] = math.pow(ref_total_return, (1.0/system_stats['total_years_in']))
-
-    if logging.root.level < 25:
-        print '\n\t\tReference:'
-        print 'ArithMu: \t', round(ref_stats['arith_mean'], 6)
-        print 'Sigma: \t\t', round(ref_stats['sigma'], 6)
-        print 'Mean DD: \t', round(ref_stats['mean_drawdown'], 6)
-        print 'Median DD: \t', round(ref_stats['median_drawdown'], 6)
-        print 'Sigma DD: \t', round(ref_stats['sigma_drawdown'], 6)
-        print 'NegSigma: \t', round(ref_stats['neg_sigma'], 6)
-        print 'NegSigma/Tot: \t', round((ref_stats['neg_sigma']/ref_stats['sigma']), 6)
-        print 'Sharpe: \t', round(ref_stats['sharpe'], 6)
-        print 'Sortino: \t', round(ref_stats['sortino'], 6)
-        print 'Ann. Return: \t', round(ref_stats['annualized_return'], 6)
-
-        print "\nFinished: "
-        if write_to_file:
-            print "File Written: ", out_file_name.split('/')[-1]
-
-    return system_stats
 
 
 def _get_long_only_diversification_ratio(weights):
@@ -730,10 +469,13 @@ class Portfolio():
 
         best_result = self._get_best_result_from_jacobians(all_results, highest_diversification_ratio)
 
-        np_normalized_sum = np.sum(best_result[0])
+        # abs() should not be necessary as being positive is a constraint, but this is for safety
+        np_normalized_sum = np.sum([ abs(w) for w in best_result[0] ])
         np_normalized_weights = [ (w / np_normalized_sum) for w in best_result[0] ]
 
         ret_weights = np.array([ [w] for w in np_normalized_weights ])
+
+        # import pdb; pdb.set_trace()
         return ret_weights
 
     @memoize
@@ -743,8 +485,8 @@ class Portfolio():
         # in practice, if any solution has a tiny asset weighting, we can just manually ignore it
         bounds = [ (0.00001, 1.0) for asset in self.assets ]
 
-        initial_guess_rp = np.array([ w[0] for w in self.get_risk_parity_weights(self.get_max_index()) ])
-        initial_guess_mdp = np.array([ max(w[0], 0) for w in self.get_mdp_weights(self.get_max_index()) ])
+        initial_guess_rp = np.array([ w[0] for w in self.get_risk_parity_weights(self.x) ])
+        initial_guess_mdp = np.array([ max(w[0], 0) for w in self.get_mdp_weights(self.x) ])
         initial_guess_equal = np.array([ (1.0 / len(initial_guess_mdp)) for a in initial_guess_mdp ])
 
         constraints = {'type': 'eq', 'fun': (lambda x: sum(x) - 1.0) }
@@ -760,9 +502,13 @@ class Portfolio():
 
             basinhopping_minimizer_kwargs = {'bounds': bounds, 'constraints': constraints}
 
+            # import pdb; pdb.set_trace()
             res = scipy.optimize.basinhopping(_get_long_only_diversification_ratio, initial_guess_mdp, niter=10, \
                                               stepsize=1, minimizer_kwargs=basinhopping_minimizer_kwargs, \
                                               callback=callback)
+
+            # import pdb; pdb.set_trace()
+            # self.get_diversification_ratio(self.x, weights=res[0])
 
         elif method == 'initial_guess_mdp_local':
             options_dict = {'maxiter': 300, 'disp': True}
@@ -988,6 +734,7 @@ class Portfolio():
 
         return ret
 
+
 def run_live_portfolio_analysis(assets=None):
 
     update_data = True
@@ -1007,7 +754,6 @@ def run_live_portfolio_analysis(assets=None):
 
     ###
     # return
-
 
     output_data = []
     for stock_tuple in input:
@@ -1084,6 +830,7 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
         port.current_entry_prices = [ 0 for n in port.assets ]
         port.current_weights = [ 0 for n in port.assets ]
         port.lookback = GLOBAL_LOOKBACK
+        port.x = port.get_max_index()
 
         # print [ port.closes[v] for k, v in enumerate(port.assets) ]
 
@@ -1179,4 +926,133 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
         return ret_dict, port
 
 
+def aggregate_statistics(mdp_port, write_to_file=True):
 
+    if logging.root.level < 25:
+        print '\n'.join([str(r) for r in mdp_port.rebalance_log])
+
+    ### Create sharpe_price_list and a Moving Average of port valuations. Last if statement will simply store days
+    # the valuation was < MA
+    sharpe_price_list = []
+    sys_closes = []
+    system_dma = []
+    # trade_days_skipped = []
+    for k, val in enumerate(mdp_port.portfolio_valuations):
+        sharpe_price_list.append(('existing_trade', 'long', val[1]))
+        sys_closes.append(val[1])
+        if k < 200:
+            system_dma.append(1)
+        else:
+            system_dma.append(np.mean([n[1] for n in mdp_port.portfolio_valuations[k-200:k+1]]))
+        # if mdp_port.portfolio_valuations[k-1][1] < system_dma[k-1]:
+        #     trade_days_skipped.append(k)
+
+    ### Show starting and ending valuation (after potentially adding a moving average filter)
+    if logging.root.level < 25:
+        print '\n', mdp_port.portfolio_valuations[0], mdp_port.portfolio_valuations[-1]
+
+    ### Get Ref Data
+    ref_log = []
+
+    # add the other ETF here so that the data for SPY will be validated against it, but we won't use it directly
+    ref_port = Portfolio(assets_list=['SPY', 'TLT'])
+    ref_port = get_data(ref_port, base_etf=ref_port.assets[0], last_x_days=0, get_new_data=UPDATE_DATA)
+    ref_price_list = ref_port.trimmed[ref_port.assets[0]]
+
+    # first_date = datetime.datetime.strptime(mdp_port.portfolio_valuations[0][0], '%Y-%m-%d')
+    # ref_closes = [t['AdjClose'] for t in ref_price_list if datetime.datetime.strptime(t['Date'], '%Y-%m-%d') >= first_date ]
+    first_date = mdp_port.portfolio_valuations[0][0]
+    ref_closes = [ t['AdjClose'] for t in ref_price_list if t['Date'] >= first_date ]
+    for val in ref_closes:
+        ref_log.append(('existing_trade', 'long', val))
+
+
+    ### Gather statistics
+    system_stats = {}
+    ref_stats = {}
+
+    system_stats['drawdown'] = get_drawdown(sys_closes)
+    ref_stats['drawdown'] = get_drawdown(ref_closes)
+
+    system_stats['mean_drawdown'] = np.mean(system_stats['drawdown'])
+    ref_stats['mean_drawdown'] = np.mean(ref_stats['drawdown'])
+
+    system_stats['median_drawdown'] = np.median(system_stats['drawdown'])
+    ref_stats['median_drawdown'] = np.median(ref_stats['drawdown'])
+
+    system_stats['sigma_drawdown'] = np.std(system_stats['drawdown'])
+    ref_stats['sigma_drawdown'] = np.std(ref_stats['drawdown'])
+
+
+    # smean, sstd, sneg_std, spos_std, ssharpe, ssortino, savg_loser, savg_winner, spct_losers = get_sharpe_ratio(sharpe_price_list)
+
+    system_stats['arith_mean'], system_stats['sigma'], system_stats['neg_sigma'], system_stats['pos_sigma'], \
+        system_stats['sharpe'], system_stats['sortino'], system_stats['avg_loser'], system_stats['avg_winner'], \
+        system_stats['pct_losers'] = get_sharpe_ratio(sharpe_price_list)
+
+    if write_to_file:
+        output_fields = ('Date', 'Port Valuation', 'Ref Valuation', 'Port DD', 'Ref DD', 'Port MA', 'Port DRs')
+
+        # We must add back in dashes into the date so Excel handles this properly
+        output_string = '\n'.join( [(str(n[0][0:4]) + '-' + str(n[0][4:6]) + '-' + str(n[0][6:8])
+                                     + ',' + str(n[1]) + ',' + str(ref_log[k][2]/ref_log[0][2]) +\
+                                     ',' + str(system_stats['drawdown'][k]) + ',' + str(ref_stats['drawdown'][k]) +\
+                                     ',' + str(system_dma[k]) +\
+                                     ',' + str(mdp_port.trailing_DRs[k])
+            ) for k, n in enumerate(mdp_port.portfolio_valuations)] )
+
+        output_header = ','.join(output_fields)
+        output_header_and_data = output_header + '\n' + output_string
+        current_time = str(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+        out_file_name = '/home/wilmott/Desktop/fourseasons/fourseasons/results/portfolio_analysis' + '_' + str(current_time) +'.csv'
+        with open(out_file_name, 'w') as f:
+            f.write(output_header_and_data)
+
+    system_stats['total_years_in'] = len(sharpe_price_list) / 252.0
+    system_stats['annualized_return'] = math.pow(mdp_port.portfolio_valuations[-1][1], (1.0/system_stats['total_years_in']))
+
+    system_stats['mean_diversification_ratio'] = np.mean([ n for n in mdp_port.trailing_DRs if n != 0.0 ])
+    #historical_trailing_DRs = np.mean( [ n[1] for n in mdp_port.rebalance_log ])
+    #system_stats['mean_diversification_ratio'] = historical_trailing_DRs
+    system_stats['number_of_rebals'] = len(mdp_port.rebalance_log)
+
+    # We added leading zeroes to trailing_DRs, don't include them in the mean
+    if logging.root.level < 25:
+        print "Mean Daily Diversification Ratio: ", system_stats['mean_diversification_ratio'], len(mdp_port.trailing_DRs)
+        print '\t\tSystem:'
+        print 'ArithMu: \t', round(system_stats['arith_mean'], 6)
+        print 'Sigma: \t\t', round(system_stats['sigma'], 6)
+        print 'Mean DD: \t', round(system_stats['mean_drawdown'], 6)
+        print 'Median DD: \t', round(system_stats['median_drawdown'], 6)
+        print 'Sigma DD: \t', round(system_stats['sigma_drawdown'], 6)
+        print 'NegSigma: \t', round(system_stats['neg_sigma'], 6)
+        print 'NegSigma/Tot: \t', round((system_stats['neg_sigma']/system_stats['sigma']), 6)
+        print 'Sharpe: \t', round(system_stats['sharpe'], 6)
+        print 'Sortino: \t', round(system_stats['sortino'], 6)
+        print 'Ann. Return: \t', round(system_stats['annualized_return'], 6)
+
+    ref_stats['arith_mean'], ref_stats['sigma'], ref_stats['neg_sigma'], ref_stats['pos_sigma'], \
+        ref_stats['sharpe'], ref_stats['sortino'], ref_stats['avg_loser'], ref_stats['avg_winner'], \
+        ref_stats['pct_losers'] = get_sharpe_ratio(ref_log)
+
+    ref_total_return = ref_log[-1][2] / ref_log[0][2]
+    ref_stats['annualized_return'] = math.pow(ref_total_return, (1.0/system_stats['total_years_in']))
+
+    if logging.root.level < 25:
+        print '\n\t\tReference:'
+        print 'ArithMu: \t', round(ref_stats['arith_mean'], 6)
+        print 'Sigma: \t\t', round(ref_stats['sigma'], 6)
+        print 'Mean DD: \t', round(ref_stats['mean_drawdown'], 6)
+        print 'Median DD: \t', round(ref_stats['median_drawdown'], 6)
+        print 'Sigma DD: \t', round(ref_stats['sigma_drawdown'], 6)
+        print 'NegSigma: \t', round(ref_stats['neg_sigma'], 6)
+        print 'NegSigma/Tot: \t', round((ref_stats['neg_sigma']/ref_stats['sigma']), 6)
+        print 'Sharpe: \t', round(ref_stats['sharpe'], 6)
+        print 'Sortino: \t', round(ref_stats['sortino'], 6)
+        print 'Ann. Return: \t', round(ref_stats['annualized_return'], 6)
+
+        print "\nFinished: "
+        if write_to_file:
+            print "File Written: ", out_file_name.split('/')[-1]
+
+    return system_stats
