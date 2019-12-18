@@ -38,10 +38,12 @@ def get_portfolio_weights(mdp_port, x):
     try:
         theoretical_weights = mdp_port.get_short_long_mdp_weights(x)
     except:
-        # this is a hack...if we can't determine new MDP weights, just re-use the current ones
-        # arguably it would be better to determine current risk parity weights for example...
+        # HACK: Sometimes the weights can't be determined because the covariance matrix has a zero-determinant and
+        # cannot be inverted. If that's the case, do the next best thing and optimize it as of the previous day.
+        # Not clear why we have uninvertible matrices
+        print "WARNING: Changing x (from-to): ", x, x-1
         import pdb; pdb.set_trace()
-        return mdp_port, mdp_port.normalized_weights
+        theoretical_weights = mdp_port.get_short_long_mdp_weights(x-1)
 
     # if logging.root.level < 25:
         # print "Theoretical Result: \n", theoretical_weights
@@ -424,11 +426,13 @@ class Portfolio():
 
         unity_vector = np.array([[1]] * len(self.assets))
 
-        # Either the unity vector OR the transposed volalities matrix can be used in B, below. Changing them would scale
-        # the result differently, but we normalize as the last step. The white paper shows this calculation done with
-        # the transposed volatilities matrix, but the website actually shows it done with the unity vector. Note that
-        # the "B" that is used in the whitepaper is the "C" that is on the website.
+        # Either the unity vector OR the transposed volatilities matrix can be used in B, below. Changing them would
+        # scale the result differently, but we normalize as the last step. The white paper shows this calculation done
+        # with the transposed volatilities matrix, but the website actually shows it done with the unity vector. Note
+        # that the "B" that is used in the whitepaper is the "C" that is on the website.
 
+        # TODO: Some matrices cannot be inverted and this will fail. Try to find a less fragile way. These often fail in
+        # the LOMDP too, it seems they might have a bad covariance matrix.
         A = np.dot(np.dot(np.matrix.transpose(unity_vector), scipy.linalg.inv(cov_matrix)), unity_vector)
         # print "A is: ", A
 
@@ -437,7 +441,7 @@ class Portfolio():
         B = np.dot(np.dot(self.transposed_volatilities_matrix, scipy.linalg.inv(cov_matrix)), volatilities_matrix)
         # print "B is: ", B
 
-        C = np.dot(np.dot(self.transposed_volatilities_matrix, scipy.linalg.inv(cov_matrix)), volatilities_matrix)
+        # C = np.dot(np.dot(self.transposed_volatilities_matrix, scipy.linalg.inv(cov_matrix)), volatilities_matrix)
         # print "C is: ", C
 
         #D = (A * C) - (B^2)
