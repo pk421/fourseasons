@@ -3,7 +3,7 @@ import scipy as scipy
 import datetime
 import copy
 import sys
-
+import logging
 import math
 import itertools
 
@@ -14,17 +14,14 @@ from src.portfolio_analysis.portfolio_utils         import get_data
 from src.portfolio_analysis.portfolio_constants     import custom_assets_list, live_portfolio, stocks_to_test
 from src.portfolio_analysis.portfolio_helpers       import get_drawdown, get_port_valuation, TradeLog, \
                                                            adjust_weights_based_on_yield_curve
-
 from src.math_tools                                 import get_returns, get_ln_returns
-
 from util.memoize import memoize
 
-import logging
 
 # determine whether to download new data from the internet
 UPDATE_DATA=True
-GLOBAL_LOOKBACK = 63
-GLOBAL_UPDATE_DATE = '20191213'
+GLOBAL_LOOKBACK = 126
+GLOBAL_UPDATE_DATE = '20191218'
 
 global long_only_mdp_cov_matrix, long_only_mdp_global_port
 long_only_mdp_cov_matrix = None
@@ -33,17 +30,7 @@ long_only_mdp_global_port = None
 logging.root.setLevel(logging.INFO)
 
 def get_portfolio_weights(mdp_port, x):
-
-    # FIXME: sometimes this routine results in a singular matrix and fails
-    try:
-        theoretical_weights = mdp_port.get_short_long_mdp_weights(x)
-    except:
-        # HACK: Sometimes the weights can't be determined because the covariance matrix has a zero-determinant and
-        # cannot be inverted. If that's the case, do the next best thing and optimize it as of the previous day.
-        # Not clear why we have uninvertible matrices
-        print "WARNING: Changing x (from-to): ", x, x-1
-        import pdb; pdb.set_trace()
-        theoretical_weights = mdp_port.get_short_long_mdp_weights(x-1)
+    theoretical_weights = mdp_port.get_short_long_mdp_weights(x)
 
     # if logging.root.level < 25:
         # print "Theoretical Result: \n", theoretical_weights
@@ -284,7 +271,6 @@ class Portfolio():
         self.past_returns_matrix = None
         self.cov_matrix = None
         self.inv_cov_matrix = None
-        self.transposed_volatilities_matrix = None
 
         self.lookback = None
         self.rebalance_time = None
@@ -415,47 +401,60 @@ class Portfolio():
         # The foundation for this and get_diversification_ratio() can be found in Roger Clarke: Minimum Variance,
         # Maximum Diversification, and Risk Parity: An Analytic Perspective
         # Additional information about MDP is in Choueifaty: Properties Of The Most Diverisified Portfolio
-        self.mean_past_returns = {}
 
-        volatilities_matrix = self.get_volatilities_matrix_lookback(x)
+        # FIXME: sometimes this routine results in a singular matrix and fails
+        # HACK: Sometimes the weights can't be determined because the covariance matrix has a zero-determinant and
+        # cannot be inverted. If that's the case, do the next best thing and optimize it as of the previous day.
+        # Not clear why we have uninvertible matrices
+        subtraction_iter = 0
+        while True:
+            try:
+                if subtraction_iter > 0:
+                    print "WARNING SINGULAR MATRIX WORKAROUND: Changing x (from-to): ", x, x-subtraction_iter
+                    # import pdb; pdb.set_trace()
+                self.mean_past_returns = {}
 
-        cov_matrix = self.get_covariance_matrix_lookback(x)
+                volatilities_matrix = self.get_volatilities_matrix_lookback(x-subtraction_iter)
+                cov_matrix = self.get_covariance_matrix_lookback(x-subtraction_iter)
 
-        # This is used as the "mean return"
-        self.transposed_volatilities_matrix = np.matrix.transpose(volatilities_matrix)
+                # This is used as the "mean return"
+                transposed_volatilities_matrix = np.matrix.transpose(volatilities_matrix)
 
-        unity_vector = np.array([[1]] * len(self.assets))
+                unity_vector = np.array([[1]] * len(self.assets))
 
-        # Either the unity vector OR the transposed volatilities matrix can be used in B, below. Changing them would
-        # scale the result differently, but we normalize as the last step. The white paper shows this calculation done
-        # with the transposed volatilities matrix, but the website actually shows it done with the unity vector. Note
-        # that the "B" that is used in the whitepaper is the "C" that is on the website.
+                # Either the unity vector OR the transposed volatilities matrix can be used in B, below. Changing them would
+                # scale the result differently, but we normalize as the last step. The white paper shows this calculation done
+                # with the transposed volatilities matrix, but the website actually shows it done with the unity vector. Note
+                # that the "B" that is used in the whitepaper is the "C" that is on the website.
 
-        # TODO: Some matrices cannot be inverted and this will fail. Try to find a less fragile way. These often fail in
-        # the LOMDP too, it seems they might have a bad covariance matrix.
-        A = np.dot(np.dot(np.matrix.transpose(unity_vector), scipy.linalg.inv(cov_matrix)), unity_vector)
-        # print "A is: ", A
+                # TODO: Some matrices cannot be inverted and this will fail. Try to find a less fragile way. These often fail in
+                # the LOMDP too, it seems they might have a bad covariance matrix.
+                A = np.dot(np.dot(np.matrix.transpose(unity_vector), scipy.linalg.inv(cov_matrix)), unity_vector)
+                # print "A is: ", A
 
-        # B = np.dot(np.dot(np.matrix.transpose(unity_vector), scipy.linalg.inv(cov_matrix)), volatilities_matrix)
-        # This basic equation appears in the Holt paper - chapter 3
-        B = np.dot(np.dot(self.transposed_volatilities_matrix, scipy.linalg.inv(cov_matrix)), volatilities_matrix)
-        # print "B is: ", B
+                # B = np.dot(np.dot(np.matrix.transpose(unity_vector), scipy.linalg.inv(cov_matrix)), volatilities_matrix)
+                # This basic equation appears in the Holt paper - chapter 3
+                B = np.dot(np.dot(transposed_volatilities_matrix, scipy.linalg.inv(cov_matrix)), volatilities_matrix)
+                # print "B is: ", B
 
-        # C = np.dot(np.dot(self.transposed_volatilities_matrix, scipy.linalg.inv(cov_matrix)), volatilities_matrix)
-        # print "C is: ", C
+                # C = np.dot(np.dot(transposed_volatilities_matrix, scipy.linalg.inv(cov_matrix)), volatilities_matrix)
+                # print "C is: ", C
 
-        #D = (A * C) - (B^2)
-        #print "D is: ", D
+                #D = (A * C) - (B^2)
+                #print "D is: ", D
 
-        numerator = np.dot(scipy.linalg.inv(cov_matrix), volatilities_matrix)
-        denominator = B
-        mdp_weights = np.divide(numerator, denominator)
+                numerator = np.dot(scipy.linalg.inv(cov_matrix), volatilities_matrix)
+                denominator = B
+                mdp_weights = np.divide(numerator, denominator)
 
-        # This is akin (though possibly not identical) to the "naive" risk parity optimization.
-        ### mdp_weights = np.divide(unity_vector, self.volatilities_matrix)
+                # This is akin (though possibly not identical) to the "naive" risk parity optimization.
+                ### mdp_weights = np.divide(unity_vector, self.volatilities_matrix)
 
-        total_sum = sum([abs(n) for n in mdp_weights])[0]
-        normalized_weights = np.divide(mdp_weights, total_sum)
+                total_sum = sum([abs(n) for n in mdp_weights])[0]
+                normalized_weights = np.divide(mdp_weights, total_sum)
+                break
+            except:
+                subtraction_iter += 1
 
         return normalized_weights
 
@@ -577,9 +576,9 @@ class Portfolio():
                 duplicated_geom_means.append((geometric_mean_derivative, result))
             final_results[geometric_mean_derivative] = result
 
-        final_result_count = 0
-        for geometric_mean, result in sorted(final_results.iteritems()):
-            final_result_count += 1
+        # final_result_count = 0
+        # for geometric_mean, result in sorted(final_results.iteritems()):
+            # final_result_count += 1
             # print "Final Result: ", final_result_count, round(geometric_mean, 6), round(result[1], 6), result[0]
 
         lowest_derivative = min(final_results.keys())
@@ -703,7 +702,7 @@ class Portfolio():
         ###     raise Exception("set normalized weights don't sum to 1.0: " + str(weight_sum))
         self.current_entry_prices = [ self.closes[v][x] for k, v in enumerate(self.assets) ]
         self.shares = [ (old_weighted_valuation * self.normalized_weights[k][0] / self.closes[v][x]) for k, v in enumerate(self.assets) ]
-        print "SELF SHARES: ", self.shares
+        print "Setting Normalized Weights ", x, [ round(w, 5) for w in weights ]
 
     # Do NOT memoize, it can be called with both current and normalized weights at the same x
     def get_diversification_ratio(self, x, weights=None):
@@ -793,7 +792,7 @@ def run_live_portfolio_analysis(assets=None):
 
     inverse_volatility_weights = port.get_inverse_volatility_weights(port.get_max_index())
 
-    print '     ', 'Symbol', '\t', 'Beta', '\t', 'Sigma', '\t', 'Act', '\t', 'LOMDP', '\t', 'RP', '\t', 'MDP', '\t', '1/Vol', '\t', 'LOMDPDiff'
+    print '     ', 'Symbol', '\t', 'Beta', '\t', 'Sigma', '\t', 'Act', '\t', 'LOMDP', '\t', 'RP', '\t', 'MDP', '\t', '1/Vol', '\t', 'ActDer', '\t', 'LOMDPDiff'
 
     new_stock_output_data = output_data[len(live_portfolio[0]):]
 
@@ -809,6 +808,7 @@ def run_live_portfolio_analysis(assets=None):
             '{0:.4f}'.format(round(port_ret['risk_parity_weights'][i], 4)).zfill(6), '\t', \
             '{0:.3f}'.format(round(port_ret['mdp_weights'][i], 3)).zfill(5), '\t', \
             '{0:.4f}'.format(round(inverse_volatility_weights[item[0]], 4)).zfill(6), '\t', \
+            '{0:.3f}'.format(round(port_ret['port_derivative'][i], 3)).zfill(5), '\t', \
             round(weighted_delta, 2)
 
     for item in sorted(new_stock_output_data, key=lambda tup: tup[1], reverse=False):
@@ -877,7 +877,9 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
             div_ratio = port.get_diversification_ratio(port.get_max_index(), weights='current')
 
             deriv_weights = np.array([ w[0] for w in port.current_weights ])
-            approx_derivative = scipy.optimize._numdiff.approx_derivative(_get_long_only_diversification_ratio, deriv_weights)
+            port_derivative = scipy.optimize._numdiff.approx_derivative(_get_long_only_diversification_ratio, deriv_weights)
+            # The derivatives are reversed because the calcs minimize the DR but we want to maxmize it
+            port_derivative = [ -d for d in port_derivative ]
 
             # Set the weights to the various algo weights, then recalc the div ratio
             port.current_weights = risk_parity_weights
@@ -907,8 +909,10 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
             mdp_weights = [ [1.0] ]
             mdp_div_ratio = 1.0
 
+            port_derivative = [[ 1.0 ]]
+
         if len(assets) > 1:
-            print "Act. Port Derivative: ", approx_derivative
+            # print "Act. Port Derivative: ", approx_derivative
             print port.portfolio_valuations
             # print "Assets: \t", assets
             print "Act. Sigma: \t", round(system_sigma, 6)
@@ -923,6 +927,7 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
         ret_dict = {'assets': assets, 'actual_sigma': round(system_sigma, 6), \
                 'actual_weights': [ round(n[0], 6) for n in original_weights ], \
                 'valuation': valuation, 'actual_div_ratio': div_ratio, \
+                'port_derivative': port_derivative, \
                 'long_only_mdp_weights': long_only_mdp_weights, \
                 'long_only_mdp_div_ratio': long_only_mdp_div_ratio, \
                 'risk_parity_weights': risk_parity_weights, \
