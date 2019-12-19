@@ -101,69 +101,50 @@ max_uncorrelated = [('SPY', 1), ('TLT', 1), ('IEF', 1), ('GLD', 1), ('DBC', 4), 
 m_ib_live_now = [
        # Developed Market stocks
        ('T', 1400), ('VOO', 0.001), ('VBR', 700),
-
        # Developed Market Bonds
-       ('VGLT', 0.001), ('VGIT', 0.0001),
-
+       ('EDV', 0.0001), ('VGIT', 0.0001),
        # Developed Market Muni Bonds
        ('MUB', 0.0001),
-
        # Emerging Market Bonds
        ('VWOB', 0.001),
-
        # Emerging Market Stocks
        ('EWZ', 1000), ('GXG', 4000), ('RSX', 2000), ('VWO', 0.0001),
-
        # Commodities
        # Switch DBC to PDBC
        ('DBC', 4000), ('HP', 500), ('MPLX', 2000), ('PAA', 1000),
-
        # Gold
        ('GDX', 3800), ('IAU', 7000),
-
        # Real Estate
-       ('VNQ', 0.0001),
-
+       ('VNQ', 400),
        # Crypto
-       ('GBTC', 0.001),
-
+       ('GBTC', 1100),
        # Other
-       ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 5985), ('CGC', 798),
+       ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 13500), ('CGC', 798),
 
        ]
 
-
-m_ib_20191215 = [
+m_ib_20191219 = [
        # Developed Market stocks
-       ('T', 1400), ('VOO', 200), ('VBR', 700), ('SKT', 2000),
-
+       ('T', 1400), ('VOO', 0.001), ('VBR', 700),
        # Developed Market Bonds
-       ('VGLT', 0.0001), ('VGIT', 0.0001), ('EDV', 0.0001),
-
+       ('EDV', 400), ('VGIT', 0.0001),
        # Developed Market Muni Bonds
        ('MUB', 0.0001),
-
        # Emerging Market Bonds
-       ('VWOB', 0.0001),
-
+       ('VWOB', 0.001),
        # Emerging Market Stocks
        ('EWZ', 1000), ('GXG', 4000), ('RSX', 2000), ('VWO', 0.0001),
-
        # Commodities
        # Switch DBC to PDBC
-       ('DBC', 4000), ('HP', 600), ('MPLX', 0.0001), ('PAA', 1000),
-
+       ('DBC', 4000), ('HP', 500), ('MPLX', 2000), ('PAA', 1000),
        # Gold
        ('GDX', 3800), ('IAU', 7000),
-
        # Real Estate
-       ('VNQ', 300),
-
+       ('VNQ', 400),
        # Crypto
-       ('GBTC', 0.0001),
-
+       ('GBTC', 1100),
        # Other
-       ('ACB', 0.0001), ('APHA', 0.0001), ('HMLSF', 1333), ('LXRP', 5985), ('CGC', 400),
+       ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 15000), ('CGC', 798),
 
        ]
 
@@ -375,7 +356,7 @@ live_portfolio = [m_ib_live_now]
 
 custom_assets_volatile_groups = [ a[0] for a in volatile_groups ]
 
-custom_assets_list = dalio_all_weather
+custom_assets_list = custom_assets_volatile_groups
 
 
 
