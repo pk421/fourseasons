@@ -100,59 +100,58 @@ max_uncorrelated = [('SPY', 1), ('TLT', 1), ('IEF', 1), ('GLD', 1), ('DBC', 4), 
 
 m_ib_live_now = [
        # Developed Market stocks
-       ('T', 1400), ('VOO', 0.001), ('VBR', 700),
+       ('T', 1600), ('SKT', 3000), ('VOO', 0.001), ('VBR', 700),
        # Developed Market Bonds
-       ('EDV', 0.0001), ('VGIT', 0.0001),
+       ('EDV', 1200), ('VGIT', 0.0001),
        # Developed Market Muni Bonds
        ('MUB', 0.0001),
        # Emerging Market Bonds
        ('VWOB', 0.001),
        # Emerging Market Stocks
-       ('EWZ', 1000), ('GXG', 4000), ('RSX', 2000), ('VWO', 0.0001),
+       ('EWZ', 0.0001), ('GXG', 4000), ('RSX', 2000), ('INDA', 900), ('VWO', 0.0001),
        # Commodities
        # Switch DBC to PDBC
-       ('DBC', 4000), ('HP', 500), ('MPLX', 2000), ('PAA', 1000),
-       # Gold
-       ('GDX', 3800), ('IAU', 7000),
+       ('DBC', 4000), ('HEP', 3500), ('HP', 500), ('MPLX', 1400), ('WES', 76),
+       # Precious Metals
+       ('GDX', 3250), ('GDXJ', 0.0001), ('IAU', 7000), ('SLVP', 0.0001),
        # Real Estate
        ('VNQ', 400),
        # Crypto
-       ('GBTC', 1100),
+       ('GBTC', 3000),
        # Other
-       ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 13500), ('CGC', 798),
+       ('ACB', 5506), ('AOBC', 3400), ('APHA', 1700), ('CGC', 798), ('LXRP', 35000), ('MJ', 0.0001)
 
        ]
 
-m_ib_20191219 = [
+m_ib_20191221 = [
        # Developed Market stocks
-       ('T', 1400), ('VOO', 0.001), ('VBR', 700),
+       ('T', 1600), ('SKT', 3000), ('VOO', 0.001), ('VBR', 700),
        # Developed Market Bonds
-       ('EDV', 400), ('VGIT', 0.0001),
+       ('EDV', 1200), ('VGIT', 0.0001),
        # Developed Market Muni Bonds
        ('MUB', 0.0001),
        # Emerging Market Bonds
        ('VWOB', 0.001),
        # Emerging Market Stocks
-       ('EWZ', 1000), ('GXG', 4000), ('RSX', 2000), ('VWO', 0.0001),
+       ('EWZ', 0.0001), ('GXG', 4000), ('RSX', 2000), ('INDA', 900), ('VWO', 0.0001),
        # Commodities
        # Switch DBC to PDBC
-       ('DBC', 4000), ('HP', 500), ('MPLX', 2000), ('PAA', 1000),
+       ('DBC', 4000), ('ET', 0.0001), ('HEP', 3500), ('HP', 500), ('MPLX', 1400), ('WES', 450),
        # Gold
-       ('GDX', 3800), ('IAU', 7000),
+       ('GDX', 3250), ('GDXJ', 0.0001), ('IAU', 7000), ('SLVP', 1600),
        # Real Estate
        ('VNQ', 400),
        # Crypto
-       ('GBTC', 1100),
+       ('GBTC', 3000),
        # Other
-       ('ACB', 5506), ('APHA', 1333), ('HMLSF', 1333), ('LXRP', 15000), ('CGC', 798),
+       ('ACB', 5506), ('AOBC', 3400), ('APHA', 1700), ('CGC', 798), ('LXRP', 35000), ('MJ', 0.0001)
 
        ]
-
 
 # m_ib = max_uncorrelated
 # m_ib = m_ib_all_assets
 
-m_golden_butterfly_20191020 = [('IAU', 84), ('VGLT', 14), ('VGSH', 20), ('VBR', 9), ('VTI', 8),
+johana_golden_butterfly_20191020 = [('IAU', 84), ('VGLT', 14), ('VGSH', 20), ('VBR', 9), ('VTI', 8),
 
        ]
 # m_ib_total = [('IJR', 2200), ('TLT', 1866), ('IEF', 600), ('DBC', 4000), ('IAU', 5000), ('GDX', 500), ('PAA', 900), ('GXG', 4000), ('VNQ', 0), ('PCY', 0), ('JNK', 0), ('VIPSX', 0), ('XLU', 0)]
@@ -167,18 +166,39 @@ m_golden_butterfly_20191020 = [('IAU', 84), ('VGLT', 14), ('VGSH', 20), ('VBR', 
 #             # ('ACB', 2000), ('APH', 1000), ('LEAF', 600), ('WEED', 600)
 #             ]
 
-# EM Strat
-# em_strat = [('FXI', 100), ('RSX', 300), ('EWZ', 100), ('EMB', 100)]
+
+roth_ira = [
+       # Developed Market stocks
+       ('T', 100), ('VBR', 0.0001), ('IJR', 190), ('SKT', 150),
+       # Developed Market Bonds
+       ('EDV', 125), ('JPST', 0.0001),
+       # Developed Market Muni Bonds
+       ('MUB', 0.0001),
+       # Emerging Market Bonds
+       ('VWOB', 0.0001),
+       # Emerging Market Stocks
+       ('VWO', 0.0001),
+       # Commodities
+       # Switch DBC to PDBC
+       ('PDBC', 540), ('HP', 100),
+       # Gold
+       ('GDX', 0.0001), ('IAU', 573),
+       # Real Estate
+       ('VNQ', 10),
+       # Crypto
+       ('GBTC', 0.0001),
+       # Other
 
 
-roth_ira = [('TLT', 128), ('DBC', 560), ('IAU',573), ('IJR', 206), ('XOP', 140)]
+       ]
 
-#####['TNA', 'EURL', 'EDC', 'UGLD', 'DRN', 'TMF']
-### c_ib = [('IWM', 2835), ('TLT', 3488), ('IEF', 1500), ('DBC', 5800), ('UGLD', 3400), ('PAA', 1850)]
-c_ib = [('VBR', 3240), ('TLT', 3488), ('VGLT', 1660), ('IEF', 1970), ('DBC', 6870), ('IAU', 11000), ('PAA', 1850)]
+c_ib_live = [('VBR', 3240), ('IAU', 8600), ('JPST', 70)]
 
-c_roth_ira = [('TLT', 775), ('DBC', 2600), ('UGLD', 1350), ('VGK', 1500)]
-# c_roth_ira = [('TLT',190), ('DBC',1503), ('UGLD',605), ('VGK', 0)]
+c_ib_20191223 = [('VBR', 3240), ('IAU', 8600), ('JPST', 70), ('EDV', 2400), ('WES', 3000), ('HEP', 2500)]
+
+c_iras_combined = [ ('VBR', 381), ('BSV', 600), ('VWO', 1125), ('IAU', 4030), ('JPST', 1125), ('EDV', 236) ]
+
+c_iras_20191223 = [ ('VBR', 381), ('BSV', 600), ('VWO', 1125), ('IAU', 4030), ('EDV', 0.0001) ]
 
 # Developed World Large Cap Stocks - Dividend.com 25 Year Dividend Stocks - incomplete list
 dividend_growers = [
@@ -317,6 +337,7 @@ marijuana = [
     ('CGC', 0.000001),
     ('HMLSF', 0.000001),
     ('LXRP', 0.000001),
+    ('MJ', 0.000001),
 ]
 
 # Crypto
@@ -331,6 +352,8 @@ stocks_to_test = dividend_growers + developed_world_etfs + usa_large_indices + e
 # marijuana and cryptocurrency stocks don't have enough history to be in here for historical tests
 volatile_groups = dividend_growers + developed_world_etfs + usa_large_indices + emerging_market_etfs + commodities + \
                 precious_metals
+
+volatile_groups = dividend_growers + emerging_market_etfs + commodities + precious_metals
 
 # with open('/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + '300B_1M_and_etfs_etns.csv', 'r') as file:
 # with open('/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + 'big_etfs.csv', 'r') as file:
@@ -347,10 +370,6 @@ volatile_groups = dividend_growers + developed_world_etfs + usa_large_indices + 
 #                 ('TLT', 100), ('DBC', 100), ('GLD', 100)]
 ###
 
-m_test = [
-
-
-]
 
 live_portfolio = [m_ib_live_now]
 
