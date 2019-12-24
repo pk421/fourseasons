@@ -15,7 +15,7 @@ from src.portfolio_analysis.portfolio_constants     import custom_assets_list, l
 from src.portfolio_analysis.portfolio_helpers       import get_drawdown, get_port_valuation, TradeLog, \
                                                            adjust_weights_based_on_yield_curve
 from src.math_tools                                 import get_returns, get_ln_returns
-from util.memoize import memoize
+from util.memoize                                   import memoize, Memoized
 
 
 # determine whether to download new data from the internet
@@ -332,12 +332,12 @@ class Portfolio():
 
         return np.array([r1[0] - 1])
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_max_index(self):
         max_index = len(self.closes[self.assets[0]]) - 1
         return max_index
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_closes_lookback(self, x):
         end_index = x
         start_index = max(0, x - self.lookback)
@@ -349,7 +349,7 @@ class Portfolio():
 
         return all_closes
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_returns_lookback(self, x):
         all_returns = {}
         for item in self.assets:
@@ -358,12 +358,12 @@ class Portfolio():
 
         return all_returns
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_past_returns_matrix_lookback(self, x):
         past_returns = np.array([self.get_returns_lookback(x)[asset] for asset in self.assets])
         return past_returns
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_mean_returns_lookback(self, x):
         all_mean_returns = {}
         for item in self.assets:
@@ -372,7 +372,7 @@ class Portfolio():
 
         return all_mean_returns
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_volatilities_lookback(self, x):
         all_volatilities = {}
         for item in self.assets:
@@ -380,30 +380,30 @@ class Portfolio():
             all_volatilities[item] = volatility
         return all_volatilities
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_volatilities_matrix_lookback(self, x):
         volatilities = self.get_volatilities_lookback(x)
         volatilities_matrix = np.array( [ [volatilities[a]] for a in self.assets ] )
         return volatilities_matrix
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_covariance_matrix_lookback(self, x):
         past_returns_matrix = self.get_past_returns_matrix_lookback(x)
         cov_matrix = np.cov(past_returns_matrix, bias=True)
         return cov_matrix
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_correlation_matrix_lookback(self, x):
         past_returns = self.get_past_returns_matrix_lookback(x)
         correlation_matrix = np.corrcoef(past_returns)
 
         return correlation_matrix
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_two_asset_correlation_lookback(self, x, asset_1, asset_2):
         import pbd; pdb.set_trace()
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_short_long_mdp_weights(self, x):
         # The foundation for this and get_diversification_ratio() can be found in Roger Clarke: Minimum Variance,
         # Maximum Diversification, and Risk Parity: An Analytic Perspective
@@ -465,7 +465,7 @@ class Portfolio():
 
         return normalized_weights
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_long_only_mdp_weights(self, x, method='basinhopping_global'):
         # this entire optimization routine is expensive and imprecise. If the closed-form, MDP weights happen to be all
         # positive, there is no reason to waste time optimizing to get an approximation!
@@ -600,7 +600,7 @@ class Portfolio():
 
         return best_result
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_inverse_volatility_weights(self, x):
         inverse_volatilities_weights = {}
         volatilities = self.get_volatilities_lookback(x)
@@ -612,7 +612,7 @@ class Portfolio():
 
         return inverse_volatilities_weights
 
-    @memoize
+    @Memoized(cache_size=10)
     def get_risk_parity_weights(self, x):
         '''
         The entire risk parity algo is taken from the paper: "A Fast Algorithm For Computing High-dimensional Risk

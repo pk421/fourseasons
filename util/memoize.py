@@ -1,5 +1,6 @@
 import collections
 import functools
+import time
 
 class memoize(object):
    '''Decorator. Caches a function's return value each time it is called.
@@ -7,6 +8,8 @@ class memoize(object):
    (not reevaluated).
    '''
    def __init__(self, func):
+      self.max_cached_items = 10
+      self.item_count = 0
       self.func = func
       self.cache = {}
    def __call__(self, *args, **kwargs):
@@ -15,11 +18,34 @@ class memoize(object):
          # better to not cache than blow up.
          return self.func(*args, **kwargs)
       if args in self.cache:
-         return self.cache[args]
-      else:
+         # cache hit
+         current_time = time.time()
+         # update the time
+         self.cache[args][1] = current_time
+
+         return self.cache[args][0]
+      elif self.item_count < self.max_cached_items:
+         # cache miss and add
          value = self.func(*args, **kwargs)
-         self.cache[args] = value
+         current_time = time.time()
+         self.cache[args] = [value, current_time]
+
+         self.item_count += 1
+
          return value
+      else:
+          # cache miss - add and evict old
+          value = self.func(*args, **kwargs)
+          current_time = time.time()
+          self.cache[args] = [value, current_time]
+
+          # This is really inefficient but super easy...not so terrible though if cache hits are far more common than
+          # cache misses, which would be the case here
+          oldest_timestamp = sorted([v[1] for v in self.cache.values()])[0]
+          self.cache = { k : v for k, v in self.cache.iteritems() if v[1] != oldest_timestamp }
+
+          return value
+
    def __repr__(self):
       '''Return the function's docstring.'''
       return self.func.__doc__
@@ -197,3 +223,47 @@ class MemoizeMutable:
 #             # print "hit"  # DEBUG INFO
 
 #         return self.memo[str]
+
+
+# Memoization with settable size of cache
+# Taken From: http://scottlobdell.me/2015/04/decorators-arguments-python/
+from collections import deque
+
+
+class Memoized(object):
+
+    def __init__(self, cache_size=100):
+        self.cache_size = cache_size
+        self.call_args_queue = deque()
+        self.call_args_to_result = {}
+
+    def __call__(self, fn, *args, **kwargs):
+
+        def new_func(*args, **kwargs):
+            memoization_key = self._convert_call_arguments_to_hash(args, kwargs)
+            if memoization_key not in self.call_args_to_result:
+                result = fn(*args, **kwargs)
+                self._update_cache_key_with_value(memoization_key, result)
+                self._evict_cache_if_necessary()
+            return self.call_args_to_result[memoization_key]
+
+        return new_func
+
+    def _update_cache_key_with_value(self, key, value):
+        self.call_args_to_result[key] = value
+        self.call_args_queue.append(key)
+
+    def _evict_cache_if_necessary(self):
+        if len(self.call_args_queue) > self.cache_size:
+            oldest_key = self.call_args_queue.popleft()
+            del self.call_args_to_result[oldest_key]
+
+    @staticmethod
+    def _convert_call_arguments_to_hash(args, kwargs):
+        return hash(str(args) + str(kwargs))
+
+
+@Memoized(cache_size=5)
+def get_not_so_random_number_with_max(max_value):
+    import random
+    return random.random() * max_value
