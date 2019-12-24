@@ -14,14 +14,14 @@ from src.portfolio_analysis.portfolio_utils         import get_data
 from src.portfolio_analysis.portfolio_constants     import custom_assets_list, live_portfolio, stocks_to_test
 from src.portfolio_analysis.portfolio_helpers       import get_drawdown, get_port_valuation, TradeLog, \
                                                            adjust_weights_based_on_yield_curve
-from src.math_tools                                 import get_returns, get_ln_returns
+from src.math_tools                                 import get_returns, get_ln_returns, get_portfolio_returns_using_assets
 from util.memoize import memoize
 
 
 # determine whether to download new data from the internet
 UPDATE_DATA=True
 GLOBAL_LOOKBACK = 126
-GLOBAL_UPDATE_DATE = '20191218'
+GLOBAL_UPDATE_DATE = '20191220'
 
 global long_only_mdp_cov_matrix, long_only_mdp_global_port
 long_only_mdp_cov_matrix = None
@@ -121,8 +121,15 @@ def do_analysis(assets=None, write_to_file=True):
                 # if logging.root.level < 25:
                     ### print "Trailing DR: ", x, trailing_diversification_ratio
 
+                # div_ratio_at_last_rebalance = mdp_port.trailing_DRs[-mdp_port.rebalance_counter]
+                # div_ratio_rebalance_constant = 0.95
+                # minimum_div_ratio = div_ratio_rebalance_constant * div_ratio_at_last_rebalance
+
                 if mdp_port.rebalance_counter >= mdp_port.rebalance_time:
                     mdp_port.rebalance_now = True
+
+                # elif trailing_diversification_ratio < minimum_div_ratio:
+                #     mdp_port.rebalance_now = True
             else:
                 mdp_port.trailing_DRs.append(0)
             x += 1
@@ -517,7 +524,7 @@ class Portfolio():
 
             basinhopping_minimizer_kwargs = {'bounds': bounds, 'constraints': constraints}
 
-            res = scipy.optimize.basinhopping(_get_long_only_diversification_ratio, initial_guess_mdp, niter=10, \
+            res = scipy.optimize.basinhopping(_get_long_only_diversification_ratio, initial_guess_mdp, niter=1, \
                                               stepsize=1, minimizer_kwargs=basinhopping_minimizer_kwargs, \
                                               callback=callback)
 
@@ -589,7 +596,7 @@ class Portfolio():
             print "Theoretical best DR: ", highest_diversification_ratio['lowest_optimization_result']['fun']
             import pdb; pdb.set_trace()
 
-        print "Duplicated Geometric Means Not Included: ", len(duplicated_geom_means)
+        # print "Duplicated Geometric Means Not Included: ", len(duplicated_geom_means)
 
         return best_result
 
@@ -687,11 +694,22 @@ class Portfolio():
     def _get_port_returns(self, x, input_weights):
         return_matrix = self.get_past_returns_matrix_lookback(x)
         total_returns = [0.0] * len(return_matrix[0])
+        len_weights = len(input_weights)
 
-        for i, asset_returns in enumerate(return_matrix):
-            for j, daily_return in enumerate(asset_returns):
-                asset_day_contribution = input_weights[i] * daily_return
-                total_returns[j] = total_returns[j] + asset_day_contribution
+        # FIXME: This assumes the asset weight was static over the whole history, but that's not accurate...that said
+        # how should the asset weight be fixed relative to input weights? The first day of the lookback is fixed or the
+        # last day of the lookback is fixed? Or the average day is fixed (something like what's happening now)
+        # There's no clear answer, so it seems what is being done now might be ok...especially since this is used to
+        # calc the DR and in this case the DR is showing what it would have been if you had maintained a particular
+        # weighting for the past period of time
+
+        # This approach leverages numpy's ability to do matrix operations quickly
+        # I tried to do this more manually in cython, but this approach is approximately 2x faster than anything that
+        # can be done in cython. Even if this code is put directly in cython, it will not be any faster than this, so
+        # it's not worth the complexity
+        for i in xrange(0, len_weights):
+            weighted_return = input_weights[i] * return_matrix[i]
+            total_returns = total_returns + weighted_return
 
         return total_returns
 
@@ -792,7 +810,7 @@ def run_live_portfolio_analysis(assets=None):
 
     inverse_volatility_weights = port.get_inverse_volatility_weights(port.get_max_index())
 
-    print '     ', 'Symbol', '\t', 'Beta', '\t', 'Sigma', '\t', 'Act', '\t', 'LOMDP', '\t', 'RP', '\t', 'MDP', '\t', '1/Vol', '\t', 'ActDer', '\t', 'LOMDPDiff'
+    print '     ', 'Symbol', '\t', 'Beta', '\t', 'Sigma', '\t', 'Act', '\t', 'LOMDP', '\t', 'RP', '\t', 'MDP', '\t', '1/Vol', '\t', 'LOMDPDiff', '\t', 'ActDer'
 
     new_stock_output_data = output_data[len(live_portfolio[0]):]
 
@@ -808,8 +826,8 @@ def run_live_portfolio_analysis(assets=None):
             '{0:.4f}'.format(round(port_ret['risk_parity_weights'][i], 4)).zfill(6), '\t', \
             '{0:.3f}'.format(round(port_ret['mdp_weights'][i], 3)).zfill(5), '\t', \
             '{0:.4f}'.format(round(inverse_volatility_weights[item[0]], 4)).zfill(6), '\t', \
-            '{0:.3f}'.format(round(port_ret['port_derivative'][i], 3)).zfill(5), '\t', \
-            round(weighted_delta, 2)
+            '{0:.2f}'.format(round(weighted_delta, 2)).rjust(10), '\t', \
+            '{0:.3f}'.format(round(port_ret['port_derivative'][i], 3)).rjust(6)
 
     for item in sorted(new_stock_output_data, key=lambda tup: tup[1], reverse=False):
         print "Beta: ", item[0], '\t', '{0:.3f}'.format(item[1].round(3)), '\t', '{0:.3f}'.format(item[2].round(3))
