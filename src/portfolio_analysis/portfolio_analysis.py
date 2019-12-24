@@ -121,15 +121,15 @@ def do_analysis(assets=None, write_to_file=True):
                 # if logging.root.level < 25:
                     ### print "Trailing DR: ", x, trailing_diversification_ratio
 
-                div_ratio_at_last_rebalance = mdp_port.trailing_DRs[-mdp_port.rebalance_counter]
-                div_ratio_rebalance_constant = 0.95
-                minimum_div_ratio = div_ratio_rebalance_constant * div_ratio_at_last_rebalance
+                # div_ratio_at_last_rebalance = mdp_port.trailing_DRs[-mdp_port.rebalance_counter]
+                # div_ratio_rebalance_constant = 0.95
+                # minimum_div_ratio = div_ratio_rebalance_constant * div_ratio_at_last_rebalance
 
                 if mdp_port.rebalance_counter >= mdp_port.rebalance_time:
                     mdp_port.rebalance_now = True
 
-                elif trailing_diversification_ratio < minimum_div_ratio:
-                    mdp_port.rebalance_now = True
+                # elif trailing_diversification_ratio < minimum_div_ratio:
+                #     mdp_port.rebalance_now = True
             else:
                 mdp_port.trailing_DRs.append(0)
             x += 1
