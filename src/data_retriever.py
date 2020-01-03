@@ -72,7 +72,10 @@ def get_yahoo_data(queue, **kwargs):
                                                                                 '&interval=1d&events=history&crumb=oRQtY6jjCqs'
 
 
-            headers = {'Content-Type': 'application/json', 'Authorization' : 'Token 682e2feeed3d495a6a68820c4bbb40ed5754ff5c'}
+            # 5GB available: pilat.michael / patos / ______23 / ec2bff038efec4926fd3673b8f17aeeb6525227f
+            # 2GB available: mcpilat / climbarok / ______23 / 682e2feeed3d495a6a68820c4bbb40ed5754ff5c
+
+            headers = {'Content-Type': 'application/json', 'Authorization' : 'Token ec2bff038efec4926fd3673b8f17aeeb6525227f'}
             # This request string just gives basic info
             # request_string = 'https://api.tiingo.com/tiingo/daily/' + s + '?token=682e2feeed3d495a6a68820c4bbb40ed5754ff5c'
             request_string = 'https://api.tiingo.com/tiingo/daily/' + s + '/prices?startDate=' + start_date +  '&endDate=' + current_date
