@@ -21,7 +21,7 @@ from util.memoize                                   import memoize, Memoized
 # determine whether to download new data from the internet
 UPDATE_DATA=True
 GLOBAL_LOOKBACK = 126
-GLOBAL_UPDATE_DATE = '20191220'
+GLOBAL_UPDATE_DATE = '20191231'
 
 global long_only_mdp_cov_matrix, long_only_mdp_global_port
 long_only_mdp_cov_matrix = None
@@ -40,8 +40,34 @@ def get_portfolio_weights(mdp_port, x):
     abs_weight_sum = np.sum([abs(n) for n in theoretical_weights])
 
     normalized_theoretical_weights = np.array([ n / abs_weight_sum for n in theoretical_weights])
+    # normalized_theoretical_weights = mdp_port.get_inverse_volatility_weights(x)
     # normalized_theoretical_weights = mdp_port.get_risk_parity_weights(x)
     normalized_theoretical_weights = mdp_port.get_long_only_mdp_weights(x)
+
+    # This classifies the max_diversity assets and fixes the percentage allocated to each class
+    # bond_assets = ['TLT', 'IEF', 'PCY', 'MUB']
+    # stock_assets = ['SPY', 'VWO', 'RWO']
+    # commodities = ['GLD', 'DBC']
+    #
+    # bond_sum = 0.0
+    # stock_sum = 0.0
+    # commodities_sum = 0.0
+    #
+    # for i, asset in enumerate(mdp_port.assets):
+    #     if asset in bond_assets:
+    #         bond_sum += normalized_theoretical_weights[i][0]
+    #     elif asset in stock_assets:
+    #         stock_sum += normalized_theoretical_weights[i][0]
+    #     elif asset in commodities:
+    #         commodities_sum += normalized_theoretical_weights[i][0]
+    #
+    # for i, asset in enumerate(mdp_port.assets):
+    #     if asset in bond_assets:
+    #         normalized_theoretical_weights[i] = normalized_theoretical_weights[i] * 0.40 / bond_sum
+    #     elif asset in stock_assets:
+    #         normalized_theoretical_weights[i] = normalized_theoretical_weights[i] * 0.40 / stock_sum
+    #     elif asset in commodities:
+    #         normalized_theoretical_weights[i] = normalized_theoretical_weights[i] * 0.20 / commodities_sum
 
     # Turn this on to fix the weights of at each rebalance
     # theoretical_weights = np.array([ [1.0 / len(mdp_port.assets)] for x in mdp_port.assets])
@@ -102,6 +128,10 @@ def do_analysis(assets=None, write_to_file=True):
     mdp_port.rebalance_log = []
     old_weighted_valuation = 1000
     debt = 0
+
+    global long_only_mdp_global_port
+    long_only_mdp_global_port = copy.deepcopy(mdp_port)
+
     while x < len(mdp_port.trimmed[mdp_port.assets[0]]):
         mdp_port.x = x
         if not mdp_port.rebalance_now:
@@ -147,8 +177,10 @@ def do_analysis(assets=None, write_to_file=True):
 
             global long_only_mdp_cov_matrix, long_only_mdp_global_port
             long_only_mdp_cov_matrix = mdp_port.get_covariance_matrix_lookback(mdp_port.x)
-            long_only_mdp_global_port = copy.deepcopy(mdp_port)
+            # long_only_mdp_global_port = copy.deepcopy(mdp_port)
             long_only_mdp_global_port.x = mdp_port.x
+            long_only_mdp_global_port.current_weights = mdp_port.current_weights
+            long_only_mdp_global_port.normalized_weights = mdp_port.normalized_weights
 
             long_only_dr_algo = _get_long_only_diversification_ratio(np.array([ w[0] for w in mdp_port.current_weights ]))
 
@@ -174,15 +206,17 @@ def do_analysis(assets=None, write_to_file=True):
 
             if trailing_diversification_ratio < rebalance_old_div_ratio:
                 print "Old DR / New DR: ", rebalance_old_div_ratio, '\t', trailing_diversification_ratio
-                import pdb; pdb.set_trace()
+                # import pdb; pdb.set_trace()
 
             # get_long_only_mdp_weights(x) would be sufficient to set globals, but only if the basinhopping routine is
             # run. If LongShortMDP results in positive weights, the LOMDP kicks out early and won't set these
             # Globals must be reset here because the mdp_port object has been mutated in _get_port_valuation()
             global long_only_mdp_cov_matrix, long_only_mdp_global_port
             long_only_mdp_cov_matrix = mdp_port.get_covariance_matrix_lookback(mdp_port.x)
-            long_only_mdp_global_port = copy.deepcopy(mdp_port)
+            # long_only_mdp_global_port = copy.deepcopy(mdp_port)
             long_only_mdp_global_port.x = mdp_port.x
+            long_only_mdp_global_port.current_weights = mdp_port.current_weights
+            long_only_mdp_global_port.normalized_weights = mdp_port.normalized_weights
             long_only_dr_algo = _get_long_only_diversification_ratio(np.array([ w[0] for w in mdp_port.normalized_weights]))
 
             # This is for safety, either method should be able to get the same result, if not there is a problem
@@ -602,15 +636,17 @@ class Portfolio():
 
     @Memoized(cache_size=10)
     def get_inverse_volatility_weights(self, x):
-        inverse_volatilities_weights = {}
+        inverse_volatilities_weights = []
         volatilities = self.get_volatilities_lookback(x)
         inverse_volatility_sum = np.sum( [(1/s) for s in volatilities.values() ] )
 
         for item in self.assets:
             this_stocks_inverse_volatility = 1 / volatilities[item]
-            inverse_volatilities_weights[item] = this_stocks_inverse_volatility / inverse_volatility_sum
+            inverse_volatilities_weights.append(this_stocks_inverse_volatility / inverse_volatility_sum)
 
-        return inverse_volatilities_weights
+        np_new_weights = np.array([ [w] for w in inverse_volatilities_weights ])
+
+        return np_new_weights
 
     @Memoized(cache_size=10)
     def get_risk_parity_weights(self, x):
@@ -708,7 +744,9 @@ class Portfolio():
         # can be done in cython. Even if this code is put directly in cython, it will not be any faster than this, so
         # it's not worth the complexity
         for i in xrange(0, len_weights):
+            # take the weight of this asset and multiply that weight by the full list of returns
             weighted_return = input_weights[i] * return_matrix[i]
+            # now take the full weighted list of returns and add that on to the total returns
             total_returns = total_returns + weighted_return
 
         return total_returns
@@ -825,7 +863,7 @@ def run_live_portfolio_analysis(assets=None):
             '{0:.4f}'.format(round(port_ret['long_only_mdp_weights'][i], 4)).zfill(6), '\t', \
             '{0:.4f}'.format(round(port_ret['risk_parity_weights'][i], 4)).zfill(6), '\t', \
             '{0:.3f}'.format(round(port_ret['mdp_weights'][i], 3)).zfill(5), '\t', \
-            '{0:.4f}'.format(round(inverse_volatility_weights[item[0]], 4)).zfill(6), '\t', \
+            '{0:.4f}'.format(round(inverse_volatility_weights[i], 4)).zfill(6), '\t', \
             '{0:.2f}'.format(round(weighted_delta, 2)).rjust(10), '\t', \
             '{0:.3f}'.format(round(port_ret['port_derivative'][i], 3)).rjust(6)
 
@@ -914,6 +952,7 @@ def live_portfolio_analysis(assets=None, update_data=True, update_date=None):
             # for shorter time windows there have been discrepancies...so far I know it happens on <21 days lookback
             if round(long_only_dr_algo, 8) != -round(mdp_div_ratio, 8):
                 import pdb; pdb.set_trace()
+                print "DRs Don't Match: ", round(long_only_dr_algo, 8), -round(mdp_div_ratio, 8)
 
         else:
             div_ratio = 1.0
