@@ -28,6 +28,10 @@ def get_yahoo_data(queue, **kwargs):
     start_date = start_year + '-' + start_month + '-' + start_day
     current_date = current_year + '-' + current_month + '-' + current_day
 
+    request_string = 'https://api.tiingo.com/tiingo/daily/' + 'idu' + '/prices?startDate=' + start_date +  '&endDate=' + current_date
+    headers = {'Content-Type': 'application/json', 'Authorization' : 'Token ec2bff038efec4926fd3673b8f17aeeb6525227f'}
+    test_file = requests.get(request_string, headers=headers, timeout=2)
+
     while True:
         s = queue.get().lower()
 
@@ -49,6 +53,7 @@ def get_yahoo_data(queue, **kwargs):
         # to date here with fresh queries that are done manually. This handles cases when the cookie expires. Note: The
         # yahoo finance query MUST BE DONE ON LINUX, NOT WINDOWS
         if (os.path.exists(file_path) == False) or update_check == False:
+            # print "Doing query: ", s
 #            query_url = 'http://table.finance.yahoo.com/table.csv?s=' + s + '&a=' + start_month + \
 #                                                                           '&b=' + start_day + \
 #                                                                           '&c=' + start_year + \
@@ -75,13 +80,13 @@ def get_yahoo_data(queue, **kwargs):
             # 5GB available: pilat.michael / patos / ______23 / ec2bff038efec4926fd3673b8f17aeeb6525227f
             # 2GB available: mcpilat / climbarok / ______23 / 682e2feeed3d495a6a68820c4bbb40ed5754ff5c
 
-            headers = {'Content-Type': 'application/json', 'Authorization' : 'Token ec2bff038efec4926fd3673b8f17aeeb6525227f'}
+            headers = {'Content-Type': 'application/json', 'Authorization' : 'Token 682e2feeed3d495a6a68820c4bbb40ed5754ff5c'}
             # This request string just gives basic info
             # request_string = 'https://api.tiingo.com/tiingo/daily/' + s + '?token=682e2feeed3d495a6a68820c4bbb40ed5754ff5c'
             request_string = 'https://api.tiingo.com/tiingo/daily/' + s + '/prices?startDate=' + start_date +  '&endDate=' + current_date
 
             # print "Querying: ", request_string
-            logger.debug(s + "\tbefore request")
+            # logger.debug(s + "\tbefore request")
             try:
                 # test_file = requests.get(query_url, timeout=2)
                 test_file = requests.get(request_string, headers=headers, timeout=2)
@@ -100,14 +105,21 @@ def get_yahoo_data(queue, **kwargs):
                         continue
             #logger.debug(s + "\tafter request, will write to file")
             if test_file.status_code == 200:
-                test_csv = get_csv_from_json(test_file.json(), s)
+                try:
+                    test_csv = get_csv_from_json(test_file.json(), s)
+                except:
+                    print "TEST: ", s, test_file
+                    raise
                 fout = open(file_path, 'w')
                 fout.write(test_csv)
                 fout.close()
                 queue.task_done()
+                # print "Wrote File: ", file_path
                 continue
+            else:
+                print "ERROR: Bad HTTP Status Code: ", s, test_file.status_code
         else:
-            #logger.debug(s + '\tskipping, file already present')
+            logger.debug(s + '\tskipping, file already present')
             queue.task_done()
             continue
         #catch anything that might have gotten thru other statements...this is to debug
@@ -154,7 +166,7 @@ def get_merged_start_date(s):
 #http://table.finance.yahoo.com/table.csv?a=["fmonth","fmonth"]&b=["fday","fday"]&c=["fyear","fyear"]&d=["tmonth","tmonth"]&e=["tday","tday"]&f=["tyear","tyear"]&s=["ticker", "ticker"]&y=0&g=["per","per"]&ignore=.csv
 #http://table.finance.yahoo.com/table.csv?a=1&b=1&c=1900&d=2&e=2&f=2020&s=AMMD&ignore=.csv
 
-def multithread_yahoo_download(list_to_download='large_universe.csv', thread_count=1, update_check=False,
+def multithread_yahoo_download(list_to_download='large_universe.csv', thread_count=20, update_check=False,
                                new_only=False, store_location = 'tmp/', use_list = None):
     queue = Queue.Queue()
     #kill off previous processes:

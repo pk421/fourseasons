@@ -23,8 +23,8 @@ def run_indicator_system():
     sectors = ('basic_materials', 'conglomerates', 'consumer_goods', 'financial', 'healthcare', 'industrial_services', \
                'services', 'technology', 'utilities')
 
-    # in_file_name = 'etfs_etns_sp_500'
-    in_file_name = 'big_etfs'
+    in_file_name = 'etfs_etns_sp_500'
+    # in_file_name = 'big_etfs'
     location = '/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + in_file_name + '.csv'
     in_file = open(location, 'r')
     stock_list = in_file.read().split('\n')
@@ -111,7 +111,7 @@ def run_indicator_system():
 
     ###
     sharpe_ratio, sortino_ratio, total_days_in = get_intra_prices(trade_log)
-    total_years_in = total_days_in / 252
+    total_years_in = total_days_in / 252.0
     annualized_return = math.pow(total_return, (1.0/total_years_in))
 
 
@@ -168,7 +168,8 @@ def do_indicator_test(item, k, len_stocks, stock_1_data, is_stock):
     # signal = signals.MovingAverageSeasonalitySystem(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock, kwargs = {'stock_1_close':stock_1_close} )
     # signal = signals.SignalsSigmaSpanVolatilityTest_2(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock)
     # signal = signals.SignalsSigmaSpanVolatilityTest_3(stock_2_close, stock_2_volume, stock_2_trimmed, item, is_stock=is_stock, kwargs = {'stock_1_close':stock_1_close} )
-    signal = signals.InWeekAfterDown(stock_1_close, stock_1_volume, stock_1_trimmed, item)
+    # signal = signals.InWeekAfterDown(stock_1_close, stock_1_volume, stock_1_trimmed, item)
+    signal = signals.ATRExitSignal(stock_1_close, stock_1_volume, stock_1_trimmed, item)
     
     for x in xrange(252, end_data):
         # If we've been told we're still in a trade then we simply skip this day

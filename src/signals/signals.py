@@ -35,6 +35,97 @@ class SignalsBase(object):
             return False
         return True
 
+class ATRExitSignal(SignalsBase):
+
+    def __init__(self, closes, volume, stock_2_trimmed, item):
+        super(ATRExitSignal, self).__init__(closes, volume, stock_2_trimmed, item)
+
+        # self.atr = self.get_atr(5)
+        self.volatility_annualized = tools.volatility_bs_annualized(self.closes, 5)
+        root_252 = math.sqrt(252)
+        self.volatility_daily = [ n/root_252 for n in self.volatility_annualized ]
+
+    # def get_atr(self, lookback):
+    #     len_data = len(self.closes)
+    #     atr = []
+    #
+    #     for x in xrange(0, len_data):
+    #         if x <= lookback:
+    #             # need to warmup
+    #             atr.append(0.0)
+    #         else:
+    #             current_sigma = stock_2
+
+
+    def get_entry_signal(self, x):
+        # Simply enter if at an all time high
+        if max(self.closes) == self.closes[x]:
+            return self.get_entry_trade_result(x)
+        else:
+            return False
+
+    def get_entry_trade_result(self, x):
+        result = trade_result()
+
+        result.initial_stop_loss = self.closes[x] * (1- (10.0 * self.volatility_daily[x]))
+
+        result.long_short = 'long'
+        result.stock_2 = self.item['stock_2']
+        result.entry_date = self.stock_2_trimmed[x]['Date']
+        result.entry_price = self.closes[x]
+        result.entry_vol = self.volume[x]
+
+        return result
+
+    def get_exit(self, x, result):
+        start_index = x+1
+        len_data = len(self.closes)
+
+        trading_up = True if result.long_short == 'long' else False
+
+        price_log = [self.closes[x]]
+
+        sigma_down = 10
+        current_stop_loss_price = result.initial_stop_loss
+
+        for x in xrange(start_index, 9999999):
+            if x == len_data:
+                return None, None
+
+            date_today = self.stock_2_trimmed[x]['Date']
+            current_price = self.closes[x]
+            price_log.append(current_price)
+            price_change_pc = (current_price - result.entry_price) / result.entry_price
+
+            if trading_up:
+                ret = price_change_pc
+            else:
+                ret = -price_change_pc
+
+            new_stop_loss = self.closes[x] * (1- (10.0 * self.volatility_daily[x]))
+            current_stop_loss_price = max(current_stop_loss_price, new_stop_loss)
+
+            print "Stop, Price, Ret: ", current_stop_loss_price, current_price, ret
+
+            if trading_up and current_price < current_stop_loss_price:
+
+                result.time_in_trade = x - (start_index - 1)
+                result.exit_price = current_price
+                result.ret = ret
+                result.chained_ret = 1 + ret
+                result.exit_date = date_today
+                result.end_index = x
+                result.price_log = price_log
+
+                if ret > 0:
+                    # print "Profit: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+                    result.trade_result = "Profit"
+                else:
+                    # print "Loss: ", result.entry_date, date_today, result.entry_price, current_price, ret, '\n'
+                    result.trade_result = "Loss"
+
+                return result, result.end_index
+
 class InWeekAfterDown(SignalsBase):
 
     def __init__(self, closes, volume, stock_2_trimmed, item):

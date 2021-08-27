@@ -17,7 +17,7 @@ original_mdp = ['SPY', 'EFA', 'EWJ', 'EEM', 'IYR', 'RWX', 'IEF', 'TLT', 'DBC', '
 # Dalio's All Weather
 # dalio_all_weather = ['IJR', 'IEF', 'TLT', 'GLD', 'DJP', 'XLE']
 # dalio_all_weather = ['VBR', 'IEF', 'TLT', 'GLD', 'DBC', 'BSV']
-dalio_all_weather = ['VBR', 'IEF', 'TLT', 'GLD', 'DBC']
+dalio_all_weather = ['SPY', 'TIP', 'TLT', 'GLD', 'DBC']
 
 em_all_weather = ['VWO', 'IEF', 'VWOB', 'GLD', 'DBC']
 
@@ -26,8 +26,12 @@ modified_all_weather = ['VBR', 'IEF', 'TLT', 'GLD', 'DBC', 'VWO', 'PCY'] # VWOB 
 
 # From PortfolioCharts.com
 # golden_butterfly = ['VBR', 'SPY', 'SHY', 'TLT', 'GLD', 'BSV']
-golden_butterfly = ['SPY', 'VBR', 'TLT', 'SHY', 'GLD']
+## golden_butterfly = ['SPY', 'VBR', 'TLT', 'SHY', 'GLD']
+golden_butterfly = ['SPY', 'VBR', 'TLT', 'GLD']
 modified_butterfly = ['VBR', 'VWO', 'TLT', 'VWOB', 'BSV', 'GLD']
+
+# meb_faber = ['SPY', 'SHY', 'GLD', 'TLT', 'VBR', 'VDE', 'EFA', 'VWO', 'VWOB']
+meb_faber = ['SHY', 'SPY']
 
 
 # Dividend Payers:
@@ -84,9 +88,9 @@ hedged_dividends = ['IWM', 'TLT', 'IEF', 'DBC', 'GLD', 'PAA', 'T', 'HCP', 'OKE']
 #                     'NUE', 'DBD', 'PG', 'VVC', 'SON', 'CTBI', 'MCD', 'CINF', 'PNY', 'KO', 'WGL', 'KMB', 'MSEX',\
 #                     'JNJ', 'TMP', 'CWT', 'RAVN', 'SYY', 'NFG', 'PEP', 'WMT', 'CTWS', 'WEYS', 'TROW', 'LEG']
 
-max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'MUB']
+max_diversity_no_btc = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'MUB']
 # Adding GBTC significantly reduces the history we can test against
-# max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'GBTC']
+max_diversity = [ 'SPY', 'TLT', 'IEF', 'GLD', 'DBC', 'PCY', 'VWO', 'RWO', 'GBTC']
 # max diversity: also add MUB, VTEB - muni bonds
 
 custom_assets_list = max_diversity
@@ -98,53 +102,75 @@ max_uncorrelated = [('SPY', 1), ('TLT', 1), ('IEF', 1), ('GLD', 1), ('DBC', 4), 
                     ('RWO', 0), ('MUB', 3), ('GBTC', 1),
                     ]
 
-m_ib_live_now = [
-       # Developed Market stocks
-       ('T', 1600), ('SKT', 3000), ('VOO', 0.001), ('VBR', 700),
-       # Developed Market Bonds
-       ('EDV', 1200), ('VGIT', 0.0001),
-       # Developed Market Muni Bonds
-       ('MUB', 0.0001),
-       # Emerging Market Bonds
-       ('VWOB', 0.001),
-       # Emerging Market Stocks
-       ('EWZ', 0.0001), ('GXG', 4000), ('RSX', 2000), ('INDA', 900), ('VWO', 0.0001),
-       # Commodities
-       # Switch DBC to PDBC
-       ('DBC', 4000), ('HEP', 3500), ('HP', 500), ('MPLX', 1400), ('WES', 76),
-       # Precious Metals
-       ('GDX', 3250), ('GDXJ', 0.0001), ('IAU', 7000), ('SLVP', 0.0001),
-       # Real Estate
-       ('VNQ', 400),
-       # Crypto
-       ('GBTC', 3000),
-       # Other
-       ('ACB', 5506), ('AOBC', 3400), ('APHA', 1700), ('CGC', 798), ('LXRP', 35000), ('MJ', 0.0001)
+max_uncorrelated_no_btc = [('SPY', 1), ('TLT', 1), ('IEF', 1), ('GLD', 1), ('DBC', 4), ('PCY', 0.000001), ('VWO', 2), \
+                    ('RWO', 0), ('MUB', 3),
+                    ]
 
+# m_ib_live = [
+#        # Developed Market stocks
+#        ('T', 2000), ('SKT', 0.0001), ('VOO', 0.001), ('VBR', 700),
+#        # Developed Market Bonds
+#        ('EDV', 0.0001), ('VGIT', 0.0001), ('VGLT', 0.0001),
+#        # Developed Market Muni Bonds
+#        ('MUB', 0.0001),
+#        # Inflation-Linked Bonds
+#        ('LTPZ', 0.0001), ('SPIP', 0.0001),
+#        # Emerging Market Bonds
+#        ('VWOB', 0.001),
+#        # Emerging Market Stocks
+#        ('EWZ', 0.0001), ('GXG', 4000), ('MCHI', 700), ('RSX', 0.0001), ('INDA', 0.0001), ('VWO', 0.0001),
+#        # Commodities
+#        # Switch DBC to PDBC
+#        ('PDBC', 0.0001), ('HEP', 0.0001), ('HP', 0.0001), ('MPLX', 0.0001), ('WES', 0.0001), ('VDE', 0.0001),
+#        # Precious Metals
+#        ('GDX', 1600), ('GDXJ', 0.0001), ('IAU', 0.0001), ('SLVP', 0.0001),
+#        # Real Estate
+#        ('VNQ', 0.0001),
+#        # Crypto
+#        ('GBTC', 2000),
+#        # Other
+#        ('AOBC', 2200),
+#        # Hedge
+#        # ('VXX', 0.0001),
+#        # Travel
+#        ('DAL', 500), ('HTZ', 2000), ('JETS', 2900), ('LUV', 500)
+#
+#        ]
+m_ib_live = [
+        ('DAL', 3000), ('GBTC', 5000), ('IWM', 1000), ('NEM', 3500), ('SPY', 500),
        ]
 
-m_ib_20191221 = [
+
+m_ib_202010 = [
        # Developed Market stocks
-       ('T', 1600), ('SKT', 3000), ('VOO', 0.001), ('VBR', 700),
+       ('BA', 0.0001), ('IWM', 1000), ('SPY', 0.0001), ('SKT', 0.0001), ('T', 3000), ('VOO', 0.0001), ('VBR', 0.0001),
        # Developed Market Bonds
-       ('EDV', 1200), ('VGIT', 0.0001),
+       ('EDV', 2000), ('VGIT', 0.0001), ('VGLT', 0.0001),
        # Developed Market Muni Bonds
        ('MUB', 0.0001),
+       # Inflation-Linked Bonds
+       ('LTPZ', 0.0001), ('SPIP', 0.0001),
        # Emerging Market Bonds
-       ('VWOB', 0.001),
+       ('VWOB', 0.0001), ('PCY', 0.0001), ('EMB', 0.0001),
        # Emerging Market Stocks
-       ('EWZ', 0.0001), ('GXG', 4000), ('RSX', 2000), ('INDA', 900), ('VWO', 0.0001),
+       ('EWZ', 0.0001), ('GXG', 2000), ('MCHI', 0.0001), ('RSX', 0.0001), ('INDA', 0.0001), ('VWO', 0.0001), ('BBJP', 0.0001), ('THD', 0.0001), ('VNM', 0.0001),
        # Commodities
        # Switch DBC to PDBC
-       ('DBC', 4000), ('ET', 0.0001), ('HEP', 3500), ('HP', 500), ('MPLX', 1400), ('WES', 450),
+       ('PDBC', 0.0001), ('XOM', 1600), ('HP', 0.0001), ('URA', 0.0001), ('VDE', 0.0001),
        # Gold
-       ('GDX', 3250), ('GDXJ', 0.0001), ('IAU', 7000), ('SLVP', 1600),
+       ('GDXJ', 0.0001), ('IAU', 0.0001), ('NEM', 3500), ('SLVP', 0.0001),
        # Real Estate
-       ('VNQ', 400),
+       ('VNQ', 0.0001),
        # Crypto
-       ('GBTC', 3000),
+       ('GBTC', 0.0001),
        # Other
-       ('ACB', 5506), ('AOBC', 3400), ('APHA', 1700), ('CGC', 798), ('LXRP', 35000), ('MJ', 0.0001)
+       ('SWBI', 0.0001), ('MJ', 3500), ('DPZ', 0.0001), ('NFLX', 0.0001),
+       # Hedge
+       # ('VXX', 0.0001),
+       # Travel
+       ('DAL', 3000), ('RCL', 0.0001),('CAR', 0.0001),
+       # China
+       ('BABA', 0.0001), ('BIDU', 0.0001), ('JD', 1500), ('TCEHY', 0.0001)
 
        ]
 
@@ -192,7 +218,7 @@ roth_ira = [
 
        ]
 
-c_ib_live = [('VBR', 3240), ('IAU', 8600), ('JPST', 70)]
+c_ib_live = [('VBR', 3240), ('IAU', 8600), ('JPST', 70), ('EDV', 2400), ('WES', 3000), ('HEP', 2500)]
 
 c_ib_20191223 = [('VBR', 3240), ('IAU', 8600), ('JPST', 70), ('EDV', 2400), ('WES', 3000), ('HEP', 2500)]
 
@@ -249,6 +275,8 @@ dividend_growers = [
     ('WEYS', 0.000001),
     ('WMT', 0.000001),
     ('XOM', 0.000001),
+    # ('SPY', 0.000001), # This is only added to set the timeframe of simulation to the shortest asset, in this case SPY
+    # ('TLT', 0.000001), # This is only added to set the timeframe of simulation to the shortest asset, in this case TLT
     ]
 
 # Developed World ETFS
@@ -263,7 +291,7 @@ usa_large_indices = [
     ('IJR', 0.000001),
     ('SPY', 0.000001),
     ('VBR', 0.000001),
-    # ('VOO', 0.000001),
+    ('VOO', 0.000001),
     ('VTI', 0.000001),
 ]
 
@@ -271,9 +299,9 @@ usa_large_indices = [
 emerging_market_etfs = [
     ('EEM', 0.000001),
     ('EWZ', 0.000001),
-    ('GXG', 0.000001),
+    # ('GXG', 0.000001),
     # ('ICOL', 0.000001),
-    ('RSX', 0.000001),
+    # ('RSX', 0.000001),
 ]
 
 # Developed Market Bonds
@@ -310,10 +338,10 @@ commodities = [
 # Precious Metals
 precious_metals = [
     ('GDX', 0.000001),
-    ('GDXJ', 0.000001),
+    # ('GDXJ', 0.000001),
     ('IAU', 0.000001),
     ('SLV', 0.000001),
-    ('USV', 0.000001),
+    # ('USV', 0.000001),
 ]
 
 # Sector ETFs
@@ -354,6 +382,7 @@ volatile_groups = dividend_growers + developed_world_etfs + usa_large_indices + 
                 precious_metals
 
 volatile_groups = dividend_growers + emerging_market_etfs + commodities + precious_metals
+volatile_groups_plus_shy = volatile_groups + [('SHY', 0.000001), ('SPY', 0.000001), ('TLT', 0.000001)]
 
 # with open('/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + '300B_1M_and_etfs_etns.csv', 'r') as file:
 # with open('/home/wilmott/Desktop/fourseasons/fourseasons/data/stock_lists/' + 'big_etfs.csv', 'r') as file:
@@ -371,11 +400,13 @@ volatile_groups = dividend_growers + emerging_market_etfs + commodities + precio
 ###
 
 
-live_portfolio = [m_ib_live_now]
+extended_live_portfolio = stocks_to_test
 
-custom_assets_volatile_groups = [ a[0] for a in volatile_groups ]
+live_portfolio = [m_ib_202010]
 
-custom_assets_list = custom_assets_volatile_groups
+# custom_assets_volatile_groups = [ a[0] for a in volatile_groups ]
+
+custom_assets_list = golden_butterfly
 
 
 

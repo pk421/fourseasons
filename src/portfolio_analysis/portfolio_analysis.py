@@ -20,8 +20,8 @@ from util.memoize                                   import memoize, Memoized
 
 # determine whether to download new data from the internet
 UPDATE_DATA=True
-GLOBAL_LOOKBACK = 126
-GLOBAL_UPDATE_DATE = '20191231'
+GLOBAL_LOOKBACK = 63
+GLOBAL_UPDATE_DATE = '20210507'
 
 global long_only_mdp_cov_matrix, long_only_mdp_global_port
 long_only_mdp_cov_matrix = None
@@ -42,7 +42,7 @@ def get_portfolio_weights(mdp_port, x):
     normalized_theoretical_weights = np.array([ n / abs_weight_sum for n in theoretical_weights])
     # normalized_theoretical_weights = mdp_port.get_inverse_volatility_weights(x)
     # normalized_theoretical_weights = mdp_port.get_risk_parity_weights(x)
-    normalized_theoretical_weights = mdp_port.get_long_only_mdp_weights(x)
+    ### normalized_theoretical_weights = mdp_port.get_long_only_mdp_weights(x)
 
     # This classifies the max_diversity assets and fixes the percentage allocated to each class
     # bond_assets = ['TLT', 'IEF', 'PCY', 'MUB']
@@ -75,6 +75,8 @@ def get_portfolio_weights(mdp_port, x):
     # SPY SECTORS: normalized_theoretical_weights = np.array([ [0.113], [0.09], [0.135], [0.0], [0.0], [0.215], [0.215], [0.0], [0.057], [0.175] ])
     # normalized_theoretical_weights = np.array([[0.20], [0.20], [0.20], [0.20], [0.20]])
     # normalized_theoretical_weights = np.array([[0.30], [0.15], [0.40], [0.075], [0.075]])
+    # normalized_theoretical_weights = np.array([[0.25], [0.25], [0.25], [0.000], [0.25]])
+    normalized_theoretical_weights = np.array([[0.25], [0.25], [0.25], [0.25]])
 
     # This is Dalio All Weather averaged over 3400 periods
     # normalized_theoretical_weights = np.array([[0.21], [0.31], [0.28], [0.08], [0.12]])
@@ -135,6 +137,7 @@ def do_analysis(assets=None, write_to_file=True):
     while x < len(mdp_port.trimmed[mdp_port.assets[0]]):
         mdp_port.x = x
         if not mdp_port.rebalance_now:
+            # this is what sets the current weights
             current_portfolio_valuation = get_port_valuation(mdp_port, x=x) - debt
             # current_leverage_ratio = current_portfolio_valuation / (current_portfolio_valuation - debt)
 
@@ -144,6 +147,19 @@ def do_analysis(assets=None, write_to_file=True):
                 ### print x, mdp_port.trimmed[mdp_port.assets[0]][x]['Date'], current_portfolio_valuation
             mdp_port.rebalance_counter += 1
 
+
+            min_weight = round(np.min(mdp_port.current_weights), 3)
+            max_weight = round(np.max(mdp_port.current_weights), 3)
+            median_weight = round(np.median(mdp_port.current_weights), 3)
+            mean_weight = round(np.mean(mdp_port.current_weights), 3)
+            median_minus_mean_weight = median_weight - mean_weight
+            geo_mean_weight = scipy.stats.mstats.gmean(mdp_port.current_weights)
+            max_minus_mean_pct = (max_weight - mean_weight) / mean_weight
+            mean_minus_min_pct = (mean_weight - min_weight) / mean_weight
+
+            print "Current Weights: ", x-1, min_weight, max_weight, max_minus_mean_pct
+
+            ###########
             if x >= mdp_port.rebalance_time:
                 trailing_diversification_ratio = mdp_port.get_diversification_ratio(x, weights='current')
                 mdp_port.trailing_DRs.append(trailing_diversification_ratio)
@@ -154,10 +170,17 @@ def do_analysis(assets=None, write_to_file=True):
                 # div_ratio_at_last_rebalance = mdp_port.trailing_DRs[-mdp_port.rebalance_counter]
                 # div_ratio_rebalance_constant = 0.95
                 # minimum_div_ratio = div_ratio_rebalance_constant * div_ratio_at_last_rebalance
+            #
+            #     if mdp_port.rebalance_counter >= mdp_port.rebalance_time:
+            #         mdp_port.rebalance_now = True
 
-                if mdp_port.rebalance_counter >= mdp_port.rebalance_time:
+                # tested with 0.4, 0.3, 0.2, 0.1, 0.05
+                # 0.3 gets the best return, all of them have similar risk to the time-based approach
+                # if max_minus_mean_pct > 0.30:
+
+                if max_minus_mean_pct > 0.30 or mean_minus_min_pct > 0.30:
                     mdp_port.rebalance_now = True
-
+            #################
                 # elif trailing_diversification_ratio < minimum_div_ratio:
                 #     mdp_port.rebalance_now = True
             else:

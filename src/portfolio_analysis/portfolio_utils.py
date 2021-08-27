@@ -32,7 +32,7 @@ def get_data(port, base_etf, last_x_days = 0, get_new_data=True, update_date=Non
                 download_data = True
                 break
     if download_data:
-        multithread_yahoo_download(thread_count=1, update_check=False, \
+        multithread_yahoo_download(thread_count=20, update_check=False, \
                                        new_only=False, store_location = 'data/portfolio_analysis/', use_list=asset_list)
         load_redis(stock_list='tda_free_etfs.csv', db_number=1, file_location='data/portfolio_analysis/', dict_size=3, use_list=asset_list)
     stock_1_data = historical_data.get(base_etf) or manage_redis.parse_fast_data(base_etf, db_to_use=1)
